@@ -42,4 +42,8 @@ public class MockClock extends Clock {
     public void advance() {
         mCurrentTimeMillis++;
     }
+
+    public void advanceDay() {
+        mCurrentTimeMillis += 24 * 60 * 60;
+    }
 }

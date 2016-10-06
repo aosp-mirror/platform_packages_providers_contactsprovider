@@ -33,6 +33,8 @@ import java.util.function.Consumer;
 public class SqlChecker {
     private static final String TAG = "SqlChecker";
 
+    private static final String PRIVATE_PREFIX = "x_"; // MUST BE LOWERCASE.
+
     private static final boolean VERBOSE_LOGGING = AbstractContactsProvider.VERBOSE_LOGGING;
 
     private final ArraySet<String> mInvalidTokens;
@@ -47,7 +49,7 @@ public class SqlChecker {
             mInvalidTokens.add(invalidTokens.get(i).toLowerCase());
         }
         if (VERBOSE_LOGGING) {
-            Log.d(TAG, "Intialized with invalid tokens: " + invalidTokens);
+            Log.d(TAG, "Initialized with invalid tokens: " + invalidTokens);
         }
     }
 
@@ -82,7 +84,8 @@ public class SqlChecker {
     }
 
     private void throwIfContainsToken(String token, String sql) {
-        if (mInvalidTokens.contains(token.toLowerCase())) {
+        final String lower = token.toLowerCase();
+        if (mInvalidTokens.contains(lower) || lower.startsWith(PRIVATE_PREFIX)) {
             throw genException("Detected disallowed token: " + token, sql);
         }
     }

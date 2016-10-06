@@ -16,18 +16,29 @@
 
 package com.android.providers.contacts;
 
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.os.FileUtils;
+import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Profile;
+import android.provider.ContactsContract.RawContacts;
 import android.support.annotation.Nullable;
+import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
 import android.util.Log;
+
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import junit.framework.Assert;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 
 public class TestUtils {
     private static final String TAG = "ContactsTestUtils";
@@ -41,7 +52,7 @@ public class TestUtils {
      * we'll switch to file-based DBs, so we can call {@link #createDatabaseSnapshot}
      * , pull the snapshot DBs and take a look at them.
      */
-    public static final boolean ENABLE_DATABASE_SNAPSHOT = false; // DO NOT SUBMIT WITH TRUE.
+    public static final boolean ENABLE_DATABASE_SNAPSHOT = true; // DO NOT SUBMIT WITH TRUE.
 
     private static final Object sDatabasePathLock = new Object();
     private static File sDatabasePath = null;
@@ -59,14 +70,18 @@ public class TestUtils {
                 } else {
                     Assert.assertTrue("Unable to create directory: " + path, path.mkdirs());
                 }
+                Log.i(TAG, "Test DB directory: " + path);
 
                 sDatabasePath = path;
             }
+            final File ret;
             if (name == null) {
-                return sDatabasePath.getAbsolutePath();
+                ret = sDatabasePath;
             } else {
-                return new File(sDatabasePath, name).getAbsolutePath();
+                ret = new File(sDatabasePath, name);
+                Log.i(TAG, "Test DB file: " + ret);
             }
+            return ret.getAbsolutePath();
         }
     }
 
@@ -100,7 +115,7 @@ public class TestUtils {
             Assert.assertTrue("Unable to create directory: " + toDir, toDir.mkdirs());
         }
 
-        Log.w(TAG, "Copying database files into '" + toDir + "'...");
+        Log.w(TAG, "Copying database files from '" + fromDir + "' into '" + toDir + "'...");
 
         for (File file : fromDir.listFiles()) {
             try {
@@ -140,20 +155,20 @@ public class TestUtils {
      * Writes the content of a cursor to the log.
      */
     public static final void dumpCursor(Cursor c) {
-        final String TAG = "contacts";
-
         final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < c.getColumnCount(); i++) {
-            if (sb.length() > 0) sb.append("|");
+            if (i > 0) sb.append("|");
             sb.append(c.getColumnName(i));
         }
         Log.i(TAG, sb.toString());
+
+        final int pos = c.getPosition();
 
         c.moveToPosition(-1);
         while (c.moveToNext()) {
             sb.setLength(0);
             for (int i = 0; i < c.getColumnCount(); i++) {
-                if (sb.length() > 0) sb.append("|");
+                if (i > 0) sb.append("|");
 
                 if (c.getType(i) == Cursor.FIELD_TYPE_BLOB) {
                     byte[] blob = c.getBlob(i);
@@ -165,6 +180,29 @@ public class TestUtils {
                 }
             }
             Log.i(TAG, sb.toString());
+        }
+
+        c.moveToPosition(pos);
+    }
+
+    public static void dumpTable(SQLiteDatabase db, String name) {
+        Log.i(TAG, "Dumping table: " + name);
+        try (Cursor c = db.rawQuery(String.format("SELECT * FROM %s", name), null)) {
+            dumpCursor(c);
+        }
+    }
+
+    public static void dumpUri(Context context, Uri uri) {
+        Log.i(TAG, "Dumping URI: " + uri);
+        try (Cursor c = context.getContentResolver().query(uri, null, null, null, null)) {
+            dumpCursor(c);
+        }
+    }
+
+    public static void dumpUri(ContentResolver resolver, Uri uri) {
+        Log.i(TAG, "Dumping URI: " + uri);
+        try (Cursor c = resolver.query(uri, null, null, null, null)) {
+            dumpCursor(c);
         }
     }
 
@@ -181,6 +219,59 @@ public class TestUtils {
             return file.getAbsolutePath();
         } catch (IOException e) {
             return "[Failed to write to file: " + e.getMessage() + "]";
+        }
+    }
+
+    public static Uri insertRawContact(
+            ContentResolver resolver, ContactsDatabaseHelper dbh, ContentValues values) {
+        return insertRawContact(RawContacts.CONTENT_URI, resolver, dbh, values);
+    }
+
+    public static Uri insertProfileRawContact(
+            ContentResolver resolver, ContactsDatabaseHelper dbh, ContentValues values) {
+        return insertRawContact(Profile.CONTENT_RAW_CONTACTS_URI, resolver, dbh, values);
+    }
+
+    private static Uri insertRawContact(Uri tableUri,
+            ContentResolver resolver, ContactsDatabaseHelper dbh, ContentValues values) {
+        final SQLiteDatabase db = dbh.getWritableDatabase();
+
+        final Uri rowUri = resolver.insert(tableUri, values);
+        Long timesContacted = values.getAsLong(RawContacts.LR_TIMES_CONTACTED);
+        if (timesContacted != null) {
+            // TIMES_CONTACTED is no longer modifiable via resolver, so we update the DB directly.
+            final long rid = Long.parseLong(rowUri.getLastPathSegment());
+
+            final String[] args = {String.valueOf(rid)};
+
+            db.update(Tables.RAW_CONTACTS,
+                    cv(RawContacts.RAW_TIMES_CONTACTED, (long) timesContacted),
+                    "_id=?", args);
+
+            // Then propagate it to contacts too.
+            db.execSQL("UPDATE " + Tables.CONTACTS
+                    + " SET " + Contacts.RAW_TIMES_CONTACTED + " = ("
+                    + " SELECT sum(" + RawContacts.RAW_TIMES_CONTACTED + ") FROM "
+                    + Tables.RAW_CONTACTS + " AS r "
+                    + " WHERE " + Tables.CONTACTS + "._id = r." + RawContacts.CONTACT_ID
+                    + " GROUP BY r." + RawContacts.CONTACT_ID + ")");
+        }
+        return rowUri;
+    }
+
+    public static void executeSqlFromAssetFile(
+            Context context, SQLiteDatabase db, String assetName) {
+        try (InputStream input = context.getAssets().open(assetName);) {
+            BufferedReader r = new BufferedReader(new InputStreamReader(input));
+            String query;
+            while ((query = r.readLine()) != null) {
+                if (query.trim().length() == 0 || query.startsWith("--")) {
+                    continue;
+                }
+                db.execSQL(query);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e.toString());
         }
     }
 }

@@ -29,7 +29,7 @@ import java.util.HashMap;
  * Run the test like this: <code> runtest -c com.android.providers.contacts.BaseDatabaseHelperUpgradeTest
  * contactsprov </code>
  */
-public class BaseDatabaseHelperUpgradeTest extends AndroidTestCase {
+public abstract class BaseDatabaseHelperUpgradeTest extends AndroidTestCase {
 
     protected static final String INTEGER = "INTEGER";
     protected static final String TEXT = "TEXT";
@@ -168,7 +168,14 @@ public class BaseDatabaseHelperUpgradeTest extends AndroidTestCase {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        mDb = SQLiteDatabase.create(null);
+
+        final String filename = getDatabaseFilename();
+        if (filename == null) {
+            mDb = SQLiteDatabase.create(null);
+        } else {
+            getContext().deleteDatabase(filename);
+            mDb = SQLiteDatabase.openOrCreateDatabase(filename, null);
+        }
     }
 
     @Override
@@ -176,6 +183,8 @@ public class BaseDatabaseHelperUpgradeTest extends AndroidTestCase {
         mDb.close();
         super.tearDown();
     }
+
+    protected abstract String getDatabaseFilename();
 
     protected void assertDatabaseStructureSameAsList(TableListEntry[] list, boolean isNewDatabase) {
         for (TableListEntry entry : list) {

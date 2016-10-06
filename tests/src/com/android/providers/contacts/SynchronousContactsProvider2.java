@@ -54,6 +54,10 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         return new SynchronousProfileProvider(this);
     }
 
+    public ProfileDatabaseHelper getProfileDatabaseHelper() {
+        return getProfileProviderForTest().getDatabaseHelper();
+    }
+
     @Override
     public void onBegin() {
         super.onBegin();

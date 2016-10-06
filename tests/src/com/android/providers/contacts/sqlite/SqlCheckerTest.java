@@ -193,6 +193,11 @@ public class SqlCheckerTest extends AndroidTestCase {
 
         checkEnsureNoInvalidTokens(true, "a b ';' c");
         checkEnsureNoInvalidTokens(true, "a b /*;*/ c");
+
+        checkEnsureNoInvalidTokens(false, "a b x_ c");
+        checkEnsureNoInvalidTokens(false, "a b [X_OK] c");
+        checkEnsureNoInvalidTokens(true, "a b 'x_' c");
+        checkEnsureNoInvalidTokens(true, "a b /*x_*/ c");
     }
 
     private void checkEnsureSingleTokenOnly(boolean ok, String sql, String... tokens) {
