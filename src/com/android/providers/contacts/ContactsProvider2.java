@@ -5596,6 +5596,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (directoryInfo.accountType != null) {
             builder.appendQueryParameter(RawContacts.ACCOUNT_TYPE, directoryInfo.accountType);
         }
+        // Pass the caller package name.
+        builder.appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY, getCallingPackage());
 
         String limit = getLimit(uri);
         if (limit != null) {
@@ -5610,6 +5612,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         Cursor cursor;
         try {
+            if (VERBOSE_LOGGING) {
+                Log.v(TAG, "Making directory query: uri=" + directoryUri +
+                        "  projection=" + Arrays.toString(projection) +
+                        "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
+                        "  order=[" + sortOrder + "]" +
+                        "  Caller=" + getCallingPackage() +
+                        "  User=" + UserUtils.getCurrentUserHandle(getContext()));
+            }
             cursor = getContext().getContentResolver().query(
                     directoryUri, projection, selection, selectionArgs, sortOrder);
             if (cursor == null) {
