@@ -66,6 +66,7 @@ import android.os.RemoteException;
 import android.os.StrictMode;
 import android.os.SystemClock;
 import android.os.SystemProperties;
+import android.os.UserHandle;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
@@ -5577,6 +5578,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return new MatrixCursor(projection);
     }
 
+    private String getRealCallerPackageName(Uri queryUri) {
+        // If called by itself, then the URI must contain the real caller package name.
+        if (UserHandle.isSameApp(android.os.Process.myUid(), Binder.getCallingUid())) {
+            final String passedPackage = queryUri.getQueryParameter(
+                    Directory.CALLER_PACKAGE_PARAM_KEY);
+            if (TextUtils.isEmpty(passedPackage)) {
+                Log.wtf(TAG, "Cross-profile query with no " + Directory.CALLER_PACKAGE_PARAM_KEY);
+                return "UNKNOWN";
+            }
+            return passedPackage;
+        } else {
+            // Otherwise, just return the real calling package name.
+            return getCallingPackage();
+        }
+    }
+
     private Cursor queryDirectoryAuthority(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, String directory,
             final CancellationSignal cancellationSignal) {
@@ -5597,7 +5614,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             builder.appendQueryParameter(RawContacts.ACCOUNT_TYPE, directoryInfo.accountType);
         }
         // Pass the caller package name.
-        builder.appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY, getCallingPackage());
+        // Note the request may come from the CP2 on the primary profile.  In that case, the
+        // real caller package is passed via the query paramter.  See getRealCallerPackageName().
+        builder.appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY,
+                getRealCallerPackageName(uri));
 
         String limit = getLimit(uri);
         if (limit != null) {
@@ -5658,7 +5678,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             throw new IllegalArgumentException(
                     "Authority " + localUri.getAuthority() + " is not a valid CP2 authority.");
         }
-        final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
+        // Add the "user-id @" to the URI, and also pass the caller package name.
+        final Uri remoteUri = maybeAddUserId(localUri, corpUserId).buildUpon()
+                .appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY, getCallingPackage())
+                .build();
         Cursor cursor = getContext().getContentResolver().query(remoteUri, projection, selection,
                 selectionArgs, sortOrder, cancellationSignal);
         if (cursor == null) {
