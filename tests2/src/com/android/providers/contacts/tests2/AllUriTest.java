@@ -19,10 +19,13 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.CancellationSignal;
 import android.provider.ContactsContract;
+import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.RawContacts;
 import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.util.Log;
+
+import junit.framework.AssertionFailedError;
 
 import java.util.ArrayList;
 
@@ -31,7 +34,7 @@ import java.util.ArrayList;
  * TODO Copy it to CTS
  */
 @LargeTest
-public class AllUrlTest extends AndroidTestCase {
+public class AllUriTest extends AndroidTestCase {
     private static final String TAG = "AllUrlTest";
 
     // "-" : Query not supported.
@@ -43,11 +46,13 @@ public class AllUrlTest extends AndroidTestCase {
     // "i" : supports insert.
     // "r" : supports read.
     // "w" : supports write.
+    // "s" : has x_times_contacted and x_last_time_contacted.
+    // "t" : has x_times_used and x_last_time_used.
     private static final String[][] URIs = {
-            {"content://com.android.contacts/contacts"},
-            {"content://com.android.contacts/contacts/1"},
-            {"content://com.android.contacts/contacts/1/data"},
-            {"content://com.android.contacts/contacts/1/entities"},
+            {"content://com.android.contacts/contacts", "s"},
+            {"content://com.android.contacts/contacts/1", "s"},
+            {"content://com.android.contacts/contacts/1/data", "t"},
+            {"content://com.android.contacts/contacts/1/entities", "t"},
             {"content://com.android.contacts/contacts/1/suggestions"},
             {"content://com.android.contacts/contacts/1/suggestions/XXX"},
             {"content://com.android.contacts/contacts/1/photo"},
@@ -55,12 +60,12 @@ public class AllUrlTest extends AndroidTestCase {
             {"content://com.android.contacts/contacts_corp/1/photo", "-rw"},
             {"content://com.android.contacts/contacts_corp/1/display_photo", "-rw"},
             {"content://com.android.contacts/contacts/1/stream_items"},
-            {"content://com.android.contacts/contacts/filter"},
-            {"content://com.android.contacts/contacts/filter/XXX"},
-            {"content://com.android.contacts/contacts/lookup/nlookup"},
-            {"content://com.android.contacts/contacts/lookup/nlookup/data"},
-            {"content://com.android.contacts/contacts/lookup/nlookup/photo"},
-            {"content://com.android.contacts/contacts/lookup/nlookup/1"},
+            {"content://com.android.contacts/contacts/filter", "s"},
+            {"content://com.android.contacts/contacts/filter/XXX", "s"},
+            {"content://com.android.contacts/contacts/lookup/nlookup", "s"},
+            {"content://com.android.contacts/contacts/lookup/nlookup/data", "t"},
+            {"content://com.android.contacts/contacts/lookup/nlookup/photo", "t"},
+            {"content://com.android.contacts/contacts/lookup/nlookup/1", "s"},
             {"content://com.android.contacts/contacts/lookup/nlookup/1/data"},
             {"content://com.android.contacts/contacts/lookup/nlookup/1/photo"},
             {"content://com.android.contacts/contacts/lookup/nlookup/display_photo", "-rw"},
@@ -71,53 +76,54 @@ public class AllUrlTest extends AndroidTestCase {
             {"content://com.android.contacts/contacts/lookup/nlookup/1/stream_items"},
             {"content://com.android.contacts/contacts/as_vcard/nlookup"},
             {"content://com.android.contacts/contacts/as_multi_vcard/XXX"},
-            {"content://com.android.contacts/contacts/strequent/"},
-            {"content://com.android.contacts/contacts/strequent/filter/XXX"},
+            {"content://com.android.contacts/contacts/strequent/", "s"},
+            {"content://com.android.contacts/contacts/strequent/filter/XXX", "s"},
             {"content://com.android.contacts/contacts/group/XXX"},
-            {"content://com.android.contacts/contacts/frequent"},
+            {"content://com.android.contacts/contacts/frequent", "s"},
             {"content://com.android.contacts/contacts/delete_usage", "-d"},
-            {"content://com.android.contacts/contacts/filter_enterprise?directory=0"},
-            {"content://com.android.contacts/contacts/filter_enterprise/XXX?directory=0"},
-            {"content://com.android.contacts/raw_contacts"},
-            {"content://com.android.contacts/raw_contacts/1"},
-            {"content://com.android.contacts/raw_contacts/1/data"},
+            {"content://com.android.contacts/contacts/filter_enterprise?directory=0", "s"},
+            {"content://com.android.contacts/contacts/filter_enterprise/XXX?directory=0", "s"},
+            {"content://com.android.contacts/raw_contacts", "s"},
+            {"content://com.android.contacts/raw_contacts/1", "s"},
+            {"content://com.android.contacts/raw_contacts/1/data", "t"},
             {"content://com.android.contacts/raw_contacts/1/display_photo", "-rw"},
             {"content://com.android.contacts/raw_contacts/1/entity"},
             {"content://com.android.contacts/raw_contacts/1/stream_items"},
             {"content://com.android.contacts/raw_contacts/1/stream_items/1"},
             {"content://com.android.contacts/raw_contact_entities"},
             {"content://com.android.contacts/raw_contact_entities_corp", "!"},
-            {"content://com.android.contacts/data"},
-            {"content://com.android.contacts/data/1"},
-            {"content://com.android.contacts/data/phones"},
+            {"content://com.android.contacts/data", "t"},
+            {"content://com.android.contacts/data/1", "t"},
+            {"content://com.android.contacts/data/phones", "t"},
             {"content://com.android.contacts/data_enterprise/phones", "!"},
-            {"content://com.android.contacts/data/phones/1"},
-            {"content://com.android.contacts/data/phones/filter"},
-            {"content://com.android.contacts/data/phones/filter/XXX"},
-            {"content://com.android.contacts/data/phones/filter_enterprise?directory=0"},
-            {"content://com.android.contacts/data/phones/filter_enterprise/XXX?directory=0"},
-            {"content://com.android.contacts/data/emails"},
-            {"content://com.android.contacts/data/emails/1"},
-            {"content://com.android.contacts/data/emails/lookup"},
-            {"content://com.android.contacts/data/emails/lookup/XXX"},
-            {"content://com.android.contacts/data/emails/filter"},
-            {"content://com.android.contacts/data/emails/filter/XXX"},
-            {"content://com.android.contacts/data/emails/filter_enterprise?directory=0"},
-            {"content://com.android.contacts/data/emails/filter_enterprise/XXX?directory=0"},
-            {"content://com.android.contacts/data/emails/lookup_enterprise"},
-            {"content://com.android.contacts/data/emails/lookup_enterprise/XXX"},
-            {"content://com.android.contacts/data/postals"},
-            {"content://com.android.contacts/data/postals/1"},
+            {"content://com.android.contacts/data/phones/1", "t"},
+            {"content://com.android.contacts/data/phones/filter", "t"},
+            {"content://com.android.contacts/data/phones/filter/XXX", "t"},
+            {"content://com.android.contacts/data/phones/filter_enterprise?directory=0", "t"},
+            {"content://com.android.contacts/data/phones/filter_enterprise/XXX?directory=0", "t"},
+            {"content://com.android.contacts/data/emails", "t"},
+            {"content://com.android.contacts/data/emails/1", "t"},
+            {"content://com.android.contacts/data/emails/lookup", "t"},
+            {"content://com.android.contacts/data/emails/lookup/XXX", "t"},
+            {"content://com.android.contacts/data/emails/filter", "t"},
+            {"content://com.android.contacts/data/emails/filter/XXX", "t"},
+            {"content://com.android.contacts/data/emails/filter_enterprise?directory=0", "t"},
+            {"content://com.android.contacts/data/emails/filter_enterprise/XXX?directory=0", "t"},
+            {"content://com.android.contacts/data/emails/lookup_enterprise", "t"},
+            {"content://com.android.contacts/data/emails/lookup_enterprise/XXX", "t"},
+            {"content://com.android.contacts/data/postals", "t"},
+            {"content://com.android.contacts/data/postals/1", "t"},
             {"content://com.android.contacts/data/usagefeedback/XXX", "-u"},
-            {"content://com.android.contacts/data/callables/"},
-            {"content://com.android.contacts/data/callables/1"},
-            {"content://com.android.contacts/data/callables/filter"},
-            {"content://com.android.contacts/data/callables/filter/XXX"},
-            {"content://com.android.contacts/data/callables/filter_enterprise?directory=0"},
-            {"content://com.android.contacts/data/callables/filter_enterprise/XXX?directory=0"},
-            {"content://com.android.contacts/data/contactables/"},
-            {"content://com.android.contacts/data/contactables/filter"},
-            {"content://com.android.contacts/data/contactables/filter/XXX"},
+            {"content://com.android.contacts/data/callables/", "t"},
+            {"content://com.android.contacts/data/callables/1", "t"},
+            {"content://com.android.contacts/data/callables/filter", "t"},
+            {"content://com.android.contacts/data/callables/filter/XXX", "t"},
+            {"content://com.android.contacts/data/callables/filter_enterprise?directory=0", "t"},
+            {"content://com.android.contacts/data/callables/filter_enterprise/XXX?directory=0",
+                    "t"},
+            {"content://com.android.contacts/data/contactables/", "t"},
+            {"content://com.android.contacts/data/contactables/filter", "t"},
+            {"content://com.android.contacts/data/contactables/filter/XXX", "t"},
             {"content://com.android.contacts/groups"},
             {"content://com.android.contacts/groups/1"},
             {"content://com.android.contacts/groups_summary"},
@@ -139,16 +145,16 @@ public class AllUrlTest extends AndroidTestCase {
             {"content://com.android.contacts/directories_enterprise"},
             {"content://com.android.contacts/directories_enterprise/1"},
             {"content://com.android.contacts/complete_name"},
-            {"content://com.android.contacts/profile"},
-            {"content://com.android.contacts/profile/entities"},
-            {"content://com.android.contacts/profile/data"},
-            {"content://com.android.contacts/profile/data/1"},
-            {"content://com.android.contacts/profile/photo"},
+            {"content://com.android.contacts/profile", "s"},
+            {"content://com.android.contacts/profile/entities", "s"},
+            {"content://com.android.contacts/profile/data", "t"},
+            {"content://com.android.contacts/profile/data/1", "t"},
+            {"content://com.android.contacts/profile/photo", "t"},
             {"content://com.android.contacts/profile/display_photo", "-rw"},
             {"content://com.android.contacts/profile/as_vcard"},
-            {"content://com.android.contacts/profile/raw_contacts"},
-            {"content://com.android.contacts/profile/raw_contacts/1"},
-            {"content://com.android.contacts/profile/raw_contacts/1/data"},
+            {"content://com.android.contacts/profile/raw_contacts", "s"},
+            {"content://com.android.contacts/profile/raw_contacts/1", "s"},
+            {"content://com.android.contacts/profile/raw_contacts/1/data", "t"},
             {"content://com.android.contacts/profile/raw_contacts/1/entity"},
             {"content://com.android.contacts/profile/status_updates"},
             {"content://com.android.contacts/profile/raw_contact_entities"},
@@ -172,7 +178,7 @@ public class AllUrlTest extends AndroidTestCase {
             {"content://contacts/groups/system_id/XXX/members"},
             {"content://contacts/groupmembership"},
             {"content://contacts/groupmembership/1"},
-            {"content://contacts/people"},
+            {"content://contacts/people", "s"},
             {"content://contacts/people/filter/XXX"},
             {"content://contacts/people/1"},
             {"content://contacts/people/1/extensions"},
@@ -206,7 +212,6 @@ public class AllUrlTest extends AndroidTestCase {
     };
 
     private static final String[] ARG1 = {"-1"};
-
 
     private ArrayList<String> mFailures;
 
@@ -253,6 +258,7 @@ public class AllUrlTest extends AndroidTestCase {
                     message.append(s);
                 }
             }
+            mFailures = null;
             fail("Following test(s) failed:\n" + message);
         }
         mFailures = null;
@@ -319,12 +325,13 @@ public class AllUrlTest extends AndroidTestCase {
         try {
             try (Cursor c = getContext().getContentResolver().query(uri, projection, selection,
                     selectionArgs, sortOrder)) {
+                c.moveToFirst();
             }
         } catch (Throwable th) {
             // pass.
             return;
         }
-        addFailure("Query on " + uri + " expeced to fail, but succeeded.");
+        addFailure("Query on " + uri + " expected to fail, but succeeded.");
     }
 
     /**
@@ -496,6 +503,93 @@ public class AllUrlTest extends AndroidTestCase {
                     null, // selection args
                     null // sort order
             );
+        }
+        failIfFailed();
+    }
+
+    private static boolean supportsTimesContacted(String[] path) {
+        return path.length > 1 && path[1].contains("s");
+    }
+
+    private static boolean supportsTimesUsed(String[] path) {
+        return path.length > 1 && path[1].contains("t");
+    }
+
+    private void checkColumnAccessible(Uri uri, String column) {
+        try {
+            try (Cursor c = getContext().getContentResolver().query(
+                    uri, new String[]{column}, column + "=0", null, column
+            )) {
+                c.moveToFirst();
+            }
+        } catch (Throwable th) {
+            addFailure("Query failed: URI=" + uri + " Message=" + th.getMessage());
+        }
+    }
+
+    /** Test for {@link #checkColumnAccessible} */
+    public void testCheckColumnAccessible() {
+        checkColumnAccessible(Contacts.CONTENT_URI, "x_times_contacted");
+        try {
+            failIfFailed();
+        } catch (AssertionFailedError expected) {
+            return; // expected.
+        }
+        fail("Failed to detect issue.");
+    }
+
+    private void checkColumnNotAccessibleInner(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder) {
+        try {
+            try (Cursor c = getContext().getContentResolver().query(uri, projection, selection,
+                    selectionArgs, sortOrder)) {
+                c.moveToFirst();
+            }
+        } catch (IllegalArgumentException th) {
+            // pass.
+            return;
+        }
+        addFailure("Query on " + uri +
+                " expected to throw IllegalArgumentException, but succeeded.");
+    }
+
+    private void checkColumnNotAccessible(Uri uri, String column) {
+        checkColumnNotAccessibleInner(uri, new String[] {column}, null, null, null);
+        checkColumnNotAccessibleInner(uri, null, column + "=1", null, null);
+        checkColumnNotAccessibleInner(uri, null, null, null, /* order by */ column);
+    }
+
+    /** Test for {@link #checkColumnNotAccessible} */
+    public void testCheckColumnNotAccessible() {
+        checkColumnNotAccessible(Contacts.CONTENT_URI, "times_contacted");
+        try {
+            failIfFailed();
+        } catch (AssertionFailedError expected) {
+            return; // expected.
+        }
+        fail("Failed to detect issue.");
+    }
+
+    /**
+     * Make sure the x_ columns are not accessible.
+     */
+    public void testProhibitedColumns() {
+        for (String[] path : URIs) {
+            final Uri uri = getUri(path);
+            if (supportsTimesContacted(path)) {
+                checkColumnAccessible(uri, "times_contacted");
+                checkColumnAccessible(uri, "last_time_contacted");
+
+                checkColumnNotAccessible(uri, "X_times_contacted");
+                checkColumnNotAccessible(uri, "X_slast_time_contacted");
+            }
+            if (supportsTimesUsed(path)) {
+                checkColumnAccessible(uri, "times_used");
+                checkColumnAccessible(uri, "last_time_used");
+
+                checkColumnNotAccessible(uri, "X_times_used");
+                checkColumnNotAccessible(uri, "X_last_time_used");
+            }
         }
         failIfFailed();
     }

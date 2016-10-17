@@ -4553,7 +4553,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (ret.containsKey(Contacts.LR_TIMES_CONTACTED)) {
             getDatabaseHelper().logWtf(
                     "Column '" + Contacts.LR_TIMES_CONTACTED + "' can no longer be modified"
-                    + "directly.");
+                    + " directly. Caller=" + getCallingPackage());
         }
 
         ret.remove(Contacts.LR_LAST_TIME_CONTACTED);
