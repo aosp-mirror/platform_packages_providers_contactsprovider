@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 import static com.android.providers.contacts.TestUtils.cv;
+import static com.android.providers.contacts.TestUtils.dumpCursor;
 
 import android.accounts.Account;
 import android.content.ContentProvider;
@@ -1095,6 +1096,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             assertCursorValues(c, values);
         } catch (Error e) {
             TestUtils.dumpCursor(c);
+
+            // Dump with no selection.
+            TestUtils.dumpUri(mResolver, uri);
             throw e;
         } finally {
             c.close();
@@ -1158,7 +1162,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         }
     }
 
-    private void assertCursorValuesOrderly(Cursor cursor, ContentValues... expectedValues) {
+    public static void assertCursorValuesOrderly(Cursor cursor, ContentValues... expectedValues) {
         StringBuilder message = new StringBuilder();
         cursor.moveToPosition(-1);
         for (ContentValues v : expectedValues) {
@@ -1188,7 +1192,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         return true;
     }
 
-    private boolean equalsWithExpectedValues(Cursor cursor, ContentValues expectedValues,
+    private static boolean equalsWithExpectedValues(Cursor cursor, ContentValues expectedValues,
             StringBuilder msgBuffer) {
         for (String column : expectedValues.keySet()) {
             int index = cursor.getColumnIndex(column);
@@ -1229,6 +1233,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         final Cursor cursor = mResolver.query(uri, DATA_USAGE_PROJECTION, null, null,
                 null);
         try {
+            dumpCursor(cursor);
             assertCursorHasAnyRecordMatch(cursor, cv(Data.DATA1, data1, Data.TIMES_USED, timesUsed,
                     Data.LAST_TIME_USED, lastTimeUsed));
         } finally {
@@ -1367,6 +1372,17 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         long timeStamp = c.getLong(index);
         assertTrue(Math.abs(time - timeStamp) < tolerance);
     }
+
+    protected Uri insertRawContact(ContentValues values) {
+        return TestUtils.insertRawContact(mResolver,
+                getContactsProvider().getDatabaseHelper(), values);
+    }
+
+    protected Uri insertProfileRawContact(ContentValues values) {
+        return TestUtils.insertProfileRawContact(mResolver,
+                getContactsProvider().getProfileProviderForTest().getDatabaseHelper(), values);
+    }
+
     /**
      * A contact in the database, and the attributes used to create it.  Construct using
      * {@link GoldenContactBuilder#build()}.

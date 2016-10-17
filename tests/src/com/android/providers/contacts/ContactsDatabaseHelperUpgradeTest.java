@@ -16,6 +16,11 @@
 
 package com.android.providers.contacts;
 
+import static com.android.providers.contacts.TestUtils.createDatabaseSnapshot;
+import static com.android.providers.contacts.TestUtils.cv;
+import static com.android.providers.contacts.TestUtils.executeSqlFromAssetFile;
+
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.BaseColumns;
 import android.provider.CallLog.Calls;
@@ -84,8 +89,11 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
 
     private static final String CONTACTS2_DB_1108_ASSET_NAME = "upgradeTest/contacts2_1108.sql";
 
+    /**
+     * The helper instance.  Note we just use it to call the upgrade method.  The database
+     * hold by this instance is not used in this test.
+     */
     private ContactsDatabaseHelper mHelper;
-
 
     @Override
     protected void setUp() throws Exception {
@@ -101,6 +109,11 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
         super.tearDown();
     }
 
+    @Override
+    protected String getDatabaseFilename() {
+        return TestUtils.getContactsDatabaseFilename(getContext(), "-upgrade-test");
+    }
+
     public void testDatabaseCreate() {
         mHelper.onCreate(mDb);
         assertDatabaseStructureSameAsList(TABLE_LIST, /* isNewDatabase =*/ true);
@@ -108,7 +121,10 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
 
     public void testDatabaseUpgrade_UpgradeToCurrent() {
         create1108(mDb);
-        mHelper.onUpgrade(mDb, 1108, mHelper.DATABASE_VERSION);
+        int oldVersion = upgrade(1108, 1200);
+        oldVersion = upgradeTo1201(oldVersion);
+        oldVersion = upgrade(oldVersion, ContactsDatabaseHelper.DATABASE_VERSION);
+
         assertDatabaseStructureSameAsList(TABLE_LIST, /* isNewDatabase =*/ false);
     }
 
@@ -138,8 +154,62 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
         return MY_VERSION;
     }
 
+    private int upgradeTo1201(int upgradeFrom) {
+        final int MY_VERSION = 1201;
+
+        executeSqlFromAssetFile(getTestContext(), mDb, "upgradeTest/pre_upgrade1201.sql");
+
+        mHelper.onUpgrade(mDb, upgradeFrom, MY_VERSION);
+
+        try (Cursor c = mDb.rawQuery("select * from contacts order by _id", null)) {
+            BaseContactsProvider2Test.assertCursorValuesOrderly(c,
+                    cv(Contacts._ID, 1,
+                            "last_time_contacted", 0,
+                            "x_last_time_contacted", 9940760264L,
+                            "times_contacted", 0,
+                            "x_times_contacted", 4
+                            ),
+                    cv(
+                            "last_time_contacted", 0,
+                            "x_last_time_contacted", 0,
+                            "times_contacted", 0,
+                            "x_times_contacted", 0
+                    ));
+        }
+
+        try (Cursor c = mDb.rawQuery("select * from raw_contacts order by _id", null)) {
+            BaseContactsProvider2Test.assertCursorValuesOrderly(c,
+                    cv("_id", 1,
+                            "last_time_contacted", 0,
+                            "x_last_time_contacted", 9940760264L,
+                            "times_contacted", 0,
+                            "x_times_contacted", 4
+                    ),
+                    cv(
+                            "last_time_contacted", 0,
+                            "x_last_time_contacted", 0,
+                            "times_contacted", 0,
+                            "x_times_contacted", 0
+                    ));
+        }
+
+        try (Cursor c = mDb.rawQuery("select * from data_usage_stat", null)) {
+            BaseContactsProvider2Test.assertCursorValuesOrderly(c,
+                    cv(
+                            "last_time_used", 0,
+                            "x_last_time_used", 9940760264L,
+                            "times_used", 0,
+                            "x_times_used", 4
+                    ));
+        }
+
+        return MY_VERSION;
+    }
+
     private int upgrade(int upgradeFrom, int upgradeTo) {
-        mHelper.onUpgrade(mDb, upgradeFrom, upgradeTo);
+        if (upgradeFrom < upgradeTo) {
+            mHelper.onUpgrade(mDb, upgradeFrom, upgradeTo);
+        }
         return upgradeTo;
     }
 
@@ -148,15 +218,7 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
      * incrementally from this version.
      */
     private void create1108(SQLiteDatabase db) {
-        try (InputStream input = getTestContext().getAssets().open(CONTACTS2_DB_1108_ASSET_NAME);) {
-            BufferedReader r = new BufferedReader(new InputStreamReader(input));
-            String query;
-            while ((query = r.readLine()) != null) {
-                db.execSQL(query);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e.toString());
-        }
+        executeSqlFromAssetFile(getTestContext(), db, CONTACTS2_DB_1108_ASSET_NAME);
     }
 
     /**
@@ -181,8 +243,10 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableColumn(Contacts.PHOTO_FILE_ID, INTEGER, false, null),
             new TableColumn(Contacts.CUSTOM_RINGTONE, TEXT, false, null),
             new TableColumn(Contacts.SEND_TO_VOICEMAIL, INTEGER, true, "0"),
-            new TableColumn(Contacts.TIMES_CONTACTED, INTEGER, true, "0"),
-            new TableColumn(Contacts.LAST_TIME_CONTACTED, INTEGER, false, null),
+            new TableColumn(Contacts.RAW_TIMES_CONTACTED, INTEGER, true, "0"),
+            new TableColumn(Contacts.RAW_LAST_TIME_CONTACTED, INTEGER, false, null),
+            new TableColumn(Contacts.LR_TIMES_CONTACTED, INTEGER, true, "0"),
+            new TableColumn(Contacts.LR_LAST_TIME_CONTACTED, INTEGER, false, null),
             new TableColumn(Contacts.STARRED, INTEGER, true, "0"),
             new TableColumn(Contacts.PINNED, INTEGER, true,
                     String.valueOf(PinnedPositions.UNPINNED)),
@@ -213,8 +277,10 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableColumn(RawContactsColumns.AGGREGATION_NEEDED, INTEGER, true, "1"),
             new TableColumn(RawContacts.CUSTOM_RINGTONE, TEXT, false, null),
             new TableColumn(RawContacts.SEND_TO_VOICEMAIL, INTEGER, true, "0"),
-            new TableColumn(RawContacts.TIMES_CONTACTED, INTEGER, true, "0"),
-            new TableColumn(RawContacts.LAST_TIME_CONTACTED, INTEGER, false, null),
+            new TableColumn(RawContacts.RAW_TIMES_CONTACTED, INTEGER, true, "0"),
+            new TableColumn(RawContacts.RAW_LAST_TIME_CONTACTED, INTEGER, false, null),
+            new TableColumn(RawContacts.LR_TIMES_CONTACTED, INTEGER, true, "0"),
+            new TableColumn(RawContacts.LR_LAST_TIME_CONTACTED, INTEGER, false, null),
             new TableColumn(RawContacts.STARRED, INTEGER, true, "0"),
             new TableColumn(RawContacts.PINNED, INTEGER, true,
                     String.valueOf(PinnedPositions.UNPINNED)),
@@ -464,8 +530,10 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableColumn(DataUsageStatColumns._ID, INTEGER, false, null),
             new TableColumn(DataUsageStatColumns.DATA_ID, INTEGER, true, null),
             new TableColumn(DataUsageStatColumns.USAGE_TYPE_INT, INTEGER, true, "0"),
-            new TableColumn(DataUsageStatColumns.TIMES_USED, INTEGER, true, "0"),
-            new TableColumn(DataUsageStatColumns.LAST_TIME_USED, INTEGER, true, "0"),
+            new TableColumn(DataUsageStatColumns.RAW_TIMES_USED, INTEGER, true, "0"),
+            new TableColumn(DataUsageStatColumns.RAW_LAST_TIME_USED, INTEGER, true, "0"),
+            new TableColumn(DataUsageStatColumns.LR_TIMES_USED, INTEGER, true, "0"),
+            new TableColumn(DataUsageStatColumns.LR_LAST_TIME_USED, INTEGER, true, "0"),
     };
 
     private static final TableColumn[] METADATA_SYNC_COLUMNS = new TableColumn[] {

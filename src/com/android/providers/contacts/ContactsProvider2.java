@@ -221,13 +221,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final String INTERACT_ACROSS_USERS = "android.permission.INTERACT_ACROSS_USERS";
 
     /* package */ static final String UPDATE_TIMES_CONTACTED_CONTACTS_TABLE =
-          "UPDATE " + Tables.CONTACTS + " SET " + Contacts.TIMES_CONTACTED + "=" +
-          " ifnull(" + Contacts.TIMES_CONTACTED + ",0)+1" +
+          "UPDATE " + Tables.CONTACTS + " SET " + Contacts.RAW_TIMES_CONTACTED + "=" +
+          " ifnull(" + Contacts.RAW_TIMES_CONTACTED + ",0)+1" +
           " WHERE " + Contacts._ID + "=?";
 
     /* package */ static final String UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE =
-          "UPDATE " + Tables.RAW_CONTACTS + " SET " + RawContacts.TIMES_CONTACTED + "=" +
-          " ifnull(" + RawContacts.TIMES_CONTACTED + ",0)+1 " +
+          "UPDATE " + Tables.RAW_CONTACTS + " SET " + RawContacts.RAW_TIMES_CONTACTED + "=" +
+          " ifnull(" + RawContacts.RAW_TIMES_CONTACTED + ",0)+1 " +
           " WHERE " + RawContacts.CONTACT_ID + "=?";
 
     /* package */ static final String PHONEBOOK_COLLATOR_NAME = "PHONEBOOK";
@@ -314,7 +314,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public static final ProfileAwareUriMatcher sUriMatcher =
             new ProfileAwareUriMatcher(UriMatcher.NO_MATCH);
 
-    private static final String FREQUENT_ORDER_BY = DataUsageStatColumns.TIMES_USED + " DESC,"
+    private static final String FREQUENT_ORDER_BY = DataUsageStatColumns.RAW_TIMES_USED + " DESC,"
             + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
 
     public static final int CONTACTS = 1000;
@@ -611,20 +611,23 @@ public class ContactsProvider2 extends AbstractContactsProvider
     // Contacts contacted within the last 30 days (in seconds)
     private static final long LAST_TIME_USED_30_DAYS_SEC = 30L * 24 * 60 * 60;
 
-    private static final String TIME_SINCE_LAST_USED_SEC =
-            "(strftime('%s', 'now') - " + DataUsageStatColumns.LAST_TIME_USED + "/1000)";
+    private static final String RAW_TIME_SINCE_LAST_USED_SEC =
+            "(strftime('%s', 'now') - " + DataUsageStatColumns.RAW_LAST_TIME_USED + "/1000)";
+
+    private static final String LR_TIME_SINCE_LAST_USED_SEC =
+            "(strftime('%s', 'now') - " + DataUsageStatColumns.LR_LAST_TIME_USED + "/1000)";
 
     private static final String SORT_BY_DATA_USAGE =
-            "(CASE WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_3_DAYS_SEC +
+            "(CASE WHEN " + RAW_TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_3_DAYS_SEC +
             " THEN 0 " +
-                    " WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_7_DAYS_SEC +
+                    " WHEN " + RAW_TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_7_DAYS_SEC +
             " THEN 1 " +
-                    " WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_14_DAYS_SEC +
+                    " WHEN " + RAW_TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_14_DAYS_SEC +
             " THEN 2 " +
-                    " WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_30_DAYS_SEC +
+                    " WHEN " + RAW_TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_30_DAYS_SEC +
             " THEN 3 " +
             " ELSE 4 END), " +
-            DataUsageStatColumns.TIMES_USED + " DESC";
+            DataUsageStatColumns.RAW_TIMES_USED + " DESC";
 
     /*
      * Sorting order for email address suggestions: first starred, then the rest.
@@ -677,7 +680,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Contacts.DISPLAY_NAME_SOURCE)
             .add(Contacts.IN_DEFAULT_DIRECTORY)
             .add(Contacts.IN_VISIBLE_GROUP)
-            .add(Contacts.LAST_TIME_CONTACTED)
+            .add(Contacts.LR_LAST_TIME_CONTACTED)
             .add(Contacts.LOOKUP_KEY)
             .add(Contacts.PHONETIC_NAME)
             .add(Contacts.PHONETIC_NAME_STYLE)
@@ -694,7 +697,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE)
             .add(Contacts.STARRED)
             .add(Contacts.PINNED)
-            .add(Contacts.TIMES_CONTACTED)
+            .add(Contacts.LR_TIMES_CONTACTED)
             .add(Contacts.HAS_PHONE_NUMBER)
             .add(Contacts.CONTACT_LAST_UPDATED_TIMESTAMP)
             .build();
@@ -795,8 +798,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .build();
 
     private static final ProjectionMap sDataUsageColumns = ProjectionMap.builder()
-            .add(Data.TIMES_USED, Tables.DATA_USAGE_STAT + "." + Data.TIMES_USED)
-            .add(Data.LAST_TIME_USED, Tables.DATA_USAGE_STAT + "." + Data.LAST_TIME_USED)
+            .add(Data.LR_TIMES_USED, Tables.DATA_USAGE_STAT + "." + Data.LR_TIMES_USED)
+            .add(Data.LR_LAST_TIME_USED, Tables.DATA_USAGE_STAT + "." + Data.LR_LAST_TIME_USED)
             .build();
 
     /** Contains just BaseColumns._COUNT */
@@ -823,16 +826,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /** Used for pushing starred contacts to the top of a times contacted list **/
     private static final ProjectionMap sStrequentStarredProjectionMap = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(DataUsageStatColumns.TIMES_USED, String.valueOf(Long.MAX_VALUE))
-            .add(DataUsageStatColumns.LAST_TIME_USED, String.valueOf(Long.MAX_VALUE))
+            .add(DataUsageStatColumns.LR_TIMES_USED, String.valueOf(Long.MAX_VALUE))
+            .add(DataUsageStatColumns.LR_LAST_TIME_USED, String.valueOf(Long.MAX_VALUE))
             .build();
 
     private static final ProjectionMap sStrequentFrequentProjectionMap = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(DataUsageStatColumns.TIMES_USED,
-                    "SUM(" + DataUsageStatColumns.CONCRETE_TIMES_USED + ")")
-            .add(DataUsageStatColumns.LAST_TIME_USED,
-                    "MAX(" + DataUsageStatColumns.CONCRETE_LAST_TIME_USED + ")")
+            // Note this should ideally be "lowres(SUM)" rather than "SUM(lowres)", but we do it
+            // this way for performance reasons.
+            .add(DataUsageStatColumns.LR_TIMES_USED,
+                    "SUM(" + DataUsageStatColumns.CONCRETE_LR_TIMES_USED + ")")
+            .add(DataUsageStatColumns.LR_LAST_TIME_USED,
+                    "MAX(" + DataUsageStatColumns.CONCRETE_LR_LAST_TIME_USED + ")")
             .build();
 
     /**
@@ -844,8 +849,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final ProjectionMap sStrequentPhoneOnlyProjectionMap
             = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(DataUsageStatColumns.TIMES_USED, DataUsageStatColumns.CONCRETE_TIMES_USED)
-            .add(DataUsageStatColumns.LAST_TIME_USED, DataUsageStatColumns.CONCRETE_LAST_TIME_USED)
+            .add(DataUsageStatColumns.LR_TIMES_USED)
+            .add(DataUsageStatColumns.LR_LAST_TIME_USED)
             .add(Phone.NUMBER)
             .add(Phone.TYPE)
             .add(Phone.LABEL)
@@ -877,8 +882,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(RawContactsColumns.PHONEBOOK_BUCKET_PRIMARY)
             .add(RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE)
             .add(RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE)
-            .add(RawContacts.TIMES_CONTACTED)
-            .add(RawContacts.LAST_TIME_CONTACTED)
+            .add(RawContacts.LR_TIMES_CONTACTED)
+            .add(RawContacts.LR_LAST_TIME_CONTACTED)
             .add(RawContacts.CUSTOM_RINGTONE)
             .add(RawContacts.SEND_TO_VOICEMAIL)
             .add(RawContacts.STARRED)
@@ -985,8 +990,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(PhoneLookup.PHONETIC_NAME_STYLE, "contacts_view." + Contacts.PHONETIC_NAME_STYLE)
             .add(PhoneLookup.SORT_KEY_PRIMARY, "contacts_view." + Contacts.SORT_KEY_PRIMARY)
             .add(PhoneLookup.SORT_KEY_ALTERNATIVE, "contacts_view." + Contacts.SORT_KEY_ALTERNATIVE)
-            .add(PhoneLookup.LAST_TIME_CONTACTED, "contacts_view." + Contacts.LAST_TIME_CONTACTED)
-            .add(PhoneLookup.TIMES_CONTACTED, "contacts_view." + Contacts.TIMES_CONTACTED)
+            .add(PhoneLookup.LR_LAST_TIME_CONTACTED, "contacts_view." + Contacts.LR_LAST_TIME_CONTACTED)
+            .add(PhoneLookup.LR_TIMES_CONTACTED, "contacts_view." + Contacts.LR_TIMES_CONTACTED)
             .add(PhoneLookup.STARRED, "contacts_view." + Contacts.STARRED)
             .add(PhoneLookup.IN_DEFAULT_DIRECTORY, "contacts_view." + Contacts.IN_DEFAULT_DIRECTORY)
             .add(PhoneLookup.IN_VISIBLE_GROUP, "contacts_view." + Contacts.IN_VISIBLE_GROUP)
@@ -2879,6 +2884,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private long insertRawContact(
             Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter) {
 
+        inputValues = fixUpUsageColumnsForEdit(inputValues);
+
         // Create a shallow copy and initialize the contact ID to null.
         final ContentValues values = new ContentValues(inputValues);
         values.putNull(RawContacts.CONTACT_ID);
@@ -4001,12 +4008,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private int deleteDataUsage() {
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         db.execSQL("UPDATE " + Tables.RAW_CONTACTS + " SET " +
-                Contacts.TIMES_CONTACTED + "=0," +
-                Contacts.LAST_TIME_CONTACTED + "=NULL");
+                Contacts.RAW_TIMES_CONTACTED + "=0," +
+                Contacts.RAW_LAST_TIME_CONTACTED + "=NULL");
 
         db.execSQL("UPDATE " + Tables.CONTACTS + " SET " +
-                Contacts.TIMES_CONTACTED + "=0," +
-                Contacts.LAST_TIME_CONTACTED + "=NULL");
+                Contacts.RAW_TIMES_CONTACTED + "=0," +
+                Contacts.RAW_LAST_TIME_CONTACTED + "=NULL");
 
         db.delete(Tables.DATA_USAGE_STAT, null, null);
         return 1;
@@ -4529,10 +4536,41 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return count;
     }
 
+    /**
+     * Used for insert/update raw_contacts/contacts to adjust TIMES_CONTACTED and
+     * LAST_TIME_CONTACTED.
+     */
+    private ContentValues fixUpUsageColumnsForEdit(ContentValues cv) {
+        if (!cv.containsKey(Contacts.LR_LAST_TIME_CONTACTED)
+                && !cv.containsKey(Contacts.LR_TIMES_CONTACTED)) {
+            return cv;
+        }
+        final ContentValues ret = new ContentValues(cv);
+
+        ContactsDatabaseHelper.copyLongValue(
+                ret, Contacts.RAW_LAST_TIME_CONTACTED,
+                ret, Contacts.LR_LAST_TIME_CONTACTED);
+        if (ret.containsKey(Contacts.LR_TIMES_CONTACTED)) {
+            getDatabaseHelper().logWtf(
+                    "Column '" + Contacts.LR_TIMES_CONTACTED + "' can no longer be modified"
+                    + "directly.");
+        }
+
+        ret.remove(Contacts.LR_LAST_TIME_CONTACTED);
+        ret.remove(Contacts.LR_TIMES_CONTACTED);
+        return ret;
+    }
+
     private int updateRawContact(SQLiteDatabase db, long rawContactId, ContentValues values,
             boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
         final String selection = RawContactsColumns.CONCRETE_ID + " = ?";
         mSelectionArgs1[0] = Long.toString(rawContactId);
+
+        values = fixUpUsageColumnsForEdit(values);
+
+        if (values.size() == 0) {
+            return 0; // Nothing to update; bail out.
+        }
 
         final ContactsDatabaseHelper dbHelper = mDbHelper.get();
 
@@ -4768,6 +4806,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private int updateContactOptions(
             SQLiteDatabase db, long contactId, ContentValues inputValues, boolean callerIsSyncAdapter) {
 
+        inputValues = fixUpUsageColumnsForEdit(inputValues);
+
         final ContentValues values = new ContentValues();
         ContactsDatabaseHelper.copyStringValue(
                 values, RawContacts.CUSTOM_RINGTONE,
@@ -4776,11 +4816,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 values, RawContacts.SEND_TO_VOICEMAIL,
                 inputValues, Contacts.SEND_TO_VOICEMAIL);
         ContactsDatabaseHelper.copyLongValue(
-                values, RawContacts.LAST_TIME_CONTACTED,
-                inputValues, Contacts.LAST_TIME_CONTACTED);
+                values, RawContacts.RAW_LAST_TIME_CONTACTED,
+                inputValues, Contacts.RAW_LAST_TIME_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(
-                values, RawContacts.TIMES_CONTACTED,
-                inputValues, Contacts.TIMES_CONTACTED);
+                values, RawContacts.RAW_TIMES_CONTACTED,
+                inputValues, Contacts.RAW_TIMES_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(
                 values, RawContacts.STARRED,
                 inputValues, Contacts.STARRED);
@@ -4838,11 +4878,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 values, RawContacts.SEND_TO_VOICEMAIL,
                 inputValues, Contacts.SEND_TO_VOICEMAIL);
         ContactsDatabaseHelper.copyLongValue(
-                values, RawContacts.LAST_TIME_CONTACTED,
-                inputValues, Contacts.LAST_TIME_CONTACTED);
+                values, RawContacts.RAW_LAST_TIME_CONTACTED,
+                inputValues, Contacts.RAW_LAST_TIME_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(
-                values, RawContacts.TIMES_CONTACTED,
-                inputValues, Contacts.TIMES_CONTACTED);
+                values, RawContacts.RAW_TIMES_CONTACTED,
+                inputValues, Contacts.RAW_TIMES_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(
                 values, RawContacts.STARRED,
                 inputValues, Contacts.STARRED);
@@ -4856,8 +4896,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         int rslt = db.update(Tables.CONTACTS, values, Contacts._ID + "=?",
                 mSelectionArgs1);
 
-        if (inputValues.containsKey(Contacts.LAST_TIME_CONTACTED) &&
-                !inputValues.containsKey(Contacts.TIMES_CONTACTED)) {
+        if (inputValues.containsKey(Contacts.RAW_LAST_TIME_CONTACTED) &&
+                !inputValues.containsKey(Contacts.RAW_TIMES_CONTACTED)) {
             db.execSQL(UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
             db.execSQL(UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
         }
@@ -5098,8 +5138,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     ContentValues usageStatsValues = new ContentValues();
                     usageStatsValues.put(DataUsageStatColumns.DATA_ID, dataId);
                     usageStatsValues.put(DataUsageStatColumns.USAGE_TYPE_INT, typeInt);
-                    usageStatsValues.put(DataUsageStatColumns.LAST_TIME_USED, lastTimeUsed);
-                    usageStatsValues.put(DataUsageStatColumns.TIMES_USED, timesUsed);
+                    usageStatsValues.put(DataUsageStatColumns.RAW_LAST_TIME_USED, lastTimeUsed);
+                    usageStatsValues.put(DataUsageStatColumns.RAW_TIMES_USED, timesUsed);
                     updateDataUsageStats(db, usageStatsValues);
                 }
             }
@@ -5980,8 +6020,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 if (projection != null) {
                     subProjection = new String[projection.length + 2];
                     System.arraycopy(projection, 0, subProjection, 0, projection.length);
-                    subProjection[projection.length + 0] = DataUsageStatColumns.TIMES_USED;
-                    subProjection[projection.length + 1] = DataUsageStatColumns.LAST_TIME_USED;
+                    subProjection[projection.length + 0] = DataUsageStatColumns.LR_TIMES_USED;
+                    subProjection[projection.length + 1] = DataUsageStatColumns.LR_LAST_TIME_USED;
                 }
 
                 // String that will store the query for starred contacts. For phone only queries,
@@ -6004,7 +6044,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     // it is included in the list of strequent numbers.
                     tableBuilder.append("(SELECT * FROM " + Views.DATA + " WHERE "
                             + Contacts.STARRED + "=1)" + " AS " + Tables.DATA
-                        + " LEFT OUTER JOIN " + Tables.DATA_USAGE_STAT
+                        + " LEFT OUTER JOIN " + Views.DATA_USAGE_LR
+                            + " AS " + Tables.DATA_USAGE_STAT
                             + " ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "="
                                 + DataColumns.CONCRETE_ID + " AND "
                             + DataUsageStatColumns.CONCRETE_USAGE_TYPE + "="
@@ -6037,7 +6078,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     // data rows (almost always it should be), and we don't want any phone
                     // numbers not used by the user. This way sqlite is able to drop a number of
                     // rows in view_data in the early stage of data lookup.
-                    tableBuilder.append(Tables.DATA_USAGE_STAT
+                    tableBuilder.append(Views.DATA_USAGE_LR + " AS " + Tables.DATA_USAGE_STAT
                             + " INNER JOIN " + Views.DATA + " " + Tables.DATA
                             + " ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "="
                                 + DataColumns.CONCRETE_ID + " AND "
@@ -6090,7 +6131,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                 // Phone numbers that were used more than 30 days ago are dropped from frequents
                 final String frequentQuery = "SELECT * FROM (" + frequentInnerQuery + ") WHERE " +
-                        TIME_SINCE_LAST_USED_SEC + "<" + LAST_TIME_USED_30_DAYS_SEC;
+                        LR_TIME_SINCE_LAST_USED_SEC + "<" + LAST_TIME_USED_30_DAYS_SEC;
                 final String starredQuery = "SELECT * FROM (" + starredInnerQuery + ")";
 
                 // Put them together
@@ -8010,7 +8051,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (includeDataUsageStat) {
             sb.append(" ON (" +
                     DbQueryUtils.concatenateClauses(
-                            DataUsageStatColumns.CONCRETE_TIMES_USED + " > 0",
+                            DataUsageStatColumns.CONCRETE_RAW_TIMES_USED + " > 0",
                             RawContacts.CONTACT_ID + "=" + Views.CONTACTS + "." + Contacts._ID) +
                     ")");
         }
@@ -8397,7 +8438,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private void appendDataUsageStatJoin(StringBuilder sb, int usageType, String dataIdColumn) {
         if (usageType != USAGE_TYPE_ALL) {
-            sb.append(" LEFT OUTER JOIN " + Tables.DATA_USAGE_STAT +
+            sb.append(" LEFT OUTER JOIN " + Views.DATA_USAGE_LR +
+                    " as " + Tables.DATA_USAGE_STAT +
                     " ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "=");
             sb.append(dataIdColumn);
             sb.append(" AND " + DataUsageStatColumns.CONCRETE_USAGE_TYPE + "=");
@@ -8407,13 +8449,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
             sb.append(
                     " LEFT OUTER JOIN " +
                         "(SELECT " +
-                            DataUsageStatColumns.CONCRETE_DATA_ID + " as STAT_DATA_ID, " +
-                            "SUM(" + DataUsageStatColumns.CONCRETE_TIMES_USED +
-                                ") as " + DataUsageStatColumns.TIMES_USED + ", " +
-                            "MAX(" + DataUsageStatColumns.CONCRETE_LAST_TIME_USED +
-                                ") as " + DataUsageStatColumns.LAST_TIME_USED +
-                        " FROM " + Tables.DATA_USAGE_STAT + " GROUP BY " +
-                            DataUsageStatColumns.CONCRETE_DATA_ID + ") as " + Tables.DATA_USAGE_STAT
+                            DataUsageStatColumns.DATA_ID + " as STAT_DATA_ID," +
+                            " SUM(ifnull(" + DataUsageStatColumns.RAW_TIMES_USED +
+                                ",0)) as " + DataUsageStatColumns.RAW_TIMES_USED + ", " +
+                            " MAX(ifnull(" + DataUsageStatColumns.RAW_LAST_TIME_USED +
+                                ",0)) as " + DataUsageStatColumns.RAW_LAST_TIME_USED + "," +
+
+                            // Note this is not ideal -- we should use "lowres(sum(LR_TIMES_USED))"
+                            // here, but for performance reasons we just do it simple.
+                            " SUM(ifnull(" + DataUsageStatColumns.LR_TIMES_USED +
+                                ",0)) as " + DataUsageStatColumns.LR_TIMES_USED + ", " +
+
+                            " MAX(ifnull(" + DataUsageStatColumns.LR_LAST_TIME_USED +
+                                ",0)) as " + DataUsageStatColumns.LR_LAST_TIME_USED +
+                        " FROM " + Views.DATA_USAGE_LR + " GROUP BY " +
+                            DataUsageStatColumns.DATA_ID + ") as " + Tables.DATA_USAGE_STAT
                     );
             sb.append(" ON (STAT_DATA_ID=");
             sb.append(dataIdColumn);
@@ -9831,15 +9881,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final String rids = TextUtils.join(",", rawContactIds);
 
         db.execSQL("UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContacts.LAST_TIME_CONTACTED + "=?" +
-                "," + RawContacts.TIMES_CONTACTED + "=" +
-                    "ifnull(" + RawContacts.TIMES_CONTACTED + ",0) + 1" +
+                " SET " + RawContacts.RAW_LAST_TIME_CONTACTED + "=?" +
+                "," + RawContacts.RAW_TIMES_CONTACTED + "=" +
+                    "ifnull(" + RawContacts.RAW_TIMES_CONTACTED + ",0) + 1" +
                 " WHERE " + RawContacts._ID + " IN (" + rids + ")"
                 , mSelectionArgs1);
         db.execSQL("UPDATE " + Tables.CONTACTS +
-                " SET " + Contacts.LAST_TIME_CONTACTED + "=?1" +
-                "," + Contacts.TIMES_CONTACTED + "=" +
-                    "ifnull(" + Contacts.TIMES_CONTACTED + ",0) + 1" +
+                " SET " + Contacts.RAW_LAST_TIME_CONTACTED + "=?1" +
+                "," + Contacts.RAW_TIMES_CONTACTED + "=" +
+                    "ifnull(" + Contacts.RAW_TIMES_CONTACTED + ",0) + 1" +
                 "," + Contacts.CONTACT_LAST_UPDATED_TIMESTAMP + "=?1" +
                 " WHERE " + Contacts._ID + " IN (SELECT " + RawContacts.CONTACT_ID +
                     " FROM " + Tables.RAW_CONTACTS +
@@ -9886,9 +9936,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     mSelectionArgs2[1] = String.valueOf(id);
 
                     db.execSQL("UPDATE " + Tables.DATA_USAGE_STAT +
-                            " SET " + DataUsageStatColumns.TIMES_USED + "=" +
-                                "ifnull(" + DataUsageStatColumns.TIMES_USED +",0)+1" +
-                            "," + DataUsageStatColumns.LAST_TIME_USED + "=?" +
+                            " SET " + DataUsageStatColumns.RAW_TIMES_USED + "=" +
+                                "ifnull(" + DataUsageStatColumns.RAW_TIMES_USED +",0)+1" +
+                            "," + DataUsageStatColumns.RAW_LAST_TIME_USED + "=?" +
                             " WHERE " + DataUsageStatColumns._ID + "=?",
                             mSelectionArgs2);
                 } else {
@@ -9899,8 +9949,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     db.execSQL("INSERT INTO " + Tables.DATA_USAGE_STAT +
                             "(" + DataUsageStatColumns.DATA_ID +
                             "," + DataUsageStatColumns.USAGE_TYPE_INT +
-                            "," + DataUsageStatColumns.TIMES_USED +
-                            "," + DataUsageStatColumns.LAST_TIME_USED +
+                            "," + DataUsageStatColumns.RAW_TIMES_USED +
+                            "," + DataUsageStatColumns.RAW_LAST_TIME_USED +
                             ") VALUES (?,?,?,?)",
                             mSelectionArgs4);
                 }
@@ -9913,14 +9963,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Update {@link Tables#DATA_USAGE_STAT}.
+     * Directly update {@link Tables#DATA_USAGE_STAT}; used for metadata sync.
      * Update or insert usageType, lastTimeUsed, and timesUsed for specific dataId.
      */
     private void updateDataUsageStats(SQLiteDatabase db, ContentValues values) {
         final String dataId = values.getAsString(DataUsageStatColumns.DATA_ID);
         final String type = values.getAsString(DataUsageStatColumns.USAGE_TYPE_INT);
-        final String lastTimeUsed = values.getAsString(DataUsageStatColumns.LAST_TIME_USED);
-        final String timesUsed = values.getAsString(DataUsageStatColumns.TIMES_USED);
+        final String lastTimeUsed = values.getAsString(DataUsageStatColumns.RAW_LAST_TIME_USED);
+        final String timesUsed = values.getAsString(DataUsageStatColumns.RAW_TIMES_USED);
 
         mSelectionArgs2[0] = dataId;
         mSelectionArgs2[1] = type;
@@ -9936,8 +9986,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 mSelectionArgs3[1] = timesUsed;
                 mSelectionArgs3[2] = String.valueOf(id);
                 db.execSQL("UPDATE " + Tables.DATA_USAGE_STAT +
-                        " SET " + DataUsageStatColumns.LAST_TIME_USED + "=?" +
-                        "," + DataUsageStatColumns.TIMES_USED + "=?" +
+                        " SET " + DataUsageStatColumns.RAW_LAST_TIME_USED + "=?" +
+                        "," + DataUsageStatColumns.RAW_TIMES_USED + "=?" +
                         " WHERE " + DataUsageStatColumns._ID + "=?",
                         mSelectionArgs3);
             } else {
@@ -9948,8 +9998,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 db.execSQL("INSERT INTO " + Tables.DATA_USAGE_STAT +
                         "(" + DataUsageStatColumns.DATA_ID +
                         "," + DataUsageStatColumns.USAGE_TYPE_INT +
-                        "," + DataUsageStatColumns.TIMES_USED +
-                        "," + DataUsageStatColumns.LAST_TIME_USED +
+                        "," + DataUsageStatColumns.RAW_TIMES_USED +
+                        "," + DataUsageStatColumns.RAW_LAST_TIME_USED +
                         ") VALUES (?,?,?,?)",
                         mSelectionArgs4);
             }
@@ -10185,5 +10235,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     public ContactsDatabaseHelper getContactsDatabaseHelperForTest() {
         return mContactsHelper;
+    }
+
+    @VisibleForTesting
+    public ProfileProvider getProfileProviderForTest() {
+        return mProfileProvider;
     }
 }

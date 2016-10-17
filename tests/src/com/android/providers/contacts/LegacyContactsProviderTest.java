@@ -16,6 +16,9 @@
 
 package com.android.providers.contacts;
 
+import static com.android.providers.contacts.TestUtils.dumpTable;
+import static com.android.providers.contacts.TestUtils.dumpUri;
+
 import android.app.SearchManager;
 import android.content.ContentProvider;
 import android.content.ContentUris;
@@ -64,12 +67,23 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         return Contacts.AUTHORITY + ";" + ContactsContract.AUTHORITY;
     }
 
+    private static ContentValues noStats(ContentValues v) {
+        final ContentValues ret = new ContentValues(v);
+        ret.put(People.TIMES_CONTACTED, 0);
+        ret.put(People.LAST_TIME_CONTACTED, 0);
+        return ret;
+    }
+
     public void testPeopleInsert() {
         ContentValues values = new ContentValues();
         putContactValues(values);
 
         Uri uri = mResolver.insert(People.CONTENT_URI, values);
+
+        values = noStats(values);
+
         assertStoredValues(uri, values);
+
         assertSelection(People.CONTENT_URI, values, "people", People._ID, ContentUris.parseId(uri));
     }
 
@@ -78,6 +92,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         putContactValues(values);
 
         Uri uri = mResolver.insert(People.CONTENT_URI, values);
+        values = noStats(values);
         long personId = ContentUris.parseId(uri);
         assertStoredValues(uri, values);
         assertSelection(People.CONTENT_URI, values, "people", People._ID, personId);
@@ -85,11 +100,13 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         values.clear();
         putContactValues2(values);
         mResolver.update(uri, values, null, null);
+        values = noStats(values);
         assertStoredValues(uri, values);
 
         values.clear();
         putContactValues(values);
         mResolver.update(People.CONTENT_URI, values, People._ID + "=" + personId, null);
+        values = noStats(values);
         assertStoredValues(uri, values);
     }
 
@@ -207,6 +224,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         values.clear();
         putContactValuesExceptName(values);
+        values = noStats(values);
         values.put(People.PRIMARY_PHONE_ID, ContentUris.parseId(phoneUri1));
         assertStoredValues(phoneUri2, values);
 
@@ -279,6 +297,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         values.clear();
         putContactValuesExceptName(values);
+        values = noStats(values);
         values.put(People.PRIMARY_EMAIL_ID, ContentUris.parseId(emailUri1));
         assertStoredValues(emailUri2, values);
 
@@ -314,9 +333,9 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         int timesContactedAfter =
             Integer.parseInt(getStoredValue(personUri, People.TIMES_CONTACTED));
 
-        assertTrue(lastContacted >= timeBefore);
-        assertTrue(lastContacted <= timeAfter);
-        assertEquals(timesContactedAfter, timesContactedBefore + 1);
+        // No longer supported as of O.
+        assertEquals(0, lastContacted);
+        assertEquals(0, timesContactedAfter);
     }
 
     public void testOrganizationsInsert() {
@@ -401,6 +420,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         // The result is joined with People
         putContactValues(expectedResults[0]);
+        expectedResults[0] = noStats(expectedResults[0]);
         assertStoredValues(uri, expectedResults);
         assertSelection(Phones.CONTENT_URI, values, "phones",
                 Phones._ID, ContentUris.parseId(uri));
@@ -412,6 +432,7 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
         // Now the person should be joined with Phone
         values.clear();
         putContactValues(values);
+        values = noStats(values);
         values.put(People.TYPE, Phones.TYPE_CUSTOM);
         values.put(People.LABEL, "Directory");
         values.put(People.NUMBER, "1-800-4664-411");
@@ -541,6 +562,9 @@ public class LegacyContactsProviderTest extends BaseContactsProvider2Test {
 
         // The result is joined with People
         putContactValues(values);
+
+        values = noStats(values);
+
         assertStoredValues(uri, values);
         assertSelection(ContactMethods.CONTENT_URI, values, "contact_methods",
                 ContactMethods._ID, ContentUris.parseId(uri));

@@ -23,6 +23,7 @@ cd $ANDROID_BUILD_TOP
 
 mmm -j32 packages/providers/ContactsProvider
 adb install -t -r -g $ANDROID_PRODUCT_OUT/system/priv-app/ContactsProvider/ContactsProvider.apk
+adb install -t -r -g $ANDROID_PRODUCT_OUT/data/app/ContactsProviderTests/ContactsProviderTests.apk
 adb install -t -r -g $ANDROID_PRODUCT_OUT/data/app/ContactsProviderTests2/ContactsProviderTests2.apk
 
 runtest() {

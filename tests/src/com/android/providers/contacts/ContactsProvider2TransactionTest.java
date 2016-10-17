@@ -60,7 +60,7 @@ public class ContactsProvider2TransactionTest extends BaseContactsProvider2Test 
      */
     public void testTransactionCallback_insert() {
 
-        final ContentValues values = cv(RawContacts.LAST_TIME_CONTACTED, 12345);
+        final ContentValues values = cv(RawContacts.LAST_TIME_CONTACTED, 86400);
 
         // Insert a raw contact.
         mProvider.resetTrasactionCallbackCalledFlags();
@@ -87,14 +87,14 @@ public class ContactsProvider2TransactionTest extends BaseContactsProvider2Test 
      */
     public void testTransactionCallback_update() {
 
-        final ContentValues values = cv(RawContacts.LAST_TIME_CONTACTED, 12345);
+        final ContentValues values = cv(RawContacts.LAST_TIME_CONTACTED, 86400);
 
         // Make sure to create a raw contact and a profile raw contact.
         mResolver.insert(RawContacts.CONTENT_URI, values);
         mResolver.insert(Profile.CONTENT_RAW_CONTACTS_URI, values);
 
         values.clear();
-        values.put(RawContacts.LAST_TIME_CONTACTED, 99999);
+        values.put(RawContacts.LAST_TIME_CONTACTED, 86400 * 2);
 
         // Update all raw contacts.
         mProvider.resetTrasactionCallbackCalledFlags();
@@ -121,7 +121,7 @@ public class ContactsProvider2TransactionTest extends BaseContactsProvider2Test 
      */
     public void testTransactionCallback_delete() {
 
-        final ContentValues values = cv(RawContacts.LAST_TIME_CONTACTED, 12345);
+        final ContentValues values = cv(RawContacts.LAST_TIME_CONTACTED, 86400);
 
         // Make sure to create a raw contact and a profile raw contact.
         mResolver.insert(RawContacts.CONTENT_URI, values);
@@ -150,7 +150,7 @@ public class ContactsProvider2TransactionTest extends BaseContactsProvider2Test 
      */
     public void testTransactionCallback_bulkInsert() {
 
-        final ContentValues values = cv(RawContacts.LAST_TIME_CONTACTED, 12345);
+        final ContentValues values = cv(RawContacts.LAST_TIME_CONTACTED, 86400);
 
         // Insert a raw contact.
         mProvider.resetTrasactionCallbackCalledFlags();
@@ -179,7 +179,7 @@ public class ContactsProvider2TransactionTest extends BaseContactsProvider2Test 
         ContentProviderOperation.Builder b;
         b = ContentProviderOperation.newInsert(RawContacts.CONTENT_URI);
         b.withValue(RawContacts.STARRED, 1);
-        b.withValue(RawContacts.TIMES_CONTACTED, 200001);
+        b.withValue(RawContacts.LAST_TIME_CONTACTED, 86400 * 21);
         ops.add(b.build());
 
         b = ContentProviderOperation.newInsert(Data.CONTENT_URI);
@@ -197,7 +197,7 @@ public class ContactsProvider2TransactionTest extends BaseContactsProvider2Test 
     private void checkStoredContact() {
         assertStoredValues(Contacts.CONTENT_URI, cv(
                 Contacts.DISPLAY_NAME, "Regular Contact",
-                RawContacts.TIMES_CONTACTED, 200001
+                RawContacts.LAST_TIME_CONTACTED, 86400 * 21
                 ));
     }
 
@@ -208,7 +208,7 @@ public class ContactsProvider2TransactionTest extends BaseContactsProvider2Test 
         ContentProviderOperation.Builder b;
         b = ContentProviderOperation.newInsert(Profile.CONTENT_RAW_CONTACTS_URI);
         b.withValue(RawContacts.STARRED, 1);
-        b.withValue(RawContacts.TIMES_CONTACTED, 100001);
+        b.withValue(RawContacts.LAST_TIME_CONTACTED, 86400 * 11);
         ops.add(b.build());
 
         b = ContentProviderOperation.newInsert(Data.CONTENT_URI);
@@ -227,7 +227,7 @@ public class ContactsProvider2TransactionTest extends BaseContactsProvider2Test 
     private void checkStoredProfile() {
         assertStoredValues(Profile.CONTENT_URI, cv(
                 Contacts.DISPLAY_NAME, "Profile Contact",
-                RawContacts.TIMES_CONTACTED, 100001
+                RawContacts.LAST_TIME_CONTACTED, 86400 * 11
                 ));
     }
 

@@ -136,7 +136,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1200-1299 O
      * </pre>
      */
-    static final int DATABASE_VERSION = 1200;
+    static final int DATABASE_VERSION = 1201;
     private static final int MINIMUM_SUPPORTED_VERSION = 700;
 
     public interface Tables {
@@ -325,7 +325,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String ENTITIES = "view_entities";
         public static final String RAW_ENTITIES = "view_raw_entities";
         public static final String GROUPS = "view_groups";
+
+        /** The data_usage_stat table joined with other tables. */
         public static final String DATA_USAGE_STAT = "view_data_usage_stat";
+
+        /** The data_usage_stat table with the low-res columns. */
+        public static final String DATA_USAGE_LR = "view_data_usage";
         public static final String STREAM_ITEMS = "view_stream_items";
         public static final String METADATA_SYNC = "view_metadata_sync";
         public static final String METADATA_SYNC_STATE = "view_metadata_sync_state";
@@ -408,10 +413,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         public static final String CONCRETE_PHOTO_FILE_ID = Tables.CONTACTS + "."
                 + Contacts.PHOTO_FILE_ID;
-        public static final String CONCRETE_TIMES_CONTACTED = Tables.CONTACTS + "."
-                + Contacts.TIMES_CONTACTED;
-        public static final String CONCRETE_LAST_TIME_CONTACTED = Tables.CONTACTS + "."
-                + Contacts.LAST_TIME_CONTACTED;
+
+        public static final String CONCRETE_RAW_TIMES_CONTACTED = Tables.CONTACTS + "."
+                + Contacts.RAW_TIMES_CONTACTED;
+        public static final String CONCRETE_RAW_LAST_TIME_CONTACTED = Tables.CONTACTS + "."
+                + Contacts.RAW_LAST_TIME_CONTACTED;
+
         public static final String CONCRETE_STARRED = Tables.CONTACTS + "." + Contacts.STARRED;
         public static final String CONCRETE_PINNED = Tables.CONTACTS + "." + Contacts.PINNED;
         public static final String CONCRETE_CUSTOM_RINGTONE = Tables.CONTACTS + "."
@@ -456,10 +463,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Tables.RAW_CONTACTS + "." + RawContacts.CUSTOM_RINGTONE;
         public static final String CONCRETE_SEND_TO_VOICEMAIL =
                 Tables.RAW_CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL;
-        public static final String CONCRETE_LAST_TIME_CONTACTED =
-                Tables.RAW_CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED;
-        public static final String CONCRETE_TIMES_CONTACTED =
-                Tables.RAW_CONTACTS + "." + RawContacts.TIMES_CONTACTED;
+        public static final String CONCRETE_RAW_LAST_TIME_CONTACTED =
+                Tables.RAW_CONTACTS + "." + RawContacts.RAW_LAST_TIME_CONTACTED;
+        public static final String CONCRETE_RAW_TIMES_CONTACTED =
+                Tables.RAW_CONTACTS + "." + RawContacts.RAW_TIMES_CONTACTED;
         public static final String CONCRETE_STARRED =
                 Tables.RAW_CONTACTS + "." + RawContacts.STARRED;
         public static final String CONCRETE_PINNED =
@@ -726,14 +733,24 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String CONCRETE_DATA_ID = Tables.DATA_USAGE_STAT + "." + DATA_ID;
 
         /** type: INTEGER (long) */
-        public static final String LAST_TIME_USED = "last_time_used";
-        public static final String CONCRETE_LAST_TIME_USED =
-                Tables.DATA_USAGE_STAT + "." + LAST_TIME_USED;
+        public static final String RAW_LAST_TIME_USED = Data.RAW_LAST_TIME_USED;
+        public static final String LR_LAST_TIME_USED = Data.LR_LAST_TIME_USED;
 
         /** type: INTEGER */
-        public static final String TIMES_USED = "times_used";
-        public static final String CONCRETE_TIMES_USED =
-                Tables.DATA_USAGE_STAT + "." + TIMES_USED;
+        public static final String RAW_TIMES_USED = Data.RAW_TIMES_USED;
+        public static final String LR_TIMES_USED = Data.LR_TIMES_USED;
+
+        public static final String CONCRETE_RAW_LAST_TIME_USED =
+                Tables.DATA_USAGE_STAT + "." + RAW_LAST_TIME_USED;
+
+        public static final String CONCRETE_RAW_TIMES_USED =
+                Tables.DATA_USAGE_STAT + "." + RAW_TIMES_USED;
+
+        public static final String CONCRETE_LR_LAST_TIME_USED =
+                Tables.DATA_USAGE_STAT + "." + LR_LAST_TIME_USED;
+
+        public static final String CONCRETE_LR_TIMES_USED =
+                Tables.DATA_USAGE_STAT + "." + LR_TIMES_USED;
 
         /** type: INTEGER */
         public static final String USAGE_TYPE_INT = "usage_type";
@@ -900,6 +917,60 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         @Override
         protected String[] getCommonNicknameClusters(String normalizedName) {
             return mCommonNicknameCache.getCommonNicknameClusters(normalizedName);
+        }
+    }
+
+    /** Placeholder for the methods to build the "low-res" SQL expressions. */
+    @VisibleForTesting
+    interface LowRes {
+        /** To be replaced with a real column name.  Only used within this interface. */
+        String TEMPLATE_PLACEHOLDER = "XX";
+
+        /**
+         * To be replaced with a constant in the expression.
+         * Only used within this interface.
+         */
+        String CONSTANT_PLACEHOLDER = "YY";
+
+        /** Only used within this interface. */
+        int TIMES_USED_GRANULARITY = 10;
+
+        /** Only used within this interface. */
+        int LAST_TIME_USED_GRANULARITY = 24 * 60 * 60;
+
+        /**
+         * Template to build the "low-res times used/contacted".  Only used within this interface.
+         * The outermost cast is needed to tell SQLite that the result is of the integer type.
+         */
+        String TEMPLATE_TIMES_USED =
+                ("cast(ifnull((case when (XX) <= 0 then 0"
+                + " when (XX) < (YY) then 1"
+                + " else (cast((XX) as int) / (YY)) * (YY) end), 0) as int)")
+                .replaceAll(CONSTANT_PLACEHOLDER, String.valueOf(TIMES_USED_GRANULARITY));
+
+        /**
+         * Template to build the "low-res last time used/contacted".
+         * Only used within this interface.
+         * The outermost cast is needed to tell SQLite that the result is of the integer type.
+         */
+        String TEMPLATE_LAST_TIME_USED =
+                ("cast((cast((XX) as int) / (YY)) * (YY) as int)")
+                .replaceAll(CONSTANT_PLACEHOLDER, String.valueOf(LAST_TIME_USED_GRANULARITY));
+
+        /**
+         * Build the SQL expression for the "low-res times used/contacted" expression from the
+         * give column name.
+         */
+        static String getTimesUsedExpression(String column) {
+            return TEMPLATE_TIMES_USED.replaceAll(TEMPLATE_PLACEHOLDER, column);
+        }
+
+        /**
+         * Build the SQL expression for the "low-res last time used/contacted" expression from the
+         * give column name.
+         */
+        static String getLastTimeUsedExpression(String column) {
+            return TEMPLATE_LAST_TIME_USED.replaceAll(TEMPLATE_PLACEHOLDER, column);
         }
     }
 
@@ -1122,6 +1193,20 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 AccountsColumns.DATA_SET + " TEXT" +
         ");");
 
+        // Note, there are two sets of the usage stat columns: LR_* and RAW_*.
+        // RAW_* contain the real values, which clients can't access.  The column names start
+        // with a special prefix, which clients are prohibited from using in queries (including
+        // "where" of deletes/updates.)
+        // The LR_* columns have the original, public names.  The views have the LR columns too,
+        // which contain the "low-res" numbers.  The tables, though, do *not* have to have these
+        // columns, because we won't use them anyway.  However, because old versions of the tables
+        // had those columns, and SQLite doesn't allow removing existing columns, meaning upgraded
+        // tables will have these LR_* columns anyway.  So, in order to make a new database look
+        // the same as an upgraded database, we create the LR columns in a new database too.
+        // Otherwise, we would easily end up with writing SQLs that will run fine in a new DB
+        // but not in an upgraded database, and because all unit tests will run with a new database,
+        // we can't easily catch these sort of issues.
+
         // One row per group of contacts corresponding to the same person
         db.execSQL("CREATE TABLE " + Tables.CONTACTS + " (" +
                 BaseColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -1130,8 +1215,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Contacts.PHOTO_FILE_ID + " INTEGER REFERENCES photo_files(_id)," +
                 Contacts.CUSTOM_RINGTONE + " TEXT," +
                 Contacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
-                Contacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
-                Contacts.LAST_TIME_CONTACTED + " INTEGER," +
+
+                Contacts.RAW_TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
+                Contacts.RAW_LAST_TIME_CONTACTED + " INTEGER," +
+
+                Contacts.LR_TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
+                Contacts.LR_LAST_TIME_CONTACTED + " INTEGER," +
+
                 Contacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.PINNED + " INTEGER NOT NULL DEFAULT " + PinnedPositions.UNPINNED + "," +
                 Contacts.HAS_PHONE_NUMBER + " INTEGER NOT NULL DEFAULT 0," +
@@ -1163,8 +1253,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 RawContactsColumns.AGGREGATION_NEEDED + " INTEGER NOT NULL DEFAULT 1," +
                 RawContacts.CUSTOM_RINGTONE + " TEXT," +
                 RawContacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
-                RawContacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
-                RawContacts.LAST_TIME_CONTACTED + " INTEGER," +
+
+                RawContacts.RAW_TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
+                RawContacts.RAW_LAST_TIME_CONTACTED + " INTEGER," +
+
+                RawContacts.LR_TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
+                RawContacts.LR_LAST_TIME_CONTACTED + " INTEGER," +
+
                 RawContacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.PINNED + " INTEGER NOT NULL DEFAULT "  + PinnedPositions.UNPINNED +
                     "," + RawContacts.DISPLAY_NAME_PRIMARY + " TEXT," +
@@ -1452,8 +1547,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 DataUsageStatColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 DataUsageStatColumns.DATA_ID + " INTEGER NOT NULL, " +
                 DataUsageStatColumns.USAGE_TYPE_INT + " INTEGER NOT NULL DEFAULT 0, " +
-                DataUsageStatColumns.TIMES_USED + " INTEGER NOT NULL DEFAULT 0, " +
-                DataUsageStatColumns.LAST_TIME_USED + " INTEGER NOT NULL DEFAULT 0, " +
+
+                DataUsageStatColumns.RAW_TIMES_USED + " INTEGER NOT NULL DEFAULT 0, " +
+                DataUsageStatColumns.RAW_LAST_TIME_USED + " INTEGER NOT NULL DEFAULT 0, " +
+
+                DataUsageStatColumns.LR_TIMES_USED + " INTEGER NOT NULL DEFAULT 0, " +
+                DataUsageStatColumns.LR_LAST_TIME_USED + " INTEGER NOT NULL DEFAULT 0, " +
+
                 "FOREIGN KEY(" + DataUsageStatColumns.DATA_ID + ") REFERENCES "
                         + Tables.DATA + "(" + Data._ID + ")" +
         ");");
@@ -1735,6 +1835,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_STAT + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_LR + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.STREAM_ITEMS + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.METADATA_SYNC_STATE + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.METADATA_SYNC + ";");
@@ -1803,17 +1904,24 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         String contactOptionColumns =
                 ContactsColumns.CONCRETE_CUSTOM_RINGTONE
-                        + " AS " + RawContacts.CUSTOM_RINGTONE + ","
+                        + " AS " + Contacts.CUSTOM_RINGTONE + ","
                 + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
-                        + " AS " + RawContacts.SEND_TO_VOICEMAIL + ","
-                + ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
-                        + " AS " + RawContacts.LAST_TIME_CONTACTED + ","
-                + ContactsColumns.CONCRETE_TIMES_CONTACTED
-                        + " AS " + RawContacts.TIMES_CONTACTED + ","
+                        + " AS " + Contacts.SEND_TO_VOICEMAIL + ","
+
+                + ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED
+                        + " AS " + Contacts.RAW_LAST_TIME_CONTACTED + ","
+                + ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED
+                        + " AS " + Contacts.RAW_TIMES_CONTACTED + ","
+
+                + LowRes.getLastTimeUsedExpression(ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED)
+                        + " AS " + Contacts.LR_LAST_TIME_CONTACTED + ","
+                + LowRes.getTimesUsedExpression(ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED)
+                        + " AS " + Contacts.LR_TIMES_CONTACTED + ","
+
                 + ContactsColumns.CONCRETE_STARRED
-                        + " AS " + RawContacts.STARRED + ","
+                        + " AS " + Contacts.STARRED + ","
                 + ContactsColumns.CONCRETE_PINNED
-                        + " AS " + RawContacts.PINNED;
+                        + " AS " + Contacts.PINNED;
 
         String contactNameColumns =
                 "name_raw_contact." + RawContacts.DISPLAY_NAME_SOURCE
@@ -1879,8 +1987,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String rawContactOptionColumns =
                 RawContacts.CUSTOM_RINGTONE + ","
                 + RawContacts.SEND_TO_VOICEMAIL + ","
-                + RawContacts.LAST_TIME_CONTACTED + ","
-                + RawContacts.TIMES_CONTACTED + ","
+                + RawContacts.RAW_LAST_TIME_CONTACTED + ","
+                + LowRes.getLastTimeUsedExpression(RawContacts.RAW_LAST_TIME_CONTACTED)
+                        + " AS " + RawContacts.LR_LAST_TIME_CONTACTED + ","
+                + RawContacts.RAW_TIMES_CONTACTED + ","
+                + LowRes.getTimesUsedExpression(RawContacts.RAW_TIMES_CONTACTED)
+                        + " AS " + RawContacts.LR_TIMES_CONTACTED + ","
                 + RawContacts.STARRED + ","
                 + RawContacts.PINNED;
 
@@ -1917,16 +2029,23 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         + " AS " + Contacts.CUSTOM_RINGTONE + ", "
                 + contactNameColumns + ", "
                 + baseContactColumns + ", "
-                + ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
-                        + " AS " + Contacts.LAST_TIME_CONTACTED + ", "
+
+                + ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED
+                        + " AS " + Contacts.RAW_LAST_TIME_CONTACTED + ", "
+                + LowRes.getLastTimeUsedExpression(ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED)
+                        + " AS " + Contacts.LR_LAST_TIME_CONTACTED + ", "
+
                 + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
                         + " AS " + Contacts.SEND_TO_VOICEMAIL + ", "
                 + ContactsColumns.CONCRETE_STARRED
                         + " AS " + Contacts.STARRED + ", "
                 + ContactsColumns.CONCRETE_PINNED
                 + " AS " + Contacts.PINNED + ", "
-                + ContactsColumns.CONCRETE_TIMES_CONTACTED
-                        + " AS " + Contacts.TIMES_CONTACTED;
+
+                + ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED
+                        + " AS " + Contacts.RAW_TIMES_CONTACTED + ", "
+                + LowRes.getTimesUsedExpression(ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED)
+                        + " AS " + Contacts.LR_TIMES_CONTACTED;
 
         String contactsSelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
@@ -2016,15 +2135,34 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE VIEW " + Views.ENTITIES + " AS "
                 + entitiesSelect);
 
+        // Data usage view, with the low res columns, with no joins.
+        final String dataUsageViewSelect = "SELECT "
+                + DataUsageStatColumns._ID + ", "
+                + DataUsageStatColumns.DATA_ID + ", "
+                + DataUsageStatColumns.USAGE_TYPE_INT + ", "
+                + DataUsageStatColumns.RAW_TIMES_USED + ", "
+                + DataUsageStatColumns.RAW_LAST_TIME_USED + ","
+                + LowRes.getTimesUsedExpression(DataUsageStatColumns.RAW_TIMES_USED)
+                    + " AS " + DataUsageStatColumns.LR_TIMES_USED + ","
+                + LowRes.getLastTimeUsedExpression(DataUsageStatColumns.RAW_LAST_TIME_USED)
+                    + " AS " + DataUsageStatColumns.LR_LAST_TIME_USED
+                + " FROM " + Tables.DATA_USAGE_STAT;
+
+        // When the data_usage_stat table is needed with the low-res columns, use this, which is
+        // faster than the DATA_USAGE_STAT view since it doesn't involve joins.
+        db.execSQL("CREATE VIEW " + Views.DATA_USAGE_LR + " AS " + dataUsageViewSelect);
+
         String dataUsageStatSelect = "SELECT "
                 + DataUsageStatColumns.CONCRETE_ID + " AS " + DataUsageStatColumns._ID + ", "
                 + DataUsageStatColumns.DATA_ID + ", "
                 + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + RawContacts.CONTACT_ID + ", "
                 + MimetypesColumns.CONCRETE_MIMETYPE + " AS " + Data.MIMETYPE + ", "
                 + DataUsageStatColumns.USAGE_TYPE_INT + ", "
-                + DataUsageStatColumns.TIMES_USED + ", "
-                + DataUsageStatColumns.LAST_TIME_USED
-                + " FROM " + Tables.DATA_USAGE_STAT
+                + DataUsageStatColumns.RAW_TIMES_USED + ", "
+                + DataUsageStatColumns.RAW_LAST_TIME_USED + ", "
+                + DataUsageStatColumns.LR_TIMES_USED + ", "
+                + DataUsageStatColumns.LR_LAST_TIME_USED
+                + " FROM " + Views.DATA_USAGE_LR + " AS " + Tables.DATA_USAGE_STAT
                 + " JOIN " + Tables.DATA + " ON ("
                 +   DataColumns.CONCRETE_ID + "=" + DataUsageStatColumns.CONCRETE_DATA_ID + ")"
                 + " JOIN " + Tables.RAW_CONTACTS + " ON ("
@@ -2456,6 +2594,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (isUpgradeRequired(oldVersion, newVersion, 1200)) {
             createPresenceTables(db);
             oldVersion = 1200;
+        }
+
+        if (isUpgradeRequired(oldVersion, newVersion, 1201)) {
+            upgradeToVersion1201(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1201;
         }
 
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
@@ -3199,6 +3343,35 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "' WHERE sort_key_alt IS NULL AND phonebook_bucket_alt=0;");
 
         FastScrollingIndexCache.getInstance(mContext).invalidate();
+    }
+
+    private void upgradeToVersion1201(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE contacts ADD x_times_contacted INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE contacts ADD x_last_time_contacted INTEGER");
+
+        db.execSQL("ALTER TABLE raw_contacts ADD x_times_contacted INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE raw_contacts ADD x_last_time_contacted INTEGER");
+
+        db.execSQL("ALTER TABLE data_usage_stat ADD x_times_used INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE data_usage_stat ADD x_last_time_used INTEGER NOT NULL DEFAULT 0");
+
+        db.execSQL("UPDATE contacts SET "
+                + "x_times_contacted = ifnull(times_contacted,0),"
+                + "x_last_time_contacted = ifnull(last_time_contacted,0),"
+                + "times_contacted = 0,"
+                + "last_time_contacted = 0");
+
+        db.execSQL("UPDATE raw_contacts SET "
+                + "x_times_contacted = ifnull(times_contacted,0),"
+                + "x_last_time_contacted = ifnull(last_time_contacted,0),"
+                + "times_contacted = 0,"
+                + "last_time_contacted = 0");
+
+        db.execSQL("UPDATE data_usage_stat SET "
+                + "x_times_used = ifnull(times_used,0),"
+                + "x_last_time_used = ifnull(last_time_used,0),"
+                + "times_used = 0,"
+                + "last_time_used = 0");
     }
 
     /**
@@ -4816,12 +4989,19 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     private void reportInvalidSql(String callerPackage, InvalidSqlException e) {
-        final String message = String.format("%s caller=%s", e.getMessage(), callerPackage);
+        logWtf(String.format("%s caller=%s", e.getMessage(), callerPackage));
+        throw e; // STOPSHIP Don't throw for pre-O apps.
+    }
+
+    /**
+     * Calls WTF without crashing, so we can collect errors in the wild.  During unit tests, it'll
+     * log only.
+     */
+    public void logWtf(String message) {
         if (mIsTestInstance) {
             Slog.w(TAG, "[Test mode, warning only] " + message);
         } else {
             Slog.wtfStack(TAG, message);
         }
-        throw e; // STOPSHIP Don't throw for pre-O apps.
     }
 }

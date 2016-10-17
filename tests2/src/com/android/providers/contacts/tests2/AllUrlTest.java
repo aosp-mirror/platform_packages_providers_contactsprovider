@@ -228,6 +228,12 @@ public class AllUrlTest extends AndroidTestCase {
 
     private void addFailure(String message) {
         mFailures.add(message);
+        Log.e(TAG, "Failed: " + message);
+        if (mFailures.size() > 100) {
+            // Too many failures...
+        } else {
+            mFailures.add(message);
+        }
     }
 
     private void failIfFailed() {
@@ -282,19 +288,28 @@ public class AllUrlTest extends AndroidTestCase {
                     selectionArgs, sortOrder)) {
                 c.moveToFirst();
             }
+        } catch (Throwable th) {
+            addFailure("Query failed: URI=" + uri + " Message=" + th.getMessage());
+        }
+        try {
             // With CancellationSignal.
             try (Cursor c = getContext().getContentResolver().query(uri, projection, selection,
                     selectionArgs, sortOrder, new CancellationSignal())) {
                 c.moveToFirst();
             }
+        } catch (Throwable th) {
+            addFailure("Query with cancel failed: URI=" + uri + " Message=" + th.getMessage());
+        }
+        try {
             // With limit.
             try (Cursor c = getContext().getContentResolver().query(
-                    uri.buildUpon().appendQueryParameter(ContactsContract.LIMIT_PARAM_KEY, "0").build(),
+                    uri.buildUpon().appendQueryParameter(
+                            ContactsContract.LIMIT_PARAM_KEY, "0").build(),
                     projection, selection, selectionArgs, sortOrder)) {
                 c.moveToFirst();
             }
         } catch (Throwable th) {
-            addFailure("Query failed: URI=" + uri + " Message=" + th.getMessage());
+            addFailure("Query with limit failed: URI=" + uri + " Message=" + th.getMessage());
         }
     }
 
@@ -330,6 +345,20 @@ public class AllUrlTest extends AndroidTestCase {
         failIfFailed();
     }
 
+    public void testNoHiddenColumns() {
+        for (String[] path : URIs) {
+            if (!supportsQuery(path)) continue;
+            final Uri uri = getUri(path);
+
+            for (String column : getColumns(uri)) {
+                if (column.toLowerCase().startsWith(ContactsContract.HIDDEN_COLUMN_PREFIX)) {  // doesn't seem to be working
+                    addFailure("Uri " + uri + " returned hidden column " + column);
+                }
+            }
+        }
+        failIfFailed();
+    }
+
     /**
      * Make sure all URLs are accessible with a projection.
      */
@@ -357,7 +386,8 @@ public class AllUrlTest extends AndroidTestCase {
                     // These columns only show up when the projection contains certain columns.
 
                     projection = new String[]{"mode", column};
-                } else if (u.startsWith("content://com.android.contacts/search_suggest_query")
+                } else if ((u.startsWith("content://com.android.contacts/search_suggest_query")
+                        || u.startsWith("content://contacts/search_suggest_query"))
                         && "suggest_intent_action".equals(column)) {
                     // Can't be included in the projection due to a bug in GlobalSearchSupport.
                     continue;
@@ -395,6 +425,26 @@ public class AllUrlTest extends AndroidTestCase {
         failIfFailed();
     }
 
+//    /**
+//     * Make sure all URLs are accessible with a selection.
+//     */
+//    public void testSelectWithSelectionUsingColumns() {
+//        for (String[] path : URIs) {
+//            if (!supportsQuery(path)) continue;
+//            final Uri uri = getUri(path);
+//
+//            for (String column : getColumns(uri)) {
+//                checkQueryExecutable(uri,
+//                        null, // projection
+//                        column + "=?", // selection
+//                        ARG1, // , // selection args
+//                        null // sort order
+//                );
+//            }
+//        }
+//        failIfFailed();
+//    }
+
     /**
      * Make sure all URLs are accessible with an order-by.
      */
@@ -403,12 +453,14 @@ public class AllUrlTest extends AndroidTestCase {
             if (!supportsQuery(path)) continue;
             final Uri uri = getUri(path);
 
-            checkQueryExecutable(uri,
-                    null, // projection
-                    null, // selection
-                    null, // , // selection args
-                    getColumns(uri)[0] // sort order
-            );
+            for (String column : getColumns(uri)) {
+                checkQueryExecutable(uri,
+                        null, // projection
+                        "1=2", // selection
+                        null, // , // selection args
+                        column // sort order
+                );
+            }
         }
         failIfFailed();
     }
