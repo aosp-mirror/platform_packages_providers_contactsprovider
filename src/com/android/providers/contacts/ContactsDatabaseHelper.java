@@ -4952,16 +4952,26 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Ensure (a piece of) SQL is valid and doesn't contain disallowed tokens.
      */
     public void validateSql(String callerPackage, String sqlPiece) {
-        runSqlValidation(callerPackage, () -> getSqlChecker().ensureNoInvalidTokens(sqlPiece));
+        // TODO Replace the Runnable with a lambda -- which would crash right now due to an art bug?
+        runSqlValidation(callerPackage, new Runnable() {
+            @Override
+            public void run() {
+                ContactsDatabaseHelper.this.getSqlChecker().ensureNoInvalidTokens(sqlPiece);
+            }
+        });
     }
 
     /**
      * Ensure all keys in {@code values} are valid. (i.e. they're all single token.)
      */
     public void validateContentValues(String callerPackage, ContentValues values) {
-        runSqlValidation(callerPackage, () -> {
-            for (String key : values.keySet()) {
-                getSqlChecker().ensureSingleTokenOnly(key);
+        // TODO Replace the Runnable with a lambda -- which would crash right now due to an art bug?
+        runSqlValidation(callerPackage, new Runnable() {
+            @Override
+            public void run() {
+                for (String key : values.keySet()) {
+                    ContactsDatabaseHelper.this.getSqlChecker().ensureSingleTokenOnly(key);
+                }
             }
         });
    }
@@ -4970,17 +4980,20 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Ensure all column names in {@code projection} are valid. (i.e. they're all single token.)
      */
     public void validateProjection(String callerPackage, String[] projection) {
+        // TODO Replace the Runnable with a lambda -- which would crash right now due to an art bug?
         if (projection != null) {
-            runSqlValidation(callerPackage, () -> {
-                for (String column : projection) {
-                    getSqlChecker().ensureSingleTokenOnly(column);
+            runSqlValidation(callerPackage, new Runnable() {
+                @Override
+                public void run() {
+                    for (String column : projection) {
+                        ContactsDatabaseHelper.this.getSqlChecker().ensureSingleTokenOnly(column);
+                    }
                 }
             });
         }
     }
 
     private void runSqlValidation(String callerPackage, Runnable r) {
-        // STOPSHIP Allow certain system apps to access it
         try {
             r.run();
         } catch (InvalidSqlException e) {

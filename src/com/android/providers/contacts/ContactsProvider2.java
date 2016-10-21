@@ -8893,6 +8893,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case PROFILE_AS_VCARD: {
+                if (!mode.equals("r")) {
+                    throw new IllegalArgumentException("Write is not supported.");
+                }
                 // When opening a contact as file, we pass back contents as a
                 // vCard-encoded stream. We build into a local buffer first,
                 // then pipe into MemoryFile once the exact size is known.
@@ -8902,6 +8905,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case CONTACTS_AS_VCARD: {
+                if (!mode.equals("r")) {
+                    throw new IllegalArgumentException("Write is not supported.");
+                }
                 // When opening a contact as file, we pass back contents as a
                 // vCard-encoded stream. We build into a local buffer first,
                 // then pipe into MemoryFile once the exact size is known.
@@ -8911,6 +8917,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case CONTACTS_AS_MULTI_VCARD: {
+                if (!mode.equals("r")) {
+                    throw new IllegalArgumentException("Write is not supported.");
+                }
                 final String lookupKeys = uri.getPathSegments().get(2);
                 final String[] lookupKeyList = lookupKeys.split(":");
                 final StringBuilder inBuilder = new StringBuilder();
@@ -8956,7 +8965,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             default:
                 throw new FileNotFoundException(
-                        mDbHelper.get().exceptionMessage("File does not exist", uri));
+                        mDbHelper.get().exceptionMessage(
+                                "Stream I/O not supported on this URI.", uri));
         }
     }
 
