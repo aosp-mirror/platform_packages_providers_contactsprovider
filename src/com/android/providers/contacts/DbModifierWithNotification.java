@@ -63,7 +63,8 @@ public class DbModifierWithNotification implements DatabaseModifier {
     private static final int SOURCE_PACKAGE_COLUMN_INDEX = 0;
     private static final String NON_NULL_SOURCE_PACKAGE_SELECTION =
             VoicemailContract.SOURCE_PACKAGE_FIELD + " IS NOT NULL";
-
+    private static final String NOT_DELETED_SELECTION =
+            Voicemails.DELETED + " == 0";
     private final String mTableName;
     private final SQLiteDatabase mDb;
     private final InsertHelper mInsertHelper;
@@ -98,7 +99,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
     public long insert(String table, String nullColumnHack, ContentValues values) {
         Set<String> packagesModified = getModifiedPackages(values);
         if (mIsCallsTable) {
-            values.put(Calls.LAST_MODIFIED, System.currentTimeMillis());
+            values.put(Calls.LAST_MODIFIED, getTimeMillis());
         }
         long rowId = mDb.insert(table, nullColumnHack, values);
         if (rowId > 0 && packagesModified.size() != 0) {
@@ -115,7 +116,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
     public long insert(ContentValues values) {
         Set<String> packagesModified = getModifiedPackages(values);
         if (mIsCallsTable) {
-            values.put(Calls.LAST_MODIFIED, System.currentTimeMillis());
+            values.put(Calls.LAST_MODIFIED, getTimeMillis());
         }
         long rowId = mInsertHelper.insert(values);
         if (rowId > 0 && packagesModified.size() != 0) {
@@ -160,8 +161,12 @@ public class DbModifierWithNotification implements DatabaseModifier {
 
         boolean hasMarkedRead = false;
         if (mIsCallsTable) {
-            values.put(Calls.LAST_MODIFIED, System.currentTimeMillis());
-
+            if (values.containsKey(Voicemails.DELETED)
+                    && !values.getAsBoolean(Voicemails.DELETED)) {
+                values.put(Calls.LAST_MODIFIED, getTimeMillis());
+            } else {
+                updateLastModified(table, whereClause, whereArgs);
+            }
             if (isVoicemail) {
                 // If a calling package is modifying its own entries, it means that the change came
                 // from the server and thus is synced or "clean". Otherwise, it means that a local
@@ -199,6 +204,15 @@ public class DbModifierWithNotification implements DatabaseModifier {
         return count;
     }
 
+    private void updateLastModified(String table, String whereClause, String[] whereArgs) {
+        ContentValues values = new ContentValues();
+        values.put(Calls.LAST_MODIFIED, getTimeMillis());
+
+        mDb.update(table, values,
+                DbQueryUtils.concatenateClauses(NOT_DELETED_SELECTION, whereClause),
+                whereArgs);
+    }
+
     @Override
     public int delete(String table, String whereClause, String[] whereArgs) {
         Set<String> packagesModified = getModifiedPackages(whereClause, whereArgs);
@@ -217,7 +231,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
             ContentValues values = new ContentValues();
             values.put(VoicemailContract.Voicemails.DIRTY, 1);
             values.put(VoicemailContract.Voicemails.DELETED, 1);
-            values.put(VoicemailContract.Voicemails.LAST_MODIFIED, System.currentTimeMillis());
+            values.put(VoicemailContract.Voicemails.LAST_MODIFIED, getTimeMillis());
             count = mDb.update(table, values, whereClause, whereArgs);
         } else {
             count = mDb.delete(table, whereClause, whereArgs);
@@ -362,5 +376,12 @@ public class DbModifierWithNotification implements DatabaseModifier {
             }
         }
         return values.getAsBoolean(key);
+    }
+
+    private long getTimeMillis() {
+        if (CallLogProvider.getTimeForTestMillis() == null) {
+            return System.currentTimeMillis();
+        }
+        return CallLogProvider.getTimeForTestMillis();
     }
 }

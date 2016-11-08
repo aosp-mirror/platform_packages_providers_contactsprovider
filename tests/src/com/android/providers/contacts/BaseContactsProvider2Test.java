@@ -31,6 +31,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.provider.BaseColumns;
 import android.provider.CallLog;
+import android.provider.CallLog.Calls;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -1355,16 +1356,21 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         }
     }
 
-    protected void assertLastModified(Uri uri) {
-        assertLastModified(uri, System.currentTimeMillis(), 1000);
-    }
-
-    protected void assertLastModified(Uri uri, long time, long tolerance) {
+    protected void assertLastModified(Uri uri, long time) {
         Cursor c = mResolver.query(uri, null, null, null, null);
         c.moveToFirst();
         int index = c.getColumnIndex(CallLog.Calls.LAST_MODIFIED);
         long timeStamp = c.getLong(index);
-        assertTrue(Math.abs(time - timeStamp) < tolerance);
+        assertEquals(timeStamp, time);
+    }
+
+    protected void setTimeForTest(Long time) {
+        Uri uri = Calls.CONTENT_URI.buildUpon()
+                .appendQueryParameter(CallLogProvider.PARAM_KEY_QUERY_FOR_TESTING, "1")
+                .appendQueryParameter(CallLogProvider.PARAM_KEY_SET_TIME_FOR_TESTING,
+                        time == null ? "null" : time.toString())
+                .build();
+        mResolver.query(uri, null, null, null, null);
     }
     /**
      * A contact in the database, and the attributes used to create it.  Construct using
