@@ -33,6 +33,9 @@ public class PackageIntentReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         Uri packageUri = intent.getData();
+        if (packageUri == null) {
+            return;
+        }
         String packageName = packageUri.getSchemeSpecificPart();
         IContentProvider iprovider =
             context.getContentResolver().acquireProvider(ContactsContract.AUTHORITY);
@@ -44,7 +47,7 @@ public class PackageIntentReceiver extends BroadcastReceiver {
     }
 
     private void handlePackageChangedForVoicemail(Context context, Intent intent) {
-        if (intent.getAction().equals(Intent.ACTION_PACKAGE_REMOVED) &&
+        if (Intent.ACTION_PACKAGE_REMOVED.equals(intent.getAction()) &&
                 !intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) {
             // Forward the intent to the cleanup service for handling the event.
             Intent intentToForward = new Intent(context, VoicemailCleanupService.class);
