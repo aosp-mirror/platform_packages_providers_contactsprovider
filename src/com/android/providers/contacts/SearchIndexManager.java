@@ -113,7 +113,7 @@ public class SearchIndexManager {
 
         @Override
         public String toString() {
-            return "Content: " + mSbContent + "\n Name: " + mSbTokens + "\n Tokens: " + mSbTokens;
+            return "Content: " + mSbContent + "\n Name: " + mSbName + "\n Tokens: " + mSbTokens;
         }
 
         public void commit() {
