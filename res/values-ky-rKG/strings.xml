@@ -17,17 +17,13 @@
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core колдонмолору"</string>
-    <!-- no translation found for app_label (3389954322874982620) -->
-    <skip />
-    <!-- no translation found for provider_label (6012150850819899907) -->
-    <skip />
+    <string name="app_label" msgid="3389954322874982620">"Байланыштар сактагычы"</string>
+    <string name="provider_label" msgid="6012150850819899907">"Байланыштар"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Байланыштарды жаңыртууга көбүрөөк орун керек."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Байланыштар үчүн сактагыч жаңыртылууда"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Жаңыртууну аягына чыгарыш үчүн тийиңиз."</string>
-    <!-- no translation found for default_directory (93961630309570294) -->
-    <skip />
-    <!-- no translation found for local_invisible_directory (705244318477396120) -->
-    <skip />
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"Жаңыртууну аягына чыгарыш үчүн таптап коюңуз."</string>
+    <string name="default_directory" msgid="93961630309570294">"Байланыштар"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"Башка"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Келген үнкат "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Байланыштар корун көчүрүү"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Сиз буларды кылайын деп жатасыз: 1) Ичинде бардык байланыштарга тийиштүү маалыматтар жана чалуу тизмелери бар берилиштер корун сырткы сактагычка  көчүрмөлөө, 2) жана аны эмейлге жөнөтүү. Көчүрмөнү, түзмөктөн ийгиликтүү көчүрүп же эмейлден алаарыңыз менен, жок кылууну унутпаңыз."</string>

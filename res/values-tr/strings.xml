@@ -21,7 +21,7 @@
     <string name="provider_label" msgid="6012150850819899907">"Kişiler"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Kişileri yeni sürüme geçirmek için daha fazla bellek gerekiyor."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Kişiler için depolama alanı yeni sürüme geçiriliyor"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Yeni sürüme geçmeyi tamamlamak için dokunun."</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"Yeni sürüme geçişi tamamlamak için hafifçe dokunun"</string>
     <string name="default_directory" msgid="93961630309570294">"Kişiler"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Diğer"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Sesli mesaj gönderen: "</string>

@@ -21,7 +21,7 @@
     <string name="provider_label" msgid="6012150850819899907">"Kontaktlar"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Kontakt təkmilləşdirməsi əlavə yaddaş tələb edir."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Kontakt üçün yaddaş təkmilləşdirilir."</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Təkmilləşdirməni tamamlamaq üçün toxunun."</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"Təkmilləşdirməni tamamlamaq üçün tıklayın."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontaktlar"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Digər"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Səsli mesaj göndərən: "</string>
