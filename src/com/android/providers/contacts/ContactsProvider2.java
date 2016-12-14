@@ -5619,12 +5619,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private String getRealCallerPackageName(Uri queryUri) {
-        // If called by itself, then the URI must contain the real caller package name.
-        if (UserHandle.isSameApp(android.os.Process.myUid(), Binder.getCallingUid())) {
+        // If called by another CP2, then the URI should contain the original package name.
+        if (calledByAnotherSelf()) {
             final String passedPackage = queryUri.getQueryParameter(
                     Directory.CALLER_PACKAGE_PARAM_KEY);
             if (TextUtils.isEmpty(passedPackage)) {
-                Log.wtf(TAG, "Cross-profile query with no " + Directory.CALLER_PACKAGE_PARAM_KEY);
+                Log.wtfStack(TAG,
+                        "Cross-profile query with no " + Directory.CALLER_PACKAGE_PARAM_KEY);
                 return "UNKNOWN";
             }
             return passedPackage;
@@ -5632,6 +5633,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // Otherwise, just return the real calling package name.
             return getCallingPackage();
         }
+    }
+
+    /**
+     * Returns true if called by a different user's CP2.
+     */
+    private boolean calledByAnotherSelf() {
+        // Note normally myUid is always different from the callerUid in the code path where
+        // this method is used, except during unit tests, where the caller is always the same
+        // process.
+        final int myUid = android.os.Process.myUid();
+        final int callerUid = Binder.getCallingUid();
+        return (myUid != callerUid) && UserHandle.isSameApp(myUid, callerUid);
     }
 
     private Cursor queryDirectoryAuthority(Uri uri, String[] projection, String selection,
