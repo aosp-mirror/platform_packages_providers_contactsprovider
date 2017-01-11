@@ -5290,18 +5290,29 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testSetSendToVoicemailAndRingtone() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
+        assertDirty(rawContactUri, true);
+        clearDirty(rawContactUri);
         long contactId = queryContactId(rawContactId);
 
         updateSendToVoicemailAndRingtone(contactId, true, "foo");
         assertSendToVoicemailAndRingtone(contactId, true, "foo");
-        assertNetworkNotified(true);
-        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId), true);
+        assertNetworkNotified(false);
+        assertMetadataNetworkNotified(true);
+        assertDirty(rawContactUri, false);
+        assertMetadataDirty(rawContactUri, true);
 
         updateSendToVoicemailAndRingtoneWithSelection(contactId, false, "bar");
         assertSendToVoicemailAndRingtone(contactId, false, "bar");
-        assertNetworkNotified(true);
-        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId), true);
+        assertNetworkNotified(false);
+        assertMetadataNetworkNotified(true);
+        assertDirty(rawContactUri, false);
+        assertMetadataDirty(rawContactUri, true);
     }
 
     public void testSendToVoicemailAndRingtoneAfterAggregation() {
@@ -5359,17 +5370,30 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSendToVoicemailAndRingtone(queryContactId(rawContactId2), false, "bar");
     }
 
-    public void testMarkDirtyAfterAggregation() {
+    public void testMarkMetadataDirtyAfterAggregation() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "i", "j");
         long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "k", "l");
+        Uri rawContactUri1 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1);
+        Uri rawContactUri2 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId2);
+        assertDirty(rawContactUri1, true);
+        assertDirty(rawContactUri2, true);
+        clearDirty(rawContactUri1);
+        clearDirty(rawContactUri2);
 
         // Aggregate them
         setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
                 rawContactId1, rawContactId2);
 
-        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1), true);
-        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId2), true);
-        assertNetworkNotified(true);
+        assertDirty(rawContactUri1, false);
+        assertDirty(rawContactUri2, false);
+        assertMetadataDirty(rawContactUri1, true);
+        assertMetadataDirty(rawContactUri2, true);
+        assertNetworkNotified(false);
+        assertMetadataNetworkNotified(true);
     }
 
     public void testStatusUpdateInsert() {
@@ -6956,28 +6980,41 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testDirtyWhenRawContactInsert() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
+        // When inserting a rawcontact without metadata.
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
         assertDirty(rawContactUri, false);
+        assertMetadataDirty(rawContactUri, false);
         assertNetworkNotified(true);
+        assertMetadataNetworkNotified(true);
 
+        // When inserting a rawcontact with metadata.
         ContentValues values = new ContentValues();
         values.put(ContactsContract.RawContacts.STARRED, 1);
         values.put(ContactsContract.RawContacts.ACCOUNT_NAME, mAccount.name);
         values.put(ContactsContract.RawContacts.ACCOUNT_TYPE, mAccount.type);
         Uri rawContactId2Uri = mResolver.insert(RawContacts.CONTENT_URI, values);
-        assertDirty(rawContactId2Uri, true);
+        assertDirty(rawContactId2Uri, false);
+        assertMetadataDirty(rawContactId2Uri, true);
         assertNetworkNotified(true);
+        assertMetadataNetworkNotified(true);
     }
 
     public void testRawContactDirtyAndVersion() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
         final long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, rawContactId);
         assertDirty(uri, false);
         long version = getVersion(uri);
 
         ContentValues values = new ContentValues();
-        values.put(ContactsContract.RawContacts.DIRTY, 0);
         values.put(ContactsContract.RawContacts.SEND_TO_VOICEMAIL, 1);
         values.put(ContactsContract.RawContacts.AGGREGATION_MODE,
                 RawContacts.AGGREGATION_MODE_IMMEDIATE);
@@ -6985,9 +7022,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, mResolver.update(uri, values, null, null));
         assertEquals(version, getVersion(uri));
 
-        // Mark dirty when send_to_voicemail/starred was set.
-        assertDirty(uri, true);
-        assertNetworkNotified(true);
+        assertDirty(uri, false);
+        assertNetworkNotified(false);
+        assertMetadataDirty(uri, true);
+        assertMetadataNetworkNotified(true);
 
         Uri emailUri = insertEmail(rawContactId, "goo@woo.com");
         assertDirty(uri, true);
@@ -8744,13 +8782,22 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
-    public void testMarkDirtyWhenDataUsageUpdate() {
+    public void testMarkMetadataDirtyWhenDataUsageUpdate() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
         final long rid1 = RawContactUtil.createRawContactWithName(mResolver, "contact", "a");
         final long did1a = ContentUris.parseId(insertEmail(rid1, "email_1_a@email.com"));
+        final Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rid1);
+        assertDirty(rawContactUri, true);
+        clearDirty(rawContactUri);
         updateDataUsageFeedback(DataUsageFeedback.USAGE_TYPE_LONG_TEXT, did1a);
 
-        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rid1), true);
-        assertNetworkNotified(true);
+        assertDirty(rawContactUri, false);
+        assertMetadataDirty(rawContactUri, true);
+        assertNetworkNotified(false);
+        assertMetadataNetworkNotified(true);
     }
 
     public void testDataUsageFeedbackAndDelete() {
@@ -8956,15 +9003,24 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         RawContactUtil.delete(mResolver, ids.mRawContactId, true);
     }
 
-    public void testContactUpdate_dirtyForMetadataChange() {
+    public void testContactUpdate_metadataChange() {
+        // Enable metadataSync flag.
+        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        cp.setMetadataSyncForTest(true);
+
         DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
+        Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, ids.mRawContactId);
+        assertDirty(rawContactUri, true);
+        clearDirty(rawContactUri);
 
         ContentValues values = new ContentValues();
         values.put(Contacts.PINNED, 1);
 
         ContactUtil.update(mResolver, ids.mContactId, values);
-        assertDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, ids.mRawContactId), true);
-        assertNetworkNotified(true);
+        assertDirty(rawContactUri, false);
+        assertMetadataDirty(rawContactUri, true);
+        assertNetworkNotified(false);
+        assertMetadataNetworkNotified(true);
     }
 
     public void testContactUpdate_updatesContactUpdatedTimestamp() {
