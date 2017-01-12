@@ -397,53 +397,54 @@ public class AllUriTest extends AndroidTestCase {
         failIfFailed();
     }
 
-    /**
-     * Make sure all URLs are accessible with a projection.
-     */
-    public void testSelectWithProjection() {
-        for (String[] path : URIs) {
-            if (!supportsQuery(path)) continue;
-            final Uri uri = getUri(path);
-
-            for (String column : getColumns(uri)) {
-                // Some columns are not selectable alone due to bugs, and we don't want to fix them
-                // in order to avoid expanding the differences between versions, so here're some
-                // hacks to make it work...
-
-                String[] projection = {column};
-
-                final String u = path[0];
-                if ((u.startsWith("content://com.android.contacts/status_updates")
-                        || u.startsWith("content://com.android.contacts/profile/status_updates"))
-                        && ("im_handle".equals(column)
-                        || "im_account".equals(column)
-                        || "protocol".equals(column)
-                        || "custom_protocol".equals(column)
-                        || "presence_raw_contact_id".equals(column)
-                        )) {
-                    // These columns only show up when the projection contains certain columns.
-
-                    projection = new String[]{"mode", column};
-                } else if ((u.startsWith("content://com.android.contacts/search_suggest_query")
-                        || u.startsWith("content://contacts/search_suggest_query"))
-                        && "suggest_intent_action".equals(column)) {
-                    // Can't be included in the projection due to a bug in GlobalSearchSupport.
-                    continue;
-                } else if (RawContacts.BACKUP_ID.equals(column)) {
-                    // Some URIs don't support a projection with BAKCUP_ID only.
-                    projection = new String[]{RawContacts.BACKUP_ID, RawContacts.SOURCE_ID};
-                }
-
-                checkQueryExecutable(uri,
-                        projection, // projection
-                        null, // selection
-                        null, // selection args
-                        null // sort order
-                );
-            }
-        }
-        failIfFailed();
-    }
+// Temporarily disabled due to taking too much time.
+//    /**
+//     * Make sure all URLs are accessible with a projection.
+//     */
+//    public void testSelectWithProjection() {
+//        for (String[] path : URIs) {
+//            if (!supportsQuery(path)) continue;
+//            final Uri uri = getUri(path);
+//
+//            for (String column : getColumns(uri)) {
+//                // Some columns are not selectable alone due to bugs, and we don't want to fix them
+//                // in order to avoid expanding the differences between versions, so here're some
+//                // hacks to make it work...
+//
+//                String[] projection = {column};
+//
+//                final String u = path[0];
+//                if ((u.startsWith("content://com.android.contacts/status_updates")
+//                        || u.startsWith("content://com.android.contacts/profile/status_updates"))
+//                        && ("im_handle".equals(column)
+//                        || "im_account".equals(column)
+//                        || "protocol".equals(column)
+//                        || "custom_protocol".equals(column)
+//                        || "presence_raw_contact_id".equals(column)
+//                        )) {
+//                    // These columns only show up when the projection contains certain columns.
+//
+//                    projection = new String[]{"mode", column};
+//                } else if ((u.startsWith("content://com.android.contacts/search_suggest_query")
+//                        || u.startsWith("content://contacts/search_suggest_query"))
+//                        && "suggest_intent_action".equals(column)) {
+//                    // Can't be included in the projection due to a bug in GlobalSearchSupport.
+//                    continue;
+//                } else if (RawContacts.BACKUP_ID.equals(column)) {
+//                    // Some URIs don't support a projection with BAKCUP_ID only.
+//                    projection = new String[]{RawContacts.BACKUP_ID, RawContacts.SOURCE_ID};
+//                }
+//
+//                checkQueryExecutable(uri,
+//                        projection, // projection
+//                        null, // selection
+//                        null, // selection args
+//                        null // sort order
+//                );
+//            }
+//        }
+//        failIfFailed();
+//    }
 
     /**
      * Make sure all URLs are accessible with a selection.
@@ -475,7 +476,7 @@ public class AllUriTest extends AndroidTestCase {
 //                checkQueryExecutable(uri,
 //                        null, // projection
 //                        column + "=?", // selection
-//                        ARG1, // , // selection args
+//                        ARG1, // , //  selection args
 //                        null // sort order
 //                );
 //            }
@@ -483,25 +484,26 @@ public class AllUriTest extends AndroidTestCase {
 //        failIfFailed();
 //    }
 
-    /**
-     * Make sure all URLs are accessible with an order-by.
-     */
-    public void testSelectWithSortOrder() {
-        for (String[] path : URIs) {
-            if (!supportsQuery(path)) continue;
-            final Uri uri = getUri(path);
-
-            for (String column : getColumns(uri)) {
-                checkQueryExecutable(uri,
-                        null, // projection
-                        "1=2", // selection
-                        null, // , // selection args
-                        column // sort order
-                );
-            }
-        }
-        failIfFailed();
-    }
+// Temporarily disabled due to taking too much time.
+//    /**
+//     * Make sure all URLs are accessible with an order-by.
+//     */
+//    public void testSelectWithSortOrder() {
+//        for (String[] path : URIs) {
+//            if (!supportsQuery(path)) continue;
+//            final Uri uri = getUri(path);
+//
+//            for (String column : getColumns(uri)) {
+//                checkQueryExecutable(uri,
+//                        null, // projection
+//                        "1=2", // selection
+//                        null, // , // selection args
+//                        column // sort order
+//                );
+//            }
+//        }
+//        failIfFailed();
+//    }
 
     /**
      * Make sure all URLs are accessible with all arguments.
