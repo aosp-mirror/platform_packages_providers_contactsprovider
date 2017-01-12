@@ -2635,7 +2635,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     protected void setProviderStatus(int status) {
         if (mProviderStatus != status) {
             mProviderStatus = status;
-            getContext().getContentResolver().notifyChange(ProviderStatus.CONTENT_URI, null, false);
+            ContactsDatabaseHelper.notifyProviderStatusChange(getContext());
         }
     }
 
@@ -7069,8 +7069,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     providerStatus = ProviderStatus.STATUS_EMPTY;
                 }
                 return buildSingleRowResult(projection,
-                        new String[] {ProviderStatus.STATUS},
-                        new Object[] {providerStatus});
+                        new String[] {ProviderStatus.STATUS,
+                                ProviderStatus.DATABASE_CREATION_TIMESTAMP},
+                        new Object[] {providerStatus, mDbHelper.get().getDatabaseCreationTime()});
             }
 
             case DIRECTORIES : {
@@ -9370,6 +9371,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 return StreamItems.StreamItemPhotos.CONTENT_ITEM_TYPE;
             case STREAM_ITEMS_PHOTOS:
                 throw new UnsupportedOperationException("Not supported for write-only URI " + uri);
+            case PROVIDER_STATUS:
+                return ProviderStatus.CONTENT_TYPE;
             default:
                 waitForAccess(mReadAccessLatch);
                 return mLegacyApiSupport.getType(uri);

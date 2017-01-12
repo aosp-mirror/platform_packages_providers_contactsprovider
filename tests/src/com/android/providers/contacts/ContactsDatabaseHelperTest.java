@@ -17,13 +17,19 @@
 package com.android.providers.contacts;
 
 import android.content.ContentValues;
+import android.database.ContentObserver;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.ContactsContract;
+import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.test.suitebuilder.annotation.SmallTest;
+import android.util.Log;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.LowRes;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
@@ -33,9 +39,14 @@ import com.google.android.collect.Sets;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 @SmallTest
 public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
+    private static final String TAG = "ContactsDHT";
+
     private ContactsDatabaseHelper mDbHelper;
     private SQLiteDatabase mDb;
 
@@ -484,5 +495,88 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
             assertEquals((Object) (86400 * i), checkGetLastTimeUsedExpression(86400 * i + 1));
             assertEquals((Object) (86400 * i), checkGetLastTimeUsedExpression(86400 * i + 86399));
         }
+    }
+
+    public void testNotifyProviderStatusChange() throws Exception {
+        final AtomicReference<Uri> calledUri = new AtomicReference<>();
+
+        final Handler h = new Handler(Looper.getMainLooper());
+
+        final CountDownLatch latch = new CountDownLatch(1);
+
+        final ContentObserver observer = new ContentObserver(h) {
+            @Override
+            public void onChange(boolean selfChange, Uri uri) {
+                calledUri.set(uri);
+                latch.countDown();
+            }
+        };
+
+        // Notify on ProviderStatus.CONTENT_URI.
+        getContext().getContentResolver().registerContentObserver(
+                ProviderStatus.CONTENT_URI,
+                /* notifyForDescendants= */ false, observer);
+
+        // This should trigger it.
+        calledUri.set(null);
+        ContactsDatabaseHelper.notifyProviderStatusChange(getContext());
+
+        assertTrue(latch.await(30, TimeUnit.SECONDS));
+        assertEquals(ProviderStatus.CONTENT_URI, calledUri.get());
+    }
+
+    public void testNotifyProviderStatusChange_alternate() throws Exception {
+        final AtomicReference<Uri> calledUri = new AtomicReference<>();
+
+        final Handler h = new Handler(Looper.getMainLooper());
+
+        final CountDownLatch latch = new CountDownLatch(1);
+
+        final ContentObserver observer = new ContentObserver(h) {
+            @Override
+            public void onChange(boolean selfChange, Uri uri) {
+                calledUri.set(uri);
+                latch.countDown();
+            }
+        };
+
+        // Notify on ProviderStatus.CONTENT_URI.
+        getContext().getContentResolver().registerContentObserver(
+                ProviderStatus.STATUS_CHANGE_NOTIFICATION_CONTENT_URI,
+                /* notifyForDescendants= */ false, observer);
+
+        // This should trigger it.
+        calledUri.set(null);
+        ContactsDatabaseHelper.notifyProviderStatusChange(getContext());
+
+        assertTrue(latch.await(30, TimeUnit.SECONDS));
+        assertEquals(ProviderStatus.STATUS_CHANGE_NOTIFICATION_CONTENT_URI, calledUri.get());
+    }
+
+    public void testOpenTimestamp() {
+        final long startTime = System.currentTimeMillis();
+
+        final String dbFilename = "testOpenTimestamp.db";
+
+        getContext().deleteDatabase(dbFilename);
+
+        final ContactsDatabaseHelper dbHelper = ContactsDatabaseHelper.getNewInstanceForTest(
+                mContext, dbFilename);
+
+        dbHelper.getReadableDatabase(); // Open the DB.
+
+        final long creationTime = dbHelper.getDatabaseCreationTime();
+
+        assertTrue("Expected " + creationTime + " >= " + startTime, creationTime >= startTime);
+
+        dbHelper.close();
+
+        // Open again.
+        final ContactsDatabaseHelper dbHelper2 = ContactsDatabaseHelper.getNewInstanceForTest(
+                mContext, dbFilename);
+
+        dbHelper2.getReadableDatabase(); // Open the DB.
+
+        assertEquals(creationTime, dbHelper2.getDatabaseCreationTime());
     }
 }

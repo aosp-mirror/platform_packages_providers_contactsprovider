@@ -52,7 +52,7 @@ public class TestUtils {
      * we'll switch to file-based DBs, so we can call {@link #createDatabaseSnapshot}
      * , pull the snapshot DBs and take a look at them.
      */
-    public static final boolean ENABLE_DATABASE_SNAPSHOT = true; // DO NOT SUBMIT WITH TRUE.
+    public static final boolean ENABLE_DATABASE_SNAPSHOT = false; // DO NOT SUBMIT WITH TRUE.
 
     private static final Object sDatabasePathLock = new Object();
     private static File sDatabasePath = null;
