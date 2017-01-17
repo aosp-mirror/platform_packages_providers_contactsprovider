@@ -85,16 +85,18 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     protected void tearDown() throws Exception {
         setUpWithVoicemailPermissions();
         mResolver.delete(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null);
+        setTimeForTest(null);
         super.tearDown();
     }
 
     public void testInsert_RegularCallRecord() {
+        setTimeForTest(1000L);
         ContentValues values = getDefaultCallValues();
         Uri uri = mResolver.insert(Calls.CONTENT_URI, values);
         values.put(Calls.COUNTRY_ISO, "us");
         assertStoredValues(uri, values);
         assertSelection(uri, values, Calls._ID, ContentUris.parseId(uri));
-        assertLastModified(uri);
+        assertLastModified(uri, 1000);
     }
 
     private void setUpWithVoicemailPermissions() {
@@ -105,6 +107,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
 
     public void testInsert_VoicemailCallRecord() {
         setUpWithVoicemailPermissions();
+        setTimeForTest(1000L);
         final ContentValues values = getDefaultCallValues();
         values.put(Calls.TYPE, Calls.VOICEMAIL_TYPE);
         values.put(Calls.VOICEMAIL_URI, "content://foo/voicemail/2");
@@ -121,10 +124,11 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         Uri uri  = mResolver.insert(Calls.CONTENT_URI_WITH_VOICEMAIL, values);
         assertStoredValues(uri, values);
         assertSelection(uri, values, Calls._ID, ContentUris.parseId(uri));
-        assertLastModified(uri);
+        assertLastModified(uri, 1000);
     }
 
     public void testUpdate() {
+        setTimeForTest(1000L);
         Uri uri = insertCallRecord();
         ContentValues values = new ContentValues();
         values.put(Calls.TYPE, Calls.OUTGOING_TYPE);
@@ -139,7 +143,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         int count = mResolver.update(uri, values, null, null);
         assertEquals(1, count);
         assertStoredValues(uri, values);
-        assertLastModified(uri);
+        assertLastModified(uri, 1000);
     }
 
     public void testDelete() {

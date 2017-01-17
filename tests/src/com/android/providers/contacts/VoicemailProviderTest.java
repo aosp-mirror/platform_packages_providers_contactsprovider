@@ -20,8 +20,10 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.BatteryStats.Uid.Proc;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
+import android.provider.CallLog;
 import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
@@ -65,6 +67,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
     protected void setUp() throws Exception {
         super.setUp();
         setUpForOwnPermission();
+        addProvider(CallLogProviderTestable.class, CallLog.AUTHORITY);
     }
 
     /** Returns the appropriate /voicemail URI. */
@@ -80,6 +83,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
     }
 
     public void testInsert() throws Exception {
+        setTimeForTest(1000L);
         Uri uri = mResolver.insert(voicemailUri(), getTestVoicemailValues());
         // We create on purpose a new set of ContentValues here, because the code above modifies
         // the copy it gets.
@@ -87,7 +91,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         assertSelection(uri, getTestVoicemailValues(), Voicemails._ID, ContentUris.parseId(uri));
         assertEquals(1, countFilesInTestDirectory());
 
-        assertLastModified(uri);
+        assertLastModified(uri, 1000);
     }
 
     public void testInsertReadMessageIsNotNew() throws Exception {
@@ -131,6 +135,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
     }
 
     public void testUpdate() {
+        setTimeForTest(1000L);
         Uri uri = insertVoicemail();
         ContentValues values = new ContentValues();
         values.put(Voicemails.NUMBER, "1-800-263-7643");
@@ -145,7 +150,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         int count = mResolver.update(uri, values, null, null);
         assertEquals(1, count);
         assertStoredValues(uri, values);
-        assertLastModified(uri);
+        assertLastModified(uri, 1000);
     }
 
     public void testUpdateOwnPackageVoicemail_NotDirty() {
@@ -182,6 +187,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
 
     public void testDeleteOtherPackageVoicemail_SetsDirtyStatus() {
         setUpForFullPermission();
+        setTimeForTest(1000L);
         final Uri anotherVoicemail = insertVoicemailForSourcePackage("another-package");
         assertEquals(1, getCount(voicemailUri(), null, null));
 
@@ -195,7 +201,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
 
         assertEquals(1, getCount(anotherVoicemail, null, null));
         assertStoredValues(anotherVoicemail, values);
-        assertLastModified(anotherVoicemail);
+        assertLastModified(anotherVoicemail, 1000);
     }
 
     public void testDelete() {
@@ -204,6 +210,29 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
                 + ContentUris.parseId(uri), null);
         assertEquals(1, count);
         assertEquals(0, getCount(uri, null, null));
+    }
+
+    public void testUpdateAfterDelete_lastModifiedNotChanged() {
+        setUpForFullPermission();
+        setTimeForTest(1000L);
+        final Uri anotherVoicemail = insertVoicemailForSourcePackage("another-package");
+        assertEquals(1, getCount(voicemailUri(), null, null));
+
+        // Clear the mapping for our own UID so that this doesn't look like an internal transaction.
+        mPackageManager.removePackage(Process.myUid());
+        mResolver.delete(anotherVoicemail, null, null);
+        assertLastModified(anotherVoicemail, 1000);
+
+        mPackageManager.addPackage(Process.myUid(), mActor.packageName);
+        setTimeForTest(2000L);
+        mResolver.update(anotherVoicemail, new ContentValues(), null, null);
+        assertLastModified(anotherVoicemail, 1000);
+
+        setTimeForTest(3000L);
+        ContentValues values = new ContentValues();
+        values.put(Voicemails.DELETED, "0");
+        mResolver.update(anotherVoicemail, values, null, null);
+        assertLastModified(anotherVoicemail, 3000);
     }
 
     public void testGetType_ItemUri() throws Exception {
