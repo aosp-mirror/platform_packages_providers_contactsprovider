@@ -74,4 +74,18 @@ public class ProfileDatabaseHelper extends ContactsDatabaseHelper {
             db.insert(SEQUENCE_TABLE, null, values);
         }
     }
+
+    @Override
+    protected void postOnCreate() {
+    }
+
+    @Override
+    protected void setDatabaseCreationTime(SQLiteDatabase db) {
+        // We don't need the creation time for the profile DB.
+    }
+
+    @Override
+    protected void loadDatabaseCreationTime(SQLiteDatabase db) {
+        // We don't need the creation time for the profile DB.
+    }
 }

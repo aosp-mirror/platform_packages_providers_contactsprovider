@@ -947,6 +947,13 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    public void testProviderStatusProjection() {
+        assertProjection(ProviderStatus.CONTENT_URI, new String[]{
+                ProviderStatus.STATUS,
+                ProviderStatus.DATABASE_CREATION_TIMESTAMP,
+        });
+    }
+
     public void testRawContactsInsert() {
         ContentValues values = new ContentValues();
 

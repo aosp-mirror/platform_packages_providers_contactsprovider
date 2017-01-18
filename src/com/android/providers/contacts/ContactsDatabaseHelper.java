@@ -76,6 +76,7 @@ import android.provider.ContactsContract.MetadataSyncState;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.PinnedPositions;
+import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
@@ -1010,6 +1011,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private final SyncStateContentProviderHelper mSyncState;
     private final CountryMonitor mCountryMonitor;
 
+    /**
+     * Time when the DB was created.  It's persisted in {@link DbProperties#DATABASE_TIME_CREATED},
+     * but loaded into memory so it can be accessed even when the DB is busy.
+     */
+    private long mDatabaseCreationTime;
+
     private MessageDigest mMessageDigest;
     {
         try {
@@ -1090,6 +1097,40 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         // were in-memory tables
         db.execSQL("DELETE FROM " + Tables.PRESENCE + ";");
         db.execSQL("DELETE FROM " + Tables.AGGREGATED_PRESENCE + ";");
+
+        loadDatabaseCreationTime(db);
+    }
+
+    protected void setDatabaseCreationTime(SQLiteDatabase db) {
+        // Note we don't do this in the profile DB helper.
+        mDatabaseCreationTime = System.currentTimeMillis();
+        PropertyUtils.setProperty(db, DbProperties.DATABASE_TIME_CREATED, String.valueOf(
+                mDatabaseCreationTime));
+    }
+
+    protected void loadDatabaseCreationTime(SQLiteDatabase db) {
+        // Note we don't do this in the profile DB helper.
+
+        mDatabaseCreationTime = 0;
+        final String timestamp = PropertyUtils.getProperty(db,
+                DbProperties.DATABASE_TIME_CREATED, "");
+        if (!TextUtils.isEmpty(timestamp)) {
+            try {
+                mDatabaseCreationTime = Long.parseLong(timestamp);
+            } catch (NumberFormatException e) {
+                Log.w(TAG, "Failed to parse timestamp: " + timestamp);
+            }
+        }
+        if (AbstractContactsProvider.VERBOSE_LOGGING) {
+            Log.v(TAG, "Open: creation time=" + mDatabaseCreationTime);
+        }
+        if (mDatabaseCreationTime == 0) {
+            Log.w(TAG, "Unable to load creating time; resetting.");
+            // Hmm, failed to load the timestamp.  Just set the current time then.
+            mDatabaseCreationTime = System.currentTimeMillis();
+            PropertyUtils.setProperty(db,
+                    DbProperties.DATABASE_TIME_CREATED, Long.toString(mDatabaseCreationTime));
+        }
     }
 
     private void createPresenceTables(SQLiteDatabase db) {
@@ -1183,8 +1224,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         // The create time is needed by BOOT_COMPLETE to send broadcasts.
         PropertyUtils.createPropertiesTable(db);
 
-        PropertyUtils.setProperty(db, DbProperties.DATABASE_TIME_CREATED, String.valueOf(
-                System.currentTimeMillis()));
+        setDatabaseCreationTime(db);
 
         db.execSQL("CREATE TABLE " + Tables.ACCOUNTS + " (" +
                 AccountsColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -1613,16 +1653,17 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             updateSqliteStats(db);
         }
 
+        postOnCreate();
+    }
+
+    protected void postOnCreate() {
+        // Only do this for the main DB, but not for the profile DB.
+
+        notifyProviderStatusChange(mContext);
+
+        // Trigger all sync adapters.
         ContentResolver.requestSync(null /* all accounts */,
                 ContactsContract.AUTHORITY, new Bundle());
-
-        // Only send broadcasts for regular contacts db.
-        if (dbForProfile() == 0) {
-            final Intent dbCreatedIntent = new Intent(
-                    ContactsContract.Intents.CONTACTS_DATABASE_CREATED);
-            dbCreatedIntent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
-            mContext.sendBroadcast(dbCreatedIntent, android.Manifest.permission.READ_CONTACTS);
-        }
     }
 
     protected void initializeAutoIncrementSequences(SQLiteDatabase db) {
@@ -4921,6 +4962,18 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         metadataSyncInsert.bindString(3, data);
         metadataSyncInsert.bindLong(4, deleted);
         return metadataSyncInsert.executeInsert();
+    }
+
+    public static void notifyProviderStatusChange(Context context) {
+        context.getContentResolver().notifyChange(ProviderStatus.CONTENT_URI,
+                /* observer= */ null, /* syncToNetwork= */ false);
+        context.getContentResolver().notifyChange(
+                ProviderStatus.STATUS_CHANGE_NOTIFICATION_CONTENT_URI,
+                /* observer= */ null, /* syncToNetwork= */ false);
+    }
+
+    public long getDatabaseCreationTime() {
+        return mDatabaseCreationTime;
     }
 
     private SqlChecker mCachedSqlChecker;
