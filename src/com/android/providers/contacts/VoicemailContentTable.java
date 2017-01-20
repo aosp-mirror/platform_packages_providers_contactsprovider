@@ -70,6 +70,10 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
             .add(Voicemails.DIRTY)
             .add(Voicemails.DELETED)
             .add(Voicemails.LAST_MODIFIED)
+            .add(Voicemails.BACKED_UP)
+            .add(Voicemails.RESTORED)
+            .add(Voicemails.ARCHIVED)
+            .add(Voicemails.IS_OMTP_VOICEMAIL)
             .add(OpenableColumns.DISPLAY_NAME)
             .add(OpenableColumns.SIZE)
             .build();
@@ -105,6 +109,10 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
                 .add(Voicemails.DIRTY)
                 .add(Voicemails.DELETED)
                 .add(Voicemails.LAST_MODIFIED)
+                .add(Voicemails.BACKED_UP)
+                .add(Voicemails.RESTORED)
+                .add(Voicemails.ARCHIVED)
+                .add(Voicemails.IS_OMTP_VOICEMAIL)
                 .add(OpenableColumns.DISPLAY_NAME, createDisplayName(context))
                 .add(OpenableColumns.SIZE, "NULL")
                 .build();
