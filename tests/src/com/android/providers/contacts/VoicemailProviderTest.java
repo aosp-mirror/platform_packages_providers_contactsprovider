@@ -142,6 +142,10 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         values.put(Voicemails.SOURCE_DATA, "foo");
         values.put(Voicemails.PHONE_ACCOUNT_COMPONENT_NAME, "dummy_name");
         values.put(Voicemails.PHONE_ACCOUNT_ID, "dummy_account");
+        values.put(Voicemails.BACKED_UP, 1);
+        values.put(Voicemails.RESTORED, 1);
+        values.put(Voicemails.ARCHIVED, 1);
+        values.put(Voicemails.IS_OMTP_VOICEMAIL, 1);
         int count = mResolver.update(uri, values, null, null);
         assertEquals(1, count);
         assertStoredValues(uri, values);
@@ -733,6 +737,10 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         values.put(Voicemails.HAS_CONTENT, 0);
         values.put(Voicemails.SOURCE_DATA, "1234");
         values.put(Voicemails.STATE, Voicemails.STATE_INBOX);
+        values.put(Voicemails.BACKED_UP, 0);
+        values.put(Voicemails.RESTORED, 0);
+        values.put(Voicemails.ARCHIVED, 0);
+        values.put(Voicemails.IS_OMTP_VOICEMAIL, 0);
         return values;
     }
 
