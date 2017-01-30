@@ -525,34 +525,6 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
         assertEquals(ProviderStatus.CONTENT_URI, calledUri.get());
     }
 
-    public void testNotifyProviderStatusChange_alternate() throws Exception {
-        final AtomicReference<Uri> calledUri = new AtomicReference<>();
-
-        final Handler h = new Handler(Looper.getMainLooper());
-
-        final CountDownLatch latch = new CountDownLatch(1);
-
-        final ContentObserver observer = new ContentObserver(h) {
-            @Override
-            public void onChange(boolean selfChange, Uri uri) {
-                calledUri.set(uri);
-                latch.countDown();
-            }
-        };
-
-        // Notify on ProviderStatus.CONTENT_URI.
-        getContext().getContentResolver().registerContentObserver(
-                ProviderStatus.STATUS_CHANGE_NOTIFICATION_CONTENT_URI,
-                /* notifyForDescendants= */ false, observer);
-
-        // This should trigger it.
-        calledUri.set(null);
-        ContactsDatabaseHelper.notifyProviderStatusChange(getContext());
-
-        assertTrue(latch.await(30, TimeUnit.SECONDS));
-        assertEquals(ProviderStatus.STATUS_CHANGE_NOTIFICATION_CONTENT_URI, calledUri.get());
-    }
-
     public void testOpenTimestamp() {
         final long startTime = System.currentTimeMillis();
 
