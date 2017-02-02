@@ -18,7 +18,7 @@
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android-kerneapplikationer"</string>
     <string name="app_label" msgid="3389954322874982620">"Lagring af kontakter"</string>
-    <string name="provider_label" msgid="6012150850819899907">"Kontakter"</string>
+    <string name="provider_label" msgid="6012150850819899907">"Kontaktpersoner"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Opgradering af kontaktpersoner kræver mere hukommelse."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Opgraderer lagring af kontaktpersoner"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"Tryk for at gennemføre opgraderingen."</string>
