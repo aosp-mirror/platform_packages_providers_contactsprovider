@@ -153,6 +153,9 @@ public class ProfileProvider extends AbstractContactsProvider {
     private void sendProfileChangedBroadcast() {
         final Intent intent = new Intent(Intents.ACTION_PROFILE_CHANGED);
         mDelegate.getContext().sendBroadcast(intent, READ_CONTACTS_PERMISSION);
+        // TODO b/35323708 update user profile data here instead of notifying Settings
+        intent.setPackage("com.android.settings");
+        mDelegate.getContext().sendBroadcast(intent, READ_CONTACTS_PERMISSION);
     }
 
     @Override
