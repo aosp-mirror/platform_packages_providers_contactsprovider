@@ -61,7 +61,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
             Calls.COUNTRY_ISO
     };
     /** Total number of columns exposed by voicemail provider. */
-    private static final int NUM_VOICEMAIL_FIELDS = 19;
+    private static final int NUM_VOICEMAIL_FIELDS = 23;
 
     @Override
     protected void setUp() throws Exception {
@@ -100,6 +100,8 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         String[] projection = {Voicemails.NUMBER, Voicemails.DATE, Voicemails.DURATION,
                 Voicemails.TRANSCRIPTION, Voicemails.IS_READ, Voicemails.HAS_CONTENT,
                 Voicemails.SOURCE_DATA, Voicemails.STATE,
+                Voicemails.BACKED_UP, Voicemails.RESTORED, Voicemails.ARCHIVED,
+                Voicemails.IS_OMTP_VOICEMAIL
         };
         Cursor c = mResolver.query(uri, projection, Calls.NEW + "=0", null,
                 null);
