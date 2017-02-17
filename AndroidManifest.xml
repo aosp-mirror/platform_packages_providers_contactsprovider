@@ -3,6 +3,8 @@
         android:sharedUserId="android.uid.shared"
         android:sharedUserLabel="@string/sharedUserLabel">
 
+    <uses-sdk android:targetSdkVersion="25" android:minSdkVersion="25"/> <!-- TODO Remove it -->
+
     <uses-permission android:name="android.permission.BIND_DIRECTORY_SEARCH" />
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <uses-permission android:name="android.permission.GET_ACCOUNTS_PRIVILEGED" />
