@@ -171,7 +171,7 @@ public class VoicemailContentProvider extends ContentProvider
         private final String mSourcePackage;
         private final VoicemailUriType mUriType;
 
-        public UriData(Uri uri, VoicemailUriType uriType, String id, String sourcePackage) {
+        private UriData(Uri uri, VoicemailUriType uriType, String id, String sourcePackage) {
             mUriType = uriType;
             mUri = uri;
             mId = id;
@@ -248,13 +248,13 @@ public class VoicemailContentProvider extends ContentProvider
         // If content values don't contain the provider, calculate the right provider to use.
         if (!values.containsKey(SOURCE_PACKAGE_FIELD)) {
             String provider = uriData.hasSourcePackage() ?
-                    uriData.getSourcePackage() : getCallingPackage_();
+                    uriData.getSourcePackage() : getInjectedCallingPackage();
             values.put(SOURCE_PACKAGE_FIELD, provider);
         }
 
         // You must have access to the provider given in values.
         if (!mVoicemailPermissions.callerHasWriteAccess(getCallingPackage())) {
-            checkPackagesMatch(getCallingPackage_(),
+            checkPackagesMatch(getInjectedCallingPackage(),
                     values.getAsString(VoicemailContract.SOURCE_PACKAGE_FIELD),
                     uriData.getUri());
         }
@@ -357,47 +357,17 @@ public class VoicemailContentProvider extends ContentProvider
                 throw new SecurityException(String.format(
                         "Provider %s does not have %s permission." +
                                 "\nPlease set query parameter '%s' in the URI.\nURI: %s",
-                        getCallingPackage_(), android.Manifest.permission.WRITE_VOICEMAIL,
+                        getInjectedCallingPackage(), android.Manifest.permission.WRITE_VOICEMAIL,
                         VoicemailContract.PARAM_KEY_SOURCE_PACKAGE, uriData.getUri()));
             }
-            checkPackagesMatch(getCallingPackage_(), uriData.getSourcePackage(), uriData.getUri());
+            checkPackagesMatch(getInjectedCallingPackage(), uriData.getSourcePackage(),
+                    uriData.getUri());
         }
     }
 
-    /**
-     * Gets the name of the calling package.
-     * <p>
-     * It's possible (though unlikely) for there to be more than one calling package (requires that
-     * your manifest say you want to share process ids) in which case we will return an arbitrary
-     * package name. It's also possible (though very unlikely) for us to be unable to work out what
-     * your calling package is, in which case we will return null.
-     */
-    /* package for test */String getCallingPackage_() {
-        int caller = Binder.getCallingUid();
-        if (caller == 0) {
-            return null;
-        }
-        String[] callerPackages = context().getPackageManager().getPackagesForUid(caller);
-        if (callerPackages == null || callerPackages.length == 0) {
-            return null;
-        }
-        if (callerPackages.length == 1) {
-            return callerPackages[0];
-        }
-        // If we have more than one caller package, which is very unlikely, let's return the one
-        // with the highest permissions. If more than one has the same permission, we don't care
-        // which one we return.
-        String bestSoFar = callerPackages[0];
-        for (String callerPackage : callerPackages) {
-            if (mVoicemailPermissions.packageHasWriteAccess(callerPackage)) {
-                // Full always wins, we can return early.
-                return callerPackage;
-            }
-            if (mVoicemailPermissions.packageHasOwnVoicemailAccess(callerPackage)) {
-                bestSoFar = callerPackage;
-            }
-        }
-        return bestSoFar;
+    @VisibleForTesting
+    String getInjectedCallingPackage() {
+        return super.getCallingPackage();
     }
 
     /**
@@ -408,7 +378,7 @@ public class VoicemailContentProvider extends ContentProvider
         if (hasReadWritePermission(isQuery)) {
             return null;
         }
-        return getEqualityClause(Voicemails.SOURCE_PACKAGE, getCallingPackage_());
+        return getEqualityClause(Voicemails.SOURCE_PACKAGE, getInjectedCallingPackage());
     }
 
     /**

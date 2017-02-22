@@ -189,7 +189,7 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
         }
 
         @Override
-        protected String getCallingPackage_() {
+        protected String getInjectedCallingPackage() {
             return getContext().getPackageName();
         }
 

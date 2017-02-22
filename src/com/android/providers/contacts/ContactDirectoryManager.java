@@ -29,6 +29,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.os.SystemProperties;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Directory;
 import android.text.TextUtils;
@@ -51,7 +52,7 @@ import java.util.Set;
 public class ContactDirectoryManager {
 
     private static final String TAG = "ContactDirectoryManager";
-    private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
+    private static final boolean DEBUG = AbstractContactsProvider.VERBOSE_LOGGING;
 
     public static final String CONTACT_DIRECTORY_META_DATA = "android.content.ContactDirectory";
 
@@ -161,7 +162,8 @@ public class ContactDirectoryManager {
      * Scans all packages for directory content providers.
      */
     public void scanAllPackages(boolean rescan) {
-        if (rescan || !areTypeResourceIdsValid()) {
+        if (rescan || !areTypeResourceIdsValid()
+                || "1".equals(SystemProperties.get("debug.cp2.scan_all_packages", "0"))) {
             getDbHelper().clearDirectoryScanComplete();
         }
 
