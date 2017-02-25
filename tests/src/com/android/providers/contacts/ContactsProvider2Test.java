@@ -8999,12 +8999,22 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         String[] projection = new String[]{ContactsContract.RawContacts.DIRTY,
                 ContactsContract.RawContacts.DELETED};
-        List<String[]> records = RawContactUtil.queryByContactId(mResolver, ids.mContactId,
+        String[] record = RawContactUtil.queryByRawContactId(mResolver, ids.mRawContactId,
                 projection);
-        for (String[] arr : records) {
-            assertEquals("1", arr[0]);
-            assertEquals("1", arr[1]);
-        }
+        assertEquals("1", record[0]);
+        assertEquals("1", record[1]);
+
+        // Clean up
+        RawContactUtil.delete(mResolver, ids.mRawContactId, true);
+    }
+
+    public void testContactDelete_checkRawContactContactId() {
+        DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete();
+
+        String[] projection = new String[]{ContactsContract.RawContacts.CONTACT_ID};
+        String[] record = RawContactUtil.queryByRawContactId(mResolver, ids.mRawContactId,
+                projection);
+        assertNull(record[0]);
 
         // Clean up
         RawContactUtil.delete(mResolver, ids.mRawContactId, true);

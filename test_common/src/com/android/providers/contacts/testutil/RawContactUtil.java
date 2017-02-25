@@ -47,18 +47,6 @@ public class RawContactUtil {
         return CommonDatabaseUtils.singleRecordToArray(cursor);
     }
 
-    /**
-     * Returns a list of raw contact records.
-     *
-     * @return A list of records.  Where each record is represented as an array of strings.
-     */
-    public static List<String[]> queryByContactId(ContentResolver resolver, long contactId,
-            String[] projection) {
-        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, contactId);
-        Cursor cursor = resolver.query(uri, projection, null, null, null);
-        return CommonDatabaseUtils.multiRecordToArray(cursor);
-    }
-
     public static void delete(ContentResolver resolver, long rawContactId,
             boolean isSyncAdapter) {
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, rawContactId)

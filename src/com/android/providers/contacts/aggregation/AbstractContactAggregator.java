@@ -69,6 +69,7 @@ import android.provider.ContactsContract.StatusUpdates;
 import android.text.TextUtils;
 import android.util.EventLog;
 import android.util.Log;
+import android.util.Slog;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -917,6 +918,10 @@ public abstract class AbstractContactAggregator {
      * Updates the contact ID for the specified contact and marks the raw contact as aggregated.
      */
     private void setContactIdAndMarkAggregated(long rawContactId, long contactId) {
+        if (contactId == 0) {
+            // Use Slog instead of Log, to prevent the process from crashing.
+            Slog.wtfStack(TAG, "Detected contact-id 0");
+        }
         mContactIdAndMarkAggregatedUpdate.bindLong(1, contactId);
         mContactIdAndMarkAggregatedUpdate.bindLong(2, rawContactId);
         mContactIdAndMarkAggregatedUpdate.execute();
