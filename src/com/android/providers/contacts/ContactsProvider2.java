@@ -56,12 +56,8 @@ import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.CancellationSignal;
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Message;
 import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor.AutoCloseInputStream;
-import android.os.Process;
 import android.os.RemoteException;
 import android.os.StrictMode;
 import android.os.SystemClock;
@@ -1532,8 +1528,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private LocaleSet mCurrentLocales;
     private int mContactsAccountCount;
 
-    private HandlerThread mBackgroundThread;
-    private Handler mBackgroundHandler;
+    private ContactsTaskScheduler mTaskScheduler;
 
     private long mLastPhotoCleanup = 0;
 
@@ -1601,13 +1596,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mReadAccessLatch = new CountDownLatch(1);
         mWriteAccessLatch = new CountDownLatch(1);
 
-        mBackgroundThread = new HandlerThread("ContactsProviderWorker",
-                Process.THREAD_PRIORITY_BACKGROUND);
-        mBackgroundThread.start();
-        mBackgroundHandler = new Handler(mBackgroundThread.getLooper()) {
+        mTaskScheduler = new ContactsTaskScheduler(getClass().getSimpleName()) {
             @Override
-            public void handleMessage(Message msg) {
-                performBackgroundTask(msg.what, msg.obj);
+            public void onPerformTask(int taskId, Object arg) {
+                performBackgroundTask(taskId, arg);
             }
         };
 
@@ -1733,11 +1725,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     protected void scheduleBackgroundTask(int task) {
-        mBackgroundHandler.sendEmptyMessage(task);
+        scheduleBackgroundTask(task, null);
     }
 
     protected void scheduleBackgroundTask(int task, Object arg) {
-        mBackgroundHandler.sendMessage(mBackgroundHandler.obtainMessage(task, arg));
+        mTaskScheduler.scheduleTask(task, arg);
     }
 
     protected void performBackgroundTask(int task, Object arg) {
@@ -10221,13 +10213,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     public void shutdown() {
-        if (mBackgroundHandler != null) {
-            mBackgroundHandler.getLooper().quit();
-            try {
-                mBackgroundThread.join();
-            } catch (InterruptedException ignore) {
-            }
-        }
+        mTaskScheduler.shutdownForTest();
     }
 
     @VisibleForTesting
