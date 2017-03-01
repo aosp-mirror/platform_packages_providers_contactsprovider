@@ -58,7 +58,7 @@ import java.util.concurrent.CountDownLatch;
  * Call log content provider.
  */
 public class CallLogProvider extends ContentProvider {
-    private static final String TAG = CallLogProvider.class.getSimpleName();
+    private static final String TAG = "CallLogProvider";
 
     public static final boolean VERBOSE_LOGGING = AbstractContactsProvider.VERBOSE_LOGGING;
 
@@ -184,6 +184,11 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public boolean onCreate() {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "onCreate: " + this.getClass().getSimpleName()
+                    + " user=" + android.os.Process.myUserHandle().getIdentifier());
+        }
+
         setAppOps(AppOpsManager.OP_READ_CALL_LOG, AppOpsManager.OP_WRITE_CALL_LOG);
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
             Log.d(Constants.PERFORMANCE_TAG, getProviderName() + ".onCreate start");

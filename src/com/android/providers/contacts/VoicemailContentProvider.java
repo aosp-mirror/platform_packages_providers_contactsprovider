@@ -36,8 +36,11 @@ import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
 import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.TypedUriMatcherImpl;
+import com.android.providers.contacts.util.UserUtils;
+
 import com.google.common.annotations.VisibleForTesting;
 import java.io.FileNotFoundException;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -48,12 +51,20 @@ import java.util.List;
  */
 public class VoicemailContentProvider extends ContentProvider
         implements VoicemailTable.DelegateHelper {
+    private static final String TAG = "VoicemailProvider";
+
+    public static final boolean VERBOSE_LOGGING = AbstractContactsProvider.VERBOSE_LOGGING;
+
     private VoicemailPermissions mVoicemailPermissions;
     private VoicemailTable.Delegate mVoicemailContentTable;
     private VoicemailTable.Delegate mVoicemailStatusTable;
 
     @Override
     public boolean onCreate() {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "onCreate: " + this.getClass().getSimpleName()
+                    + " user=" + android.os.Process.myUserHandle().getIdentifier());
+        }
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.INFO)) {
             Log.i(Constants.PERFORMANCE_TAG, "VoicemailContentProvider.onCreate start");
         }
@@ -110,6 +121,12 @@ public class VoicemailContentProvider extends ContentProvider
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
+                    "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
+                    "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid() +
+                    " User=" + UserUtils.getCurrentUserHandle(getContext()));
+        }
         UriData uriData = checkPermissionsAndCreateUriDataForRead(uri);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         selectionBuilder.addClause(getPackageRestrictionClause(true/*isQuery*/));
@@ -119,6 +136,12 @@ public class VoicemailContentProvider extends ContentProvider
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "update: uri=" + uri +
+                    "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
+                    "  values=[" + values + "] CPID=" + Binder.getCallingPid() +
+                    " User=" + UserUtils.getCurrentUserHandle(getContext()));
+        }
         UriData uriData = checkPermissionsAndCreateUriDataForWrite(uri, values);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         selectionBuilder.addClause(getPackageRestrictionClause(false/*isQuery*/));
@@ -128,6 +151,12 @@ public class VoicemailContentProvider extends ContentProvider
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "delete: uri=" + uri +
+                    "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
+                    " CPID=" + Binder.getCallingPid() +
+                    " User=" + UserUtils.getCurrentUserHandle(getContext()));
+        }
         UriData uriData = checkPermissionsAndCreateUriDataForWrite(uri);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         selectionBuilder.addClause(getPackageRestrictionClause(false/*isQuery*/));
@@ -136,14 +165,25 @@ public class VoicemailContentProvider extends ContentProvider
 
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
-        UriData uriData = null;
-        if (mode.equals("r")) {
-            uriData = checkPermissionsAndCreateUriDataForRead(uri);
-        } else {
-            uriData = checkPermissionsAndCreateUriDataForWrite(uri);
+        boolean success = false;
+        try {
+            UriData uriData = null;
+            if (mode.equals("r")) {
+                uriData = checkPermissionsAndCreateUriDataForRead(uri);
+            } else {
+                uriData = checkPermissionsAndCreateUriDataForWrite(uri);
+            }
+            // openFileHelper() relies on "_data" column to be populated with the file path.
+            final ParcelFileDescriptor ret = getTableDelegate(uriData).openFile(uriData, mode);
+            success = true;
+            return ret;
+        } finally {
+            if (VERBOSE_LOGGING) {
+                Log.v(TAG, "openFile uri=" + uri + " mode=" + mode + " success=" + success +
+                        " CPID=" + Binder.getCallingPid() +
+                        " User=" + UserUtils.getCurrentUserHandle(getContext()));
+            }
         }
-        // openFileHelper() relies on "_data" column to be populated with the file path.
-        return getTableDelegate(uriData).openFile(uriData, mode);
     }
 
     /** Returns the correct table delegate object that can handle this URI. */
