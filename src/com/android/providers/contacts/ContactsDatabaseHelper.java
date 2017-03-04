@@ -353,6 +353,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String ICU_VERSION = "icu_version";
         String LOCALE = "locale";
         String DATABASE_TIME_CREATED = "database_time_created";
+        String KNOWN_DIRECTORY_PACKAGES = "knownDirectoryPackages";
     }
 
     public interface Clauses {
@@ -4400,7 +4401,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         PropertyUtils.setProperty(getWritableDatabase(), key, value);
     }
 
-    public void clearDirectoryScanComplete() {
+    public void forceDirectoryRescan() {
         setProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
     }
 

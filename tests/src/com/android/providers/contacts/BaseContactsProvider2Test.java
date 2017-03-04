@@ -128,7 +128,8 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     protected void setUp() throws Exception {
         super.setUp();
 
-        mActor = new ContactsActor(getContext(), PACKAGE_GREY, getProviderClass(), getAuthority());
+        mActor = new ContactsActor(
+                getContext(), getContextPackageName(), getProviderClass(), getAuthority());
         mResolver = mActor.resolver;
         if (mActor.provider instanceof SynchronousContactsProvider2) {
             getContactsProvider().wipeData();
@@ -141,6 +142,10 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
                 "android.permission.READ_WRITE_CONTACT_METADATA",
                 "android.permission.READ_SOCIAL_STREAM",
                 "android.permission.WRITE_SOCIAL_STREAM");
+    }
+
+    protected String getContextPackageName() {
+        return PACKAGE_GREY;
     }
 
     @Override

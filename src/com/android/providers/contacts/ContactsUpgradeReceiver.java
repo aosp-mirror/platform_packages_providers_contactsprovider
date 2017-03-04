@@ -86,7 +86,7 @@ public class ContactsUpgradeReceiver extends BroadcastReceiver {
                 Log.i(TAG, "Creating or opening contacts database");
 
                 helper.getWritableDatabase();
-                helper.clearDirectoryScanComplete();
+                helper.forceDirectoryRescan();
 
                 profileHelper.getWritableDatabase();
                 calllogHelper.getWritableDatabase();

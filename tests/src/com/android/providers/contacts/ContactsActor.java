@@ -458,7 +458,7 @@ public class ContactsActor {
             mGrantedPermissions = grantedPermissions;
             mGrantedUriPermissions = grantedUriPermissions;
 
-            mPackageManager = new ContactsMockPackageManager();
+            mPackageManager = new ContactsMockPackageManager(overallContext);
             mPackageManager.addPackage(1000, PACKAGE_GREY);
             mPackageManager.addPackage(2000, PACKAGE_RED);
             mPackageManager.addPackage(3000, PACKAGE_GREEN);

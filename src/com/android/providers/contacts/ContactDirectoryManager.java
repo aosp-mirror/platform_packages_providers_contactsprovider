@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.annotation.NonNull;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageInfo;
@@ -44,6 +45,7 @@ import com.google.common.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -121,9 +123,11 @@ public class ContactDirectoryManager {
     private boolean areTypeResourceIdsValid() {
         SQLiteDatabase db = getDbHelper().getReadableDatabase();
 
-        Cursor cursor = db.query(Tables.DIRECTORIES,
-                new String[] { Directory.TYPE_RESOURCE_ID, Directory.PACKAGE_NAME,
-                        DirectoryColumns.TYPE_RESOURCE_NAME }, null, null, null, null, null);
+        final Cursor cursor = db.rawQuery("SELECT DISTINCT "
+                + Directory.TYPE_RESOURCE_ID + ","
+                + Directory.PACKAGE_NAME + ","
+                + DirectoryColumns.TYPE_RESOURCE_NAME
+                + " FROM " + Tables.DIRECTORIES, null);
         try {
             while (cursor.moveToNext()) {
                 int resourceId = cursor.getInt(0);
@@ -132,6 +136,13 @@ public class ContactDirectoryManager {
                     String storedResourceName = cursor.getString(2);
                     String resourceName = getResourceNameById(packageName, resourceId);
                     if (!TextUtils.equals(storedResourceName, resourceName)) {
+                        if (DEBUG) {
+                            Log.d(TAG, "areTypeResourceIdsValid:"
+                                    + " resourceId=" + resourceId
+                                    + " packageName=" + packageName
+                                    + " storedResourceName=" + storedResourceName
+                                    + " resourceName=" + resourceName);
+                        }
                         return false;
                     }
                 }
@@ -158,26 +169,68 @@ public class ContactDirectoryManager {
         }
     }
 
+    private void saveKnownDirectoryProviders(Set<String> packages) {
+        getDbHelper().setProperty(DbProperties.KNOWN_DIRECTORY_PACKAGES,
+                TextUtils.join(",", packages));
+    }
+
+    private boolean haveKnownDirectoryProvidersChanged(Set<String> packages) {
+        final String directoryPackages = TextUtils.join(",", packages);
+        final String prev = getDbHelper().getProperty(DbProperties.KNOWN_DIRECTORY_PACKAGES, "");
+
+        final boolean changed = !Objects.equals(directoryPackages, prev);
+        if (DEBUG) {
+            Log.d(TAG, "haveKnownDirectoryProvidersChanged=" + changed + "\nprev=" + prev
+                    + " current=" + directoryPackages);
+        }
+        return changed;
+    }
+
+    @VisibleForTesting
+    boolean isRescanNeeded() {
+        if ("1".equals(SystemProperties.get("debug.cp2.scan_all_packages", "0"))) {
+            Log.w(TAG, "debug.cp2.scan_all_packages set to 1.");
+            return true; // For debugging.
+        }
+        final String scanComplete =
+                getDbHelper().getProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
+        if (!"1".equals(scanComplete)) {
+            if (DEBUG) {
+                Log.d(TAG, "DIRECTORY_SCAN_COMPLETE is 0.");
+            }
+            return true;
+        }
+        if (haveKnownDirectoryProvidersChanged(getDirectoryProviderPackages(mPackageManager))) {
+            Log.i(TAG, "Directory provider packages have changed.");
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Scans all packages for directory content providers.
      */
-    public void scanAllPackages(boolean rescan) {
-        if (rescan || !areTypeResourceIdsValid()
-                || "1".equals(SystemProperties.get("debug.cp2.scan_all_packages", "0"))) {
-            getDbHelper().clearDirectoryScanComplete();
+    public int scanAllPackages(boolean rescan) {
+        if (!areTypeResourceIdsValid()) {
+            rescan = true;
+            Log.i(TAG, "!areTypeResourceIdsValid.");
+        }
+        if (rescan) {
+            getDbHelper().forceDirectoryRescan();
         }
 
-        scanAllPackagesIfNeeded();
+        return scanAllPackagesIfNeeded();
     }
 
-    private void scanAllPackagesIfNeeded() {
-        String scanComplete = getDbHelper().getProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
-        if (!"0".equals(scanComplete)) {
-            return;
+    private int scanAllPackagesIfNeeded() {
+        if (!isRescanNeeded()) {
+            return 0;
         }
-
+        if (DEBUG) {
+            Log.d(TAG, "scanAllPackagesIfNeeded()");
+        }
         final long start = SystemClock.elapsedRealtime();
-        int count = scanAllPackages();
+        final int count = scanAllPackages();
         getDbHelper().setProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "1");
         final long end = SystemClock.elapsedRealtime();
         Log.i(TAG, "Discovered " + count + " contact directories in " + (end - start) + "ms");
@@ -185,6 +238,7 @@ public class ContactDirectoryManager {
         // Announce the change to listeners of the contacts authority
         mContactsProvider.notifyChange(/* syncToNetwork =*/false,
                 /* syncToMetadataNetwork =*/false);
+        return count;
     }
 
     @VisibleForTesting
@@ -197,34 +251,25 @@ public class ContactDirectoryManager {
         return trueFalse != null && Boolean.TRUE.equals(trueFalse);
     }
 
+    @NonNull
+    static private List<ProviderInfo> getDirectoryProviderInfos(PackageManager pm) {
+        return pm.queryContentProviders(null, 0, 0, CONTACT_DIRECTORY_META_DATA);
+    }
+
     /**
      * @return List of packages that contain a directory provider.
      */
     @VisibleForTesting
+    @NonNull
     static Set<String> getDirectoryProviderPackages(PackageManager pm) {
         final Set<String> ret = Sets.newHashSet();
 
-        final List<PackageInfo> packages = pm.getInstalledPackages(PackageManager.GET_PROVIDERS
-                | PackageManager.GET_META_DATA);
-        if (packages == null) {
-            return ret;
+        if (DEBUG) {
+            Log.d(TAG, "Listing directory provider packages...");
         }
-        for (PackageInfo packageInfo : packages) {
-            if (DEBUG) {
-                Log.d(TAG, "package=" + packageInfo.packageName);
-            }
-            if (packageInfo.providers == null) {
-                continue;
-            }
-            for (ProviderInfo provider : packageInfo.providers) {
-                if (DEBUG) {
-                    Log.d(TAG, "provider=" + provider.authority);
-                }
-                if (isDirectoryProvider(provider)) {
-                    Log.d(TAG, "Found " + provider.authority);
-                    ret.add(provider.packageName);
-                }
-            }
+
+        for (ProviderInfo provider : getDirectoryProviderInfos(pm)) {
+            ret.add(provider.packageName);
         }
         if (DEBUG) {
             Log.d(TAG, "Found " + ret.size() + " directory provider packages");
@@ -233,8 +278,7 @@ public class ContactDirectoryManager {
         return ret;
     }
 
-    @VisibleForTesting
-    int scanAllPackages() {
+    private int scanAllPackages() {
         SQLiteDatabase db = getDbHelper().getWritableDatabase();
         insertDefaultDirectory(db);
         insertLocalInvisibleDirectory(db);
@@ -253,7 +297,8 @@ public class ContactDirectoryManager {
                 + Directory.ACCOUNT_NAME + "=? AND "
                 + Directory.ACCOUNT_TYPE + "=?)";
 
-        for (String packageName : getDirectoryProviderPackages(mPackageManager)) {
+        final Set<String> directoryProviderPackages = getDirectoryProviderPackages(mPackageManager);
+        for (String packageName : directoryProviderPackages) {
             if (DEBUG) Log.d(TAG, "package=" + packageName);
 
             // getDirectoryProviderPackages() shouldn't return the contacts provider package
@@ -293,6 +338,9 @@ public class ContactDirectoryManager {
 
         int deletedRows = db.delete(Tables.DIRECTORIES, deleteWhereBuilder.toString(),
                 deleteWhereArgs.toArray(new String[0]));
+
+        saveKnownDirectoryProviders(directoryProviderPackages);
+
         Log.i(TAG, "deleted " + deletedRows
                 + " stale rows which don't have any relevant directory");
         return count;
@@ -301,7 +349,7 @@ public class ContactDirectoryManager {
     private void insertDefaultDirectory(SQLiteDatabase db) {
         ContentValues values = new ContentValues();
         values.put(Directory._ID, Directory.DEFAULT);
-        values.put(Directory.PACKAGE_NAME, mContext.getApplicationInfo().packageName);
+        values.put(Directory.PACKAGE_NAME, mContext.getPackageName());
         values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
         values.put(Directory.TYPE_RESOURCE_ID, R.string.default_directory);
         values.put(DirectoryColumns.TYPE_RESOURCE_NAME,
@@ -315,7 +363,7 @@ public class ContactDirectoryManager {
     private void insertLocalInvisibleDirectory(SQLiteDatabase db) {
         ContentValues values = new ContentValues();
         values.put(Directory._ID, Directory.LOCAL_INVISIBLE);
-        values.put(Directory.PACKAGE_NAME, mContext.getApplicationInfo().packageName);
+        values.put(Directory.PACKAGE_NAME, mContext.getPackageName());
         values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
         values.put(Directory.TYPE_RESOURCE_ID, R.string.local_invisible_directory);
         values.put(DirectoryColumns.TYPE_RESOURCE_NAME,

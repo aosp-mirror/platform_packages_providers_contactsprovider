@@ -217,7 +217,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('contacts', 2009)");
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('data', 777)");
 
-        getContactDirectoryManagerForTest().scanAllPackages();
+        getContactDirectoryManagerForTest().scanAllPackages(/* rescan= */ true);
     }
 
     // Flags to remember which transaction callback has been called for which mode.

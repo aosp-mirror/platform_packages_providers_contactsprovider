@@ -20,6 +20,7 @@ import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
 import android.os.Binder;
@@ -36,11 +37,15 @@ import java.util.List;
  * {@link Context#getPackageName()}.
  */
 public class ContactsMockPackageManager extends MockPackageManager {
+
+    private final Context mRealContext;
+
     private final HashMap<Integer, String> mForward = new HashMap<Integer, String>();
     private final HashMap<String, Integer> mReverse = new HashMap<String, Integer>();
     private List<PackageInfo> mPackages;
 
-    public ContactsMockPackageManager() {
+    public ContactsMockPackageManager(Context realContext) {
+        mRealContext = realContext;
     }
 
     /**
@@ -109,6 +114,34 @@ public class ContactsMockPackageManager extends MockPackageManager {
 
     @Override
     public Resources getResourcesForApplication(String appPackageName) {
+        if (mRealContext.getPackageName().equals(appPackageName)) {
+            return mRealContext.getResources();
+        }
         return new ContactsMockResources();
+    }
+
+    @Override
+    public List<ProviderInfo> queryContentProviders(String processName, int uid, int flags,
+            String metaDataKey) {
+        final List<ProviderInfo> ret = new ArrayList<>();
+        final List<PackageInfo> packages = getInstalledPackages(flags);
+        if (packages == null) {
+            return ret;
+        }
+        for (PackageInfo pkg : packages) {
+            if (pkg.providers == null) {
+                continue;
+            }
+            for (ProviderInfo proi : pkg.providers) {
+                if (metaDataKey == null) {
+                    ret.add(proi);
+                } else {
+                    if (proi.metaData != null && proi.metaData.containsKey(metaDataKey)) {
+                        ret.add(proi);
+                    }
+                }
+            }
+        }
+        return ret;
     }
 }

@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
+
 import android.accounts.Account;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -43,12 +45,16 @@ import com.android.providers.contacts.testutil.RawContactUtil;
 @MediumTest
 public class DirectoryTest extends BaseContactsProvider2Test {
 
+    protected String getContextPackageName() {
+        return getContext().getPackageName();
+    }
+
     public void testDefaultDirectory() {
         ContentValues values = new ContentValues();
         Uri defaultDirectoryUri =
             ContentUris.withAppendedId(Directory.CONTENT_URI, Directory.DEFAULT);
 
-        values.put(Directory.PACKAGE_NAME, "contactsTestPackage");
+        values.put(Directory.PACKAGE_NAME, getContext().getPackageName());
         values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
         values.put(Directory.TYPE_RESOURCE_ID, R.string.default_directory);
         values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
@@ -64,7 +70,7 @@ public class DirectoryTest extends BaseContactsProvider2Test {
         Uri defaultDirectoryUri =
             ContentUris.withAppendedId(Directory.CONTENT_URI, Directory.LOCAL_INVISIBLE);
 
-        values.put(Directory.PACKAGE_NAME, "contactsTestPackage");
+        values.put(Directory.PACKAGE_NAME, getContext().getPackageName());
         values.put(Directory.DIRECTORY_AUTHORITY, ContactsContract.AUTHORITY);
         values.put(Directory.TYPE_RESOURCE_ID, R.string.local_invisible_directory);
         values.put(Directory.EXPORT_SUPPORT, Directory.EXPORT_SUPPORT_NONE);
