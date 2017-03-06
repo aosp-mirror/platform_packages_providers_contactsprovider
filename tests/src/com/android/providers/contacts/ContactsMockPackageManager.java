@@ -81,10 +81,15 @@ public class ContactsMockPackageManager extends MockPackageManager {
     }
 
     @Override
-    public ApplicationInfo getApplicationInfo(String packageName, int flags) {
+    public ApplicationInfo getApplicationInfo(String packageName, int flags)
+            throws NameNotFoundException {
         ApplicationInfo info = new ApplicationInfo();
         Integer uid = mReverse.get(packageName);
+        if (uid == null) {
+            throw new NameNotFoundException();
+        }
         info.uid = (uid != null) ? uid : -1;
+        info.flags = ApplicationInfo.FLAG_INSTALLED;
         return info;
     }
 

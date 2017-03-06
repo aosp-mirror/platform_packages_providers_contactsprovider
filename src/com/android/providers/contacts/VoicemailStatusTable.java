@@ -27,8 +27,12 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.VoicemailContract.Status;
+import android.util.ArraySet;
+
 import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.VoicemailContentProvider.UriData;
+
+import java.util.Set;
 
 /**
  * Implementation of {@link VoicemailTable.Delegate} for the voicemail status table.
@@ -152,5 +156,10 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
 
     private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
         return new DbModifierWithNotification(mTableName, db, mContext);
+    }
+
+    @Override
+    public ArraySet<String> getSourcePackages() {
+        return mDbHelper.selectDistinctColumn(mTableName, Status.SOURCE_PACKAGE);
     }
 }

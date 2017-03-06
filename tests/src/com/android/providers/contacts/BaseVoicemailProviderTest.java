@@ -43,7 +43,6 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        addProvider(TestVoicemailProvider.class, VoicemailContract.AUTHORITY);
         TestVoicemailProvider.setVvmProviderCallDelegate(createMockProviderCalls());
 
         mPackageManager = (ContactsMockPackageManager) getProvider()
@@ -163,6 +162,12 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
         private static VvmProviderCalls mDelegate;
         public static synchronized void setVvmProviderCallDelegate(VvmProviderCalls delegate) {
             mDelegate = delegate;
+        }
+
+        // Run the tasks synchronously.
+        @Override
+        void scheduleTask(int taskId, Object arg) {
+            performBackgroundTask(taskId, arg);
         }
 
         @Override

@@ -20,6 +20,7 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
+import android.util.ArraySet;
 
 import com.android.providers.contacts.VoicemailContentProvider.UriData;
 
@@ -44,6 +45,7 @@ public interface VoicemailTable {
         public String getType(UriData uriData);
         public ParcelFileDescriptor openFile(UriData uriData, String mode)
                 throws FileNotFoundException;
+        public ArraySet<String> getSourcePackages();
     }
 
     /**

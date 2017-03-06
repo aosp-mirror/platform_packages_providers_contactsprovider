@@ -60,7 +60,7 @@ import java.util.concurrent.CountDownLatch;
 public class CallLogProvider extends ContentProvider {
     private static final String TAG = "CallLogProvider";
 
-    public static final boolean VERBOSE_LOGGING = AbstractContactsProvider.VERBOSE_LOGGING;
+    public static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
 
     private static final int BACKGROUND_TASK_INITIALIZE = 0;
     private static final int BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT = 1;

@@ -26,6 +26,8 @@ import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
+import android.text.TextUtils;
+import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -353,6 +355,30 @@ public class CallLogDatabaseHelper {
     @Nullable // We return null during tests when migration is not needed.
     SQLiteDatabase getContactsWritableDatabaseForMigration() {
         return ContactsDatabaseHelper.getInstance(mContext).getWritableDatabase();
+    }
+
+    public ArraySet<String> selectDistinctColumn(String table, String column) {
+        final ArraySet<String> ret = new ArraySet<>();
+        final SQLiteDatabase db = getReadableDatabase();
+        final Cursor c = db.rawQuery("SELECT DISTINCT "
+                + column
+                + " FROM " + table, null);
+        try {
+            c.moveToPosition(-1);
+            while (c.moveToNext()) {
+                if (c.isNull(0)) {
+                    continue;
+                }
+                final String s = c.getString(0);
+
+                if (!TextUtils.isEmpty(s)) {
+                    ret.add(s);
+                }
+            }
+            return ret;
+        } finally {
+            c.close();
+        }
     }
 
     @VisibleForTesting
