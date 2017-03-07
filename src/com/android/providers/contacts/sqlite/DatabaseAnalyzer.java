@@ -22,12 +22,15 @@ import android.util.Log;
 
 import com.android.providers.contacts.AbstractContactsProvider;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Class to extract table/view/column names from databases.
  */
+@VisibleForTesting
 public class DatabaseAnalyzer {
     private static final String TAG = "DatabaseAnalyzer";
 
@@ -74,6 +77,7 @@ public class DatabaseAnalyzer {
      * result contains all table/view names, except for the names that are column names of any
      * tables.
      */
+    @VisibleForTesting
     public static List<String> findTableViewsAllowingColumns(SQLiteDatabase db) {
         final List<String> tables = findTablesAndViews(db);
         if (VERBOSE_LOGGING) {
