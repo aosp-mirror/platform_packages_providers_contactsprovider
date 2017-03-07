@@ -20,7 +20,6 @@ import static com.android.providers.contacts.EvenMoreAsserts.assertThrows;
 import static com.android.providers.contacts.TestUtils.cv;
 
 import android.database.Cursor;
-import android.database.sqlite.SQLiteException;
 import android.net.Uri;
 import android.net.Uri.Builder;
 import android.provider.ContactsContract;
@@ -74,20 +73,24 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
         assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
                 "0=1) UNION SELECT _id FROM view_data--", null);
         assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION, ";delete from contacts", null);
-        assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
-                "_id in data_usage_stat", null);
-        assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
-                "_id in (select _id from default_directory)", null);
+        if (ContactsDatabaseHelper.DISALLOW_SUB_QUERIES) {
+            assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
+                    "_id in data_usage_stat", null);
+            assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
+                    "_id in (select _id from default_directory)", null);
+        }
     }
 
     public void testPhoneQueryBadSortOrder() {
         assertQueryThrows(Phone.CONTENT_URI,
                 PHONE_ID_PROJECTION, null, "_id UNION SELECT _id FROM view_data--");
         assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION, null, ";delete from contacts");
-        assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION, null,
-                "_id in data_usage_stat");
-        assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
-                null, "exists (select _id from default_directory)");
+        if (ContactsDatabaseHelper.DISALLOW_SUB_QUERIES) {
+            assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION, null,
+                    "_id in data_usage_stat");
+            assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
+                    null, "exists (select _id from default_directory)");
+        }
     }
 
     public void testPhoneQueryBadLimit() {
@@ -128,27 +131,34 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
         assertThrows(IllegalArgumentException.class, () -> {
             mResolver.delete(Contacts.CONTENT_URI, ";delete from contacts;--", null);
         });
-        assertThrows(IllegalArgumentException.class, () -> {
-            mResolver.delete(Contacts.CONTENT_URI, "_id in data_usage_stat", null);
-        });
+        if (ContactsDatabaseHelper.DISALLOW_SUB_QUERIES) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                mResolver.delete(Contacts.CONTENT_URI, "_id in data_usage_stat", null);
+            });
+        }
     }
 
     public void testBadUpdate() {
         assertThrows(IllegalArgumentException.class, () -> {
             mResolver.update(Data.CONTENT_URI, cv(), ";delete from contacts;--", null);
         });
-        assertThrows(IllegalArgumentException.class, () -> {
-            mResolver.update(Data.CONTENT_URI, cv(), "_id in data_usage_stat", null);
-        });
-        assertThrows(IllegalArgumentException.class, () -> {
-            mResolver.update(Data.CONTENT_URI, cv("_id/**/", 1), null, null);
-        });
-        mResolver.update(Data.CONTENT_URI, cv("[data1]", 1), null, null); // this is actually fine
+        if (ContactsDatabaseHelper.DISALLOW_SUB_QUERIES) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                mResolver.update(Data.CONTENT_URI, cv(), "_id in data_usage_stat", null);
+            });
+            assertThrows(IllegalArgumentException.class, () -> {
+                mResolver.update(Data.CONTENT_URI, cv("_id/**/", 1), null, null);
+            });
+
+            mResolver.update(Data.CONTENT_URI, cv("[data1]", 1), null, null);
+        }
     }
 
     public void testBadInsert() {
-        assertThrows(IllegalArgumentException.class, () -> {
-            mResolver.insert(Data.CONTENT_URI, cv("_id/**/", 1));
-        });
+        if (ContactsDatabaseHelper.DISALLOW_SUB_QUERIES) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                mResolver.insert(Data.CONTENT_URI, cv("_id/**/", 1));
+            });
+        }
     }
 }
