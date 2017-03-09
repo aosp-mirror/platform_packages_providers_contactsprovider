@@ -15,22 +15,15 @@
  */
 package com.android.providers.contacts;
 
-import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.BroadcastReceiver.PendingResult;
 import android.content.ContentProvider;
-import android.content.ContentResolver;
 import android.content.Context;
 import android.content.IContentProvider;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.PackageManager.NameNotFoundException;
 import android.provider.ContactsContract;
 import android.provider.VoicemailContract;
-import android.provider.VoicemailContract.Status;
-import android.provider.VoicemailContract.Voicemails;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Slog;
@@ -38,8 +31,6 @@ import android.util.Slog;
 import com.android.providers.contacts.util.PackageUtils;
 
 import com.google.common.annotations.VisibleForTesting;
-
-import java.util.function.Consumer;
 
 /**
  * - Handles package related broadcasts.
@@ -72,11 +63,6 @@ public class ContactsPackageMonitor {
     private ContactsPackageMonitor(Context context) {
         mContext = context; // Can't use the app context due to a bug with shared process.
 
-        if (VERBOSE_LOGGING) {
-            Log.v(TAG, "Starting... user="
-                    + android.os.Process.myUserHandle().getIdentifier());
-        }
-
         // Start the BG thread and register the receiver.
         mTaskScheduler = new ContactsTaskScheduler(getClass().getSimpleName()) {
             @Override
@@ -88,6 +74,13 @@ public class ContactsPackageMonitor {
                 }
             }
         };
+    }
+
+    private void start() {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "Starting... user="
+                    + android.os.Process.myUserHandle().getIdentifier());
+        }
 
         registerReceiver();
     }
@@ -95,6 +88,7 @@ public class ContactsPackageMonitor {
     public static synchronized void start(Context context) {
         if (sInstance == null) {
             sInstance = new ContactsPackageMonitor(context);
+            sInstance.start();
         }
     }
 
@@ -139,8 +133,6 @@ public class ContactsPackageMonitor {
 
             // Next, if the package is gone, clean up the voicemail.
             cleanupVoicemail(mContext, packageName);
-
-            arg.broadcastPendingResult.setResultCode(Activity.RESULT_OK);
         } finally {
             if (VERBOSE_LOGGING) Log.v(TAG, "Calling PendingResult.finish()...");
             arg.broadcastPendingResult.finish();
