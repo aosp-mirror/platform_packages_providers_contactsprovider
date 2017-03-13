@@ -3023,8 +3023,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(dataUri2, Data.IS_SUPER_PRIMARY, 0);
         final Uri dataUriWithUsageType = Data.CONTENT_URI.buildUpon().appendQueryParameter(
                 DataUsageFeedback.USAGE_TYPE, usageTypeString).build();
-        assertDataUsageCursorContains(dataUriWithUsageType, emailAddress, 1,
-                1111111 / 86400 * 86400); // Returned values are lowres.
+        assertDataUsageCursorContains(dataUriWithUsageType, emailAddress, 5,
+                1111111 / 86400 * 86400);
 
         // Update AggregationException table.
         RawContactInfo aggregationContact = new RawContactInfo(
@@ -3489,7 +3489,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 StatusUpdates.CAPABILITY_HAS_CAMERA | StatusUpdates.CAPABILITY_HAS_VIDEO);
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
 
-        values.put(Contacts.TIMES_CONTACTED, 1); // low res.
+        values.put(Contacts.TIMES_CONTACTED, 4);
         assertStoredValues(contactUri, values);
         assertSelection(Contacts.CONTENT_URI, values, Contacts._ID, contactId);
     }
@@ -3503,7 +3503,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.CONTACT_CHAT_CAPABILITY, StatusUpdates.CAPABILITY_HAS_CAMERA);
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
 
-        values.put(Contacts.TIMES_CONTACTED, 1); // low res.
+        values.put(Contacts.TIMES_CONTACTED, 4);
 
         assertStoredValuesWithProjection(contactUri, values);
         assertSelectionWithProjection(Contacts.CONTENT_URI, values, Contacts._ID, contactId);
@@ -3527,7 +3527,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
 
         Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "goulash");
-        values.put(Contacts.TIMES_CONTACTED, 1); // low res.
+        values.put(Contacts.TIMES_CONTACTED, 4);
         assertStoredValuesWithProjection(filterUri1, values);
 
         assertContactFilter(contactId, "goolash");
@@ -3562,7 +3562,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
 
         Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "goog411@acme.com");
-        values.put(Contacts.TIMES_CONTACTED, 1); // low res.
+        values.put(Contacts.TIMES_CONTACTED, 4);
         assertStoredValuesWithProjection(filterUri1, values);
 
         assertContactFilter(contactId, "goog");
@@ -3589,7 +3589,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Contacts.CONTACT_PRESENCE, StatusUpdates.INVISIBLE);
 
         Uri filterUri1 = Uri.withAppendedPath(Contacts.CONTENT_FILTER_URI, "18004664411");
-        values.put(Contacts.TIMES_CONTACTED, 1); // low res.
+        values.put(Contacts.TIMES_CONTACTED, 4);
         assertStoredValuesWithProjection(filterUri1, values);
 
         assertContactFilter(contactId, "18004664411");
@@ -3648,7 +3648,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values1);
 
         // After the feedback, 1st and 3rd contacts should be shown after starred one.
-        values1.put(Contacts.TIMES_CONTACTED, 1); // Low res.
+        values1.put(Contacts.TIMES_CONTACTED, 2);
         assertStoredValuesOrderly(Contacts.CONTENT_STREQUENT_URI,
                 new ContentValues[] { values4, values1, values3 });
 
@@ -3682,10 +3682,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Create a ContentValues object representing the third phone number of contact 4
         final ContentValues values6 = new ContentValues(values4);
         values6.put(Phone.NUMBER, phoneNumber6);
-
-        values4.put(Contacts.TIMES_CONTACTED, 1); // Low res.
-        values5.put(Contacts.TIMES_CONTACTED, 1); // Low res.
-        values6.put(Contacts.TIMES_CONTACTED, 1); // Low res.
 
         // Phone only strequent should return all phone numbers belonging to the 4th contact,
         // and then contact 3.
@@ -3853,8 +3849,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         sendFeedback(email2, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values2);
         sendFeedback(email2, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values2);
 
-        values1.put(Contacts.TIMES_CONTACTED, 1); // low res.
-        values2.put(Contacts.TIMES_CONTACTED, 1); // low res.
+        values1.put(Contacts.TIMES_CONTACTED, 1);
+        values2.put(Contacts.TIMES_CONTACTED, 2);
         assertStoredValues(Contacts.CONTENT_FREQUENT_URI, new ContentValues[] {values2, values1});
 
         for (int i = 0; i < 10; i++) {
@@ -3927,7 +3923,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         sMockClock.setCurrentTimeMillis(86400 + 123);
         sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_LONG_TEXT, values1);
 
-        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 1, 86400);
+        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 2, 86400);
 
         sMockClock.setCurrentTimeMillis(86400 * 3 + 123);
         for (int i = 0; i < 11; i++) {
@@ -3935,33 +3931,33 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
 
         // Note here, "a@acme.com" has two data stats rows, 2 and 11.  What we get here's the sum
-        // of the lowres values, so # times will be 11, instead of 10 (which is the lowres of the
+        // of the lowres values, so # times will be 12, instead of 10 (which is the lowres of the
         // sum).
-        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 11, 86400 * 3);
+        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 12, 86400 * 3);
 
         final Uri dataUriWithUsageTypeLongText = Data.CONTENT_URI.buildUpon().appendQueryParameter(
                 DataUsageFeedback.USAGE_TYPE, DataUsageFeedback.USAGE_TYPE_LONG_TEXT).build();
 
-        assertDataUsageCursorContains(dataUriWithUsageTypeLongText, "a@acme.com", 1, 86400 * 1);
+        assertDataUsageCursorContains(dataUriWithUsageTypeLongText, "a@acme.com", 2, 86400 * 1);
 
         sMockClock.setCurrentTimeMillis(86400 * 4 + 123);
         sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_CALL, values1);
         sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_CALL, values1);
         sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_CALL, values1);
 
-        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 12, 86400 * 4);
+        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 15, 86400 * 4);
 
         sMockClock.setCurrentTimeMillis(86400 * 5 + 123);
         for (int i = 0; i < 10; i++) {
             sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_CALL, values1);
         }
-        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 21, 86400 * 5);
+        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 22, 86400 * 5);
 
         sMockClock.setCurrentTimeMillis(86400 * 6 + 123);
         for (int i = 0; i < 10; i++) {
             sendFeedback(email1, DataUsageFeedback.USAGE_TYPE_CALL, values1);
         }
-        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 31, 86400 * 6);
+        assertDataUsageCursorContains(Data.CONTENT_URI, "a@acme.com", 32, 86400 * 6);
 
         final Uri dataUriWithUsageTypeCall = Data.CONTENT_URI.buildUpon().appendQueryParameter(
                 DataUsageFeedback.USAGE_TYPE, DataUsageFeedback.USAGE_TYPE_CALL).build();
@@ -4168,8 +4164,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long nonProfileRawContactId = createBasicNonProfileContact(nonProfileValues);
         long nonProfileContactId = queryContactId(nonProfileRawContactId);
 
-        nonProfileValues.put(Contacts.TIMES_CONTACTED, 1); // low res.
-        profileValues.put(Contacts.TIMES_CONTACTED, 1); // low res.
+        nonProfileValues.put(Contacts.TIMES_CONTACTED, 4);
+        profileValues.put(Contacts.TIMES_CONTACTED, 4);
 
         assertStoredValues(Contacts.CONTENT_URI, nonProfileValues);
         assertSelection(Contacts.CONTENT_URI, nonProfileValues, Contacts._ID, nonProfileContactId);
@@ -4184,7 +4180,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Create a non-profile contact - this should be returned.
         ContentValues nonProfileValues = new ContentValues();
         createBasicNonProfileContact(nonProfileValues);
-        nonProfileValues.put(Contacts.TIMES_CONTACTED, 1); // low res
+        nonProfileValues.put(Contacts.TIMES_CONTACTED, 4);
         assertStoredValues(Contacts.CONTENT_URI, new ContentValues[] {nonProfileValues});
     }
 
@@ -4192,7 +4188,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues profileValues = new ContentValues();
         createBasicProfileContact(profileValues);
 
-        profileValues.put(Contacts.TIMES_CONTACTED, 1); // low res
+        profileValues.put(Contacts.TIMES_CONTACTED, 4);
         assertStoredValues(Profile.CONTENT_URI, profileValues);
     }
 
@@ -4241,7 +4237,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // The raw contact view doesn't include the photo ID.
         profileValues.remove(Contacts.PHOTO_ID);
-        profileValues.put(Contacts.TIMES_CONTACTED, 1); // low res
+        profileValues.put(Contacts.TIMES_CONTACTED, 4);
         assertStoredValues(Profile.CONTENT_RAW_CONTACTS_URI, profileValues);
     }
 
@@ -4251,7 +4247,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // The raw contact view doesn't include the photo ID.
         profileValues.remove(Contacts.PHOTO_ID);
-        profileValues.put(Contacts.TIMES_CONTACTED, 1); // low res
+        profileValues.put(Contacts.TIMES_CONTACTED, 4);
         assertStoredValues(ContentUris.withAppendedId(
                 Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId), profileValues);
     }
@@ -8923,15 +8919,15 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // Next, check the raw_contacts table
         assertStoredValuesWithProjection(RawContacts.CONTENT_URI,
                 cv(RawContacts._ID, rid1,
-                        RawContacts.TIMES_CONTACTED, 1,
+                        RawContacts.TIMES_CONTACTED, 2,
                         RawContacts.LAST_TIME_CONTACTED, (startTime + 86400) / 86400 * 86400
                         ),
                 cv(RawContacts._ID, rid2,
-                        RawContacts.TIMES_CONTACTED, 1,
+                        RawContacts.TIMES_CONTACTED, 3,
                         RawContacts.LAST_TIME_CONTACTED, (startTime + 86400 * 3) / 86400 * 86400
                         ),
                 cv(RawContacts._ID, rid3,
-                        RawContacts.TIMES_CONTACTED, 1,
+                        RawContacts.TIMES_CONTACTED, 2,
                         RawContacts.LAST_TIME_CONTACTED, (startTime + 86400 * 3) / 86400 * 86400
                         ),
                 cv(RawContacts._ID, rid4,
@@ -8947,11 +8943,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         // at once.
         assertStoredValuesWithProjection(Contacts.CONTENT_URI,
                 cv(Contacts._ID, cid1,
-                        Contacts.TIMES_CONTACTED, 1,
+                        Contacts.TIMES_CONTACTED, 4,
                         Contacts.LAST_TIME_CONTACTED, (startTime + 86400 * 3) / 86400 * 86400
                         ),
                 cv(Contacts._ID, cid3,
-                        Contacts.TIMES_CONTACTED, 1,
+                        Contacts.TIMES_CONTACTED, 2,
                         Contacts.LAST_TIME_CONTACTED, (startTime + 86400 * 3) / 86400 * 86400
                         ),
                 cv(Contacts._ID, cid4,

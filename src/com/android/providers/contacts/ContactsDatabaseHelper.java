@@ -949,7 +949,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
          */
         String TEMPLATE_TIMES_USED =
                 ("cast(ifnull((case when (XX) <= 0 then 0"
-                + " when (XX) < (YY) then 1"
+                + " when (XX) < (YY) then (XX)"
                 + " else (cast((XX) as int) / (YY)) * (YY) end), 0) as int)")
                 .replaceAll(CONSTANT_PLACEHOLDER, String.valueOf(TIMES_USED_GRANULARITY));
 

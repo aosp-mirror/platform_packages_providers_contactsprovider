@@ -466,7 +466,7 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
         assertEquals((Object) 0, checkGetTimesUsedExpression(-10));
         assertEquals((Object) 0, checkGetTimesUsedExpression(0));
         for (int i = 1; i < 10; i++) {
-            assertEquals("value=" + i, (Object) 1, checkGetTimesUsedExpression(i));
+            assertEquals("value=" + i, (Object) i, checkGetTimesUsedExpression(i));
         }
         for (int i = 10; i < 20; i++) {
             assertEquals("value=" + i, (Object) 10, checkGetTimesUsedExpression(i));
