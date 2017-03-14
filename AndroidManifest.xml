@@ -34,7 +34,8 @@
             android:exported="true"
             android:grantUriPermissions="true"
             android:readPermission="android.permission.READ_CONTACTS"
-            android:writePermission="android.permission.WRITE_CONTACTS">
+            android:writePermission="android.permission.WRITE_CONTACTS"
+            android:visibleToInstantApps="true">
             <path-permission
                     android:pathPrefix="/search_suggest_query"
                     android:readPermission="android.permission.GLOBAL_SEARCH" />
