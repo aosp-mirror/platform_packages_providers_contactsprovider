@@ -30,6 +30,7 @@ LOCAL_JAVA_LIBRARIES := android.test.runner
 LOCAL_SRC_FILES := $(call all-java-files-under, src)
 
 LOCAL_PACKAGE_NAME := ContactsProviderTests2
+LOCAL_COMPATIBILITY_SUITE := device-tests
 
 LOCAL_INSTRUMENTATION_FOR := ContactsProvider
 LOCAL_CERTIFICATE := shared
