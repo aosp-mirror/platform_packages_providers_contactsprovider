@@ -71,8 +71,12 @@ public class ProfileProvider extends AbstractContactsProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder, CancellationSignal cancellationSignal) {
         incrementStats(mQueryStats);
-        return mDelegate.queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1,
-                cancellationSignal);
+        try {
+            return mDelegate.queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1,
+                    cancellationSignal);
+        } finally {
+            finishOperation();
+        }
     }
 
     @Override

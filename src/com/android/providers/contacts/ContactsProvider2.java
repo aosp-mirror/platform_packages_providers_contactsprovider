@@ -5529,12 +5529,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     cancellationSignal);
         }
         incrementStats(mQueryStats);
+        try {
+            // Otherwise proceed with a normal query against the contacts DB.
+            switchToContactMode();
 
-        // Otherwise proceed with a normal query against the contacts DB.
-        switchToContactMode();
-
-        return queryDirectoryIfNecessary(uri, projection, selection, selectionArgs, sortOrder,
-                cancellationSignal);
+            return queryDirectoryIfNecessary(uri, projection, selection, selectionArgs, sortOrder,
+                    cancellationSignal);
+        } finally {
+            finishOperation();
+        }
     }
 
     private boolean isCallerFromSameUser() {
