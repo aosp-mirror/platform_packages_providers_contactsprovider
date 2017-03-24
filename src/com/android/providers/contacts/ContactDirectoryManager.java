@@ -104,6 +104,8 @@ public class ContactDirectoryManager {
     private final Context mContext;
     private final PackageManager mPackageManager;
 
+    private volatile boolean mDirectoriesForceUpdated = false;
+
     public ContactDirectoryManager(ContactsProvider2 contactsProvider) {
         mContactsProvider = contactsProvider;
         mContext = contactsProvider.getContext();
@@ -112,6 +114,10 @@ public class ContactDirectoryManager {
 
     public ContactsDatabaseHelper getDbHelper() {
         return (ContactsDatabaseHelper) mContactsProvider.getDatabaseHelper();
+    }
+
+    public void setDirectoriesForceUpdated(boolean updated) {
+        mDirectoriesForceUpdated = updated;
     }
 
     /**
@@ -230,6 +236,9 @@ public class ContactDirectoryManager {
             Log.d(TAG, "scanAllPackagesIfNeeded()");
         }
         final long start = SystemClock.elapsedRealtime();
+        // Reset directory updated flag to false. If it's changed to true
+        // then we need to rescan directories.
+        mDirectoriesForceUpdated = false;
         final int count = scanAllPackages();
         getDbHelper().setProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "1");
         final long end = SystemClock.elapsedRealtime();
@@ -238,6 +247,13 @@ public class ContactDirectoryManager {
         // Announce the change to listeners of the contacts authority
         mContactsProvider.notifyChange(/* syncToNetwork =*/false,
                 /* syncToMetadataNetwork =*/false);
+
+        // We schedule a rescan if update(DIRECTORIES) is called while we're scanning all packages.
+        if (mDirectoriesForceUpdated) {
+            mDirectoriesForceUpdated = false;
+            mContactsProvider.scheduleRescanDirectories();
+        }
+
         return count;
     }
 
