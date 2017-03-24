@@ -252,6 +252,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int BACKGROUND_TASK_CHANGE_LOCALE = 9;
     private static final int BACKGROUND_TASK_CLEANUP_PHOTOS = 10;
     private static final int BACKGROUND_TASK_CLEAN_DELETE_LOG = 11;
+    private static final int BACKGROUND_TASK_RESCAN_DIRECTORY = 12;
 
     protected static final int STATUS_NORMAL = 0;
     protected static final int STATUS_UPGRADING = 1;
@@ -1776,6 +1777,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                 updateContactsAccountCount(accounts);
                 updateDirectoriesInBackground(accountsChanged);
+                break;
+            }
+
+            case BACKGROUND_TASK_RESCAN_DIRECTORY: {
+                updateDirectoriesInBackground(true);
                 break;
             }
 
@@ -4233,6 +4239,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case DIRECTORIES: {
+                mContactDirectoryManager.setDirectoriesForceUpdated(true);
                 scanPackagesByUid(Binder.getCallingUid());
                 count = 1;
                 break;
@@ -4934,6 +4941,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public void onAccountsUpdated(Account[] accounts) {
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
+    }
+
+    public void scheduleRescanDirectories() {
+        scheduleBackgroundTask(BACKGROUND_TASK_RESCAN_DIRECTORY);
     }
 
     interface RawContactsBackupQuery {
