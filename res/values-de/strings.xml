@@ -21,10 +21,10 @@
     <string name="provider_label" msgid="6012150850819899907">"Kontakte"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Kontakte-Upgrade erfordert mehr Speicher."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Speicher für Kontakte wird aktualisiert..."</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Zum Abschluss des Upgrades berühren"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"Zum Abschließen der Aktualisierung tippen."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontakte"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Sonstige"</string>
-    <string name="voicemail_from_column" msgid="435732568832121444">"Mailbox-Nachricht von "</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"Mailboxnachricht von "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontaktdatenbank kopieren"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Du 1) erstellst eine Kopie deiner Datenbank, die alle Kontaktinformationen und Anruflisten auf dem internen Speicher enthält, und 2) sendest diese Kopie per E-Mail. Denke daran, die Kopie so schnell wie möglich zu löschen, nachdem du sie vom Gerät kopiert hast oder die E-Mail empfangen wurde."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Jetzt löschen"</string>

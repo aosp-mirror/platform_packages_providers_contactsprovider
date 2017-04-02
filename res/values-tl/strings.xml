@@ -21,7 +21,7 @@
     <string name="provider_label" msgid="6012150850819899907">"Mga Contact"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Nangangailangan ng higit pang memory ang pag-upgrade sa mga contact."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Ina-upgrade ang storage para sa mga contact"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"Pindutin upang kumpletuhin ang pag-upgrade."</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"I-tap upang kumpletuhin ang upgrade."</string>
     <string name="default_directory" msgid="93961630309570294">"Mga Contact"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Iba pa"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Voicemail mula sa/kay "</string>

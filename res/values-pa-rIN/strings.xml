@@ -21,7 +21,7 @@
     <string name="provider_label" msgid="6012150850819899907">"ਸੰਪਰਕ"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"ਸੰਪਰਕ ਅਪਗ੍ਰੇਡ ਲਈ ਵੱਧ ਮੈਮਰੀ ਦੀ ਲੋੜ ਹੈ।"</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"ਸੰਪਰਕਾਂ ਲਈ ਸਟੋਰੇਜ ਅਪਗ੍ਰੇਡ ਕਰ ਰਿਹਾ ਹੈ"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"ਅਪਗ੍ਰੇਡ ਪੂਰਾ ਕਰਨ ਲਈ ਛੋਹਵੋ।"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"ਅੱਪਗ੍ਰੇਡ ਮੁਕੰਮਲ ਕਰਨ ਲਈ ਟੈਪ ਕਰੋ।"</string>
     <string name="default_directory" msgid="93961630309570294">"ਸੰਪਰਕ"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"ਹੋਰ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ਇਸ ਤੋਂ ਵੌਇਸਮੇਲ "</string>

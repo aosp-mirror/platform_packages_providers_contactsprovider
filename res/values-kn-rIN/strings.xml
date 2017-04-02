@@ -21,13 +21,13 @@
     <string name="provider_label" msgid="6012150850819899907">"ಸಂಪರ್ಕಗಳು"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"ಸಂಪರ್ಕಗಳ ಅಪ್‌ಗ್ರೇಡ್‌‌ಗೆ ಹೆಚ್ಚಿನ ಸ್ಮರಣೆಯ ಅಗತ್ಯವಿದೆ."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"ಸಂಪರ್ಕಗಳಿಗಾಗಿ ಸಂಗ್ರಹಣೆಯನ್ನು ಅಪ್‌ಗ್ರೇಡ್ ಮಾಡಲಾಗುತ್ತಿದೆ"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="8438179450336437626">"ಅಪ್‌ಗ್ರೇಡ್ ಪೂರ್ಣಗೊಳಿಸಲು ಸ್ಪರ್ಶಿಸಿ."</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"ಅಪ್‌ಗ್ರೇಡ್ ಪೂರ್ಣಗೊಳಿಸಲು ಟ್ಯಾಪ್ ಮಾಡಿ."</string>
     <string name="default_directory" msgid="93961630309570294">"ಸಂಪರ್ಕಗಳು"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"ಇತರೆ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ಇದರಿಂದ ಧ್ವನಿಮೇಲ್‌ "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"ಸಂಪರ್ಕಗಳ ಡೇಟಾಬೇಸ್‌‌ ನಕಲಿಸಿ"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"ನೀವು 1) ಎಲ್ಲಾ ಸಂಪರ್ಕಗಳ ಸಂಬಂಧಿಸಿದ ಮಾಹಿತಿಯನ್ನು ಒಳಗೊಂಡಿರುವ ನಿಮ್ಮ ಡೇಟಾಬೇಸ್ ನಕಲು ಮಾಡಲು ಮತ್ತು ಆಂತರಿಕ ಸಂಗ್ರಹಣೆಗೆ ಎಲ್ಲ ಕರೆಯ ಲಾಗ್‌ ಮಾಡಲು ಮತ್ತು 2) ಇಮೇಲ್‌‌ ಮಾಡಲಿರುವಿರಿ. ನೀವು ಸಾಧನವನ್ನು ಯಶಸ್ವಿಯಾಗಿ ನಕಲು ಮಾಡಿದ ಬಳಿಕ ಅಥವಾ ಇಮೇಲ್‌ ಸ್ವೀಕರಿಸಿದ ಕೂಡಲೇ ನಕಲು ಅಳಿಸುವುದನ್ನು ನೆನಪಿನಲ್ಲಿರಿಸಿಕೊಳ್ಳಿ."</string>
-    <string name="debug_dump_delete_button" msgid="7832879421132026435">"ಈಗ ಅಳಿಸು"</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"ಈಗ ಅಳಿಸಿ"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"ಪ್ರಾರಂಭಿಸು"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"ನಿಮ್ಮ ಫೈಲ್ ಕಳುಹಿಸಲು ಪ್ರೋಗ್ರಾಂ ಒಂದನ್ನು ಆಯ್ಕೆ ಮಾಡಿ"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"ಸಂಪರ್ಕಗಳ Db ಲಗತ್ತಿಸಲಾಗಿದೆ"</string>
