@@ -94,7 +94,8 @@ public class VoicemailCleanupTest extends BaseVoicemailProviderTest {
 
     private void checkDataDoesNotExistForPackage(String sourcePackage) {
         Cursor cursor = mResolver.query(
-                Voicemails.buildSourceUri(sourcePackage), null, null, null, null);
+                Voicemails.buildSourceUri(sourcePackage), null,
+                "(ifnull(" + Voicemails.DELETED + ",0)==0)", null, null);
         assertEquals(0, cursor.getCount());
         cursor = mResolver.query(
                 Status.buildSourceUri(sourcePackage), null, null, null, null);
