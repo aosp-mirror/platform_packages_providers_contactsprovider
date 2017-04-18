@@ -135,6 +135,7 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.NEW, Calls.NEW);
         sCallsProjectionMap.put(Calls.VOICEMAIL_URI, Calls.VOICEMAIL_URI);
         sCallsProjectionMap.put(Calls.TRANSCRIPTION, Calls.TRANSCRIPTION);
+        sCallsProjectionMap.put(Calls.TRANSCRIPTION_STATE, Calls.TRANSCRIPTION_STATE);
         sCallsProjectionMap.put(Calls.IS_READ, Calls.IS_READ);
         sCallsProjectionMap.put(Calls.CACHED_NAME, Calls.CACHED_NAME);
         sCallsProjectionMap.put(Calls.CACHED_NUMBER_TYPE, Calls.CACHED_NUMBER_TYPE);
