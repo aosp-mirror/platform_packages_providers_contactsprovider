@@ -39,7 +39,7 @@ import com.android.providers.contacts.util.PropertyUtils;
 public class CallLogDatabaseHelper {
     private static final String TAG = "CallLogDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 4;
+    private static final int DATABASE_VERSION = 5;
 
     private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
@@ -151,6 +151,7 @@ public class CallLogDatabaseHelper {
                     Voicemails.SOURCE_DATA + " TEXT," +
                     Voicemails.SOURCE_PACKAGE + " TEXT," +
                     Voicemails.TRANSCRIPTION + " TEXT," +
+                    Voicemails.TRANSCRIPTION_STATE + " INTEGER NOT NULL DEFAULT 0," +
                     Voicemails.STATE + " INTEGER," +
                     Voicemails.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
                     Voicemails.DELETED + " INTEGER NOT NULL DEFAULT 0," +
@@ -194,6 +195,10 @@ public class CallLogDatabaseHelper {
 
             if (oldVersion < 4) {
                 upgradeToVersion4(db);
+            }
+
+            if (oldVersion < 5) {
+                upgradeToVersion5(db);
             }
         }
     }
@@ -261,6 +266,13 @@ public class CallLogDatabaseHelper {
         db.execSQL("ALTER TABLE calls ADD restored INTEGER NOT NULL DEFAULT 0");
         db.execSQL("ALTER TABLE calls ADD archived INTEGER NOT NULL DEFAULT 0");
         db.execSQL("ALTER TABLE calls ADD is_omtp_voicemail INTEGER NOT NULL DEFAULT 0");
+    }
+
+    /**
+     * Add {@link Voicemails.TRANSCRIPTION_STATE} column to the CallLog database.
+     */
+    private void upgradeToVersion5(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD transcription_state INTEGER NOT NULL DEFAULT 0");
     }
 
     /**
