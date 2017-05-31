@@ -4530,9 +4530,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 ret, Contacts.RAW_LAST_TIME_CONTACTED,
                 ret, Contacts.LR_LAST_TIME_CONTACTED);
         if (ret.containsKey(Contacts.LR_TIMES_CONTACTED)) {
-            getDatabaseHelper().logWtf(
-                    "Column '" + Contacts.LR_TIMES_CONTACTED + "' can no longer be modified"
-                    + " directly. Caller=" + getCallingPackage());
+            Log.w(TAG, "Column '" + Contacts.LR_TIMES_CONTACTED + "' can no longer be modified"
+                    + " directly, ignored.  Caller=" + getCallingPackage());
         }
 
         ret.remove(Contacts.LR_LAST_TIME_CONTACTED);
