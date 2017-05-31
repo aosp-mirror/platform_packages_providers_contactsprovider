@@ -37,9 +37,11 @@ import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
+
 import com.android.common.io.MoreCloseables;
 import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
 import com.android.providers.contacts.util.DbQueryUtils;
+
 import com.google.android.collect.Lists;
 import com.google.common.collect.Iterables;
 import java.util.ArrayList;
@@ -172,7 +174,14 @@ public class DbModifierWithNotification implements DatabaseModifier {
                 // from the server and thus is synced or "clean". Otherwise, it means that a local
                 // change is being made to the database, so the entries should be marked as "dirty"
                 // so that the corresponding sync adapter knows they need to be synced.
-                final int isDirty = isSelfModifyingOrInternal(packagesModified) ? 0 : 1;
+                int isDirty;
+                Integer callerSetDirty = values.getAsInteger(Voicemails.DIRTY);
+                if (callerSetDirty != null) {
+                    // Respect the calling package if it sets the dirty flag
+                    isDirty = callerSetDirty == 0 ? 0 : 1;
+                } else {
+                    isDirty = isSelfModifyingOrInternal(packagesModified) ? 0 : 1;
+                }
                 values.put(VoicemailContract.Voicemails.DIRTY, isDirty);
 
                 if (isDirty == 0 && values.containsKey(Calls.IS_READ) && getAsBoolean(values,

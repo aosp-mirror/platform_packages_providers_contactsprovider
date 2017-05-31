@@ -5070,7 +5070,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     private void reportInvalidSql(String callerPackage, InvalidSqlException e) {
-        logWtf(String.format("%s caller=%s", e.getMessage(), callerPackage));
+        Log.e(TAG, String.format("%s caller=%s", e.getMessage(), callerPackage));
         throw e;
     }
 
