@@ -4529,10 +4529,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         ContactsDatabaseHelper.copyLongValue(
                 ret, Contacts.RAW_LAST_TIME_CONTACTED,
                 ret, Contacts.LR_LAST_TIME_CONTACTED);
-        if (ret.containsKey(Contacts.LR_TIMES_CONTACTED)) {
-            Log.w(TAG, "Column '" + Contacts.LR_TIMES_CONTACTED + "' can no longer be modified"
-                    + " directly, ignored.  Caller=" + getCallingPackage());
-        }
+        ContactsDatabaseHelper.copyLongValue(
+                ret, Contacts.RAW_TIMES_CONTACTED,
+                ret, Contacts.LR_TIMES_CONTACTED);
 
         ret.remove(Contacts.LR_LAST_TIME_CONTACTED);
         ret.remove(Contacts.LR_TIMES_CONTACTED);
