@@ -979,7 +979,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId = ContentUris.parseId(rowUri);
 
         values.put(RawContacts.LAST_TIME_CONTACTED, 86400);
-        values.put(RawContacts.TIMES_CONTACTED, 0); // This is not insertable.
+        values.put(RawContacts.TIMES_CONTACTED, 10);
 
         assertStoredValues(rowUri, values);
         assertSelection(RawContacts.CONTENT_URI, values, RawContacts._ID, rawContactId);
