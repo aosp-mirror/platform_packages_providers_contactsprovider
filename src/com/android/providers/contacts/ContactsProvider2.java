@@ -5630,7 +5630,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             final CancellationSignal cancellationSignal) {
         DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
         if (directoryInfo == null) {
-            Log.e(TAG, "Invalid directory ID: " + uri);
+            Log.e(TAG, "Invalid directory ID");
             return null;
         }
 
@@ -5677,7 +5677,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 return null;
             }
         } catch (RuntimeException e) {
-            Log.w(TAG, "Directory query failed: uri=" + uri, e);
+            Log.w(TAG, "Directory query failed", e);
             return null;
         }
 
