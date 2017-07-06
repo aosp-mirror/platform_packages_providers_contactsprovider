@@ -21,6 +21,7 @@ import com.android.providers.contacts.sqlite.SqlChecker;
 import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
 import com.android.providers.contacts.util.PropertyUtils;
 
+import android.app.ActivityManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -1059,6 +1060,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         super(context, databaseName, null, DATABASE_VERSION, MINIMUM_SUPPORTED_VERSION, null);
         boolean enableWal = android.provider.Settings.Global.getInt(context.getContentResolver(),
                 android.provider.Settings.Global.CONTACTS_DATABASE_WAL_ENABLED, 1) == 1;
+        if (dbForProfile() != 0 || ActivityManager.isLowRamDeviceStatic()) {
+            enableWal = false;
+        }
         setWriteAheadLoggingEnabled(enableWal);
         mDatabaseOptimizationEnabled = optimizationEnabled;
         mIsTestInstance = isTestInstance;

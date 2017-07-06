@@ -19,17 +19,18 @@ import android.content.ContentValues;
 import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Bitmap;
 import android.provider.ContactsContract.PhotoFiles;
+import android.util.ArrayMap;
+import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.PhotoFilesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+
 import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -77,7 +78,7 @@ public class PhotoStore {
             }
         }
         mDatabaseHelper = databaseHelper;
-        mEntries = new HashMap<Long, Entry>();
+        mEntries = new ArrayMap<Long, Entry>();
         initialize();
     }
 
@@ -146,7 +147,7 @@ public class PhotoStore {
      * @return The set of the keys in use that refer to non-existent entries.
      */
     public Set<Long> cleanup(Set<Long> keysInUse) {
-        Set<Long> keysToRemove = new HashSet<Long>();
+        Set<Long> keysToRemove = new ArraySet<>();
         keysToRemove.addAll(mEntries.keySet());
         keysToRemove.removeAll(keysInUse);
         if (!keysToRemove.isEmpty()) {
@@ -156,7 +157,7 @@ public class PhotoStore {
             }
         }
 
-        Set<Long> missingKeys = new HashSet<Long>();
+        Set<Long> missingKeys = new ArraySet<>();
         missingKeys.addAll(keysInUse);
         missingKeys.removeAll(mEntries.keySet());
         return missingKeys;

@@ -50,6 +50,7 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.text.TextUtils;
+import android.util.ArrayMap;
 import android.util.Log;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
@@ -65,7 +66,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
-import java.util.HashMap;
 import java.util.Locale;
 
 @SuppressWarnings("deprecation")
@@ -250,14 +250,14 @@ public class LegacyApiSupport {
             + " AND " + DataColumns.CONCRETE_ID + " = legacy_photo." + LegacyPhotoData.PHOTO_DATA_ID
             + ")";
 
-    private static final HashMap<String, String> sPeopleProjectionMap;
-    private static final HashMap<String, String> sOrganizationProjectionMap;
-    private static final HashMap<String, String> sContactMethodProjectionMap;
-    private static final HashMap<String, String> sPhoneProjectionMap;
-    private static final HashMap<String, String> sExtensionProjectionMap;
-    private static final HashMap<String, String> sGroupProjectionMap;
-    private static final HashMap<String, String> sGroupMembershipProjectionMap;
-    private static final HashMap<String, String> sPhotoProjectionMap;
+    private static final ArrayMap<String, String> sPeopleProjectionMap;
+    private static final ArrayMap<String, String> sOrganizationProjectionMap;
+    private static final ArrayMap<String, String> sContactMethodProjectionMap;
+    private static final ArrayMap<String, String> sPhoneProjectionMap;
+    private static final ArrayMap<String, String> sExtensionProjectionMap;
+    private static final ArrayMap<String, String> sGroupProjectionMap;
+    private static final ArrayMap<String, String> sGroupMembershipProjectionMap;
+    private static final ArrayMap<String, String> sPhotoProjectionMap;
 
     static {
 
@@ -335,7 +335,7 @@ public class LegacyApiSupport {
                 SEARCH_SHORTCUT);
         matcher.addURI(authority, "settings", SETTINGS);
 
-        HashMap<String, String> peopleProjectionMap = new HashMap<String, String>();
+        ArrayMap<String, String> peopleProjectionMap = new ArrayMap<>();
         peopleProjectionMap.put(People.NAME, People.NAME);
         peopleProjectionMap.put(People.DISPLAY_NAME, People.DISPLAY_NAME);
         peopleProjectionMap.put(People.PHONETIC_NAME, People.PHONETIC_NAME);
@@ -349,7 +349,7 @@ public class LegacyApiSupport {
         peopleProjectionMap.put(People.PRIMARY_EMAIL_ID, People.PRIMARY_EMAIL_ID);
         peopleProjectionMap.put(People.PRIMARY_PHONE_ID, People.PRIMARY_PHONE_ID);
 
-        sPeopleProjectionMap = new HashMap<String, String>(peopleProjectionMap);
+        sPeopleProjectionMap = new ArrayMap<>(peopleProjectionMap);
         sPeopleProjectionMap.put(People._ID, People._ID);
         sPeopleProjectionMap.put(People.NUMBER, People.NUMBER);
         sPeopleProjectionMap.put(People.TYPE, People.TYPE);
@@ -369,7 +369,7 @@ public class LegacyApiSupport {
                 " LIMIT 1" +
                 ") AS " + People.PRESENCE_CUSTOM_STATUS);
 
-        sOrganizationProjectionMap = new HashMap<String, String>();
+        sOrganizationProjectionMap = new ArrayMap<>();
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations._ID,
                 android.provider.Contacts.Organizations._ID);
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.PERSON_ID,
@@ -385,7 +385,7 @@ public class LegacyApiSupport {
         sOrganizationProjectionMap.put(android.provider.Contacts.Organizations.TITLE,
                 android.provider.Contacts.Organizations.TITLE);
 
-        sContactMethodProjectionMap = new HashMap<String, String>(peopleProjectionMap);
+        sContactMethodProjectionMap = new ArrayMap<>(peopleProjectionMap);
         sContactMethodProjectionMap.put(ContactMethods._ID, ContactMethods._ID);
         sContactMethodProjectionMap.put(ContactMethods.PERSON_ID, ContactMethods.PERSON_ID);
         sContactMethodProjectionMap.put(ContactMethods.KIND, ContactMethods.KIND);
@@ -395,7 +395,7 @@ public class LegacyApiSupport {
         sContactMethodProjectionMap.put(ContactMethods.LABEL, ContactMethods.LABEL);
         sContactMethodProjectionMap.put(ContactMethods.AUX_DATA, ContactMethods.AUX_DATA);
 
-        sPhoneProjectionMap = new HashMap<String, String>(peopleProjectionMap);
+        sPhoneProjectionMap = new ArrayMap<>(peopleProjectionMap);
         sPhoneProjectionMap.put(android.provider.Contacts.Phones._ID,
                 android.provider.Contacts.Phones._ID);
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.PERSON_ID,
@@ -411,7 +411,7 @@ public class LegacyApiSupport {
         sPhoneProjectionMap.put(android.provider.Contacts.Phones.NUMBER_KEY,
                 android.provider.Contacts.Phones.NUMBER_KEY);
 
-        sExtensionProjectionMap = new HashMap<String, String>();
+        sExtensionProjectionMap = new ArrayMap<>();
         sExtensionProjectionMap.put(android.provider.Contacts.Extensions._ID,
                 android.provider.Contacts.Extensions._ID);
         sExtensionProjectionMap.put(android.provider.Contacts.Extensions.PERSON_ID,
@@ -421,7 +421,7 @@ public class LegacyApiSupport {
         sExtensionProjectionMap.put(android.provider.Contacts.Extensions.VALUE,
                 android.provider.Contacts.Extensions.VALUE);
 
-        sGroupProjectionMap = new HashMap<String, String>();
+        sGroupProjectionMap = new ArrayMap<>();
         sGroupProjectionMap.put(android.provider.Contacts.Groups._ID,
                 android.provider.Contacts.Groups._ID);
         sGroupProjectionMap.put(android.provider.Contacts.Groups.NAME,
@@ -431,7 +431,7 @@ public class LegacyApiSupport {
         sGroupProjectionMap.put(android.provider.Contacts.Groups.SYSTEM_ID,
                 android.provider.Contacts.Groups.SYSTEM_ID);
 
-        sGroupMembershipProjectionMap = new HashMap<String, String>(sGroupProjectionMap);
+        sGroupMembershipProjectionMap = new ArrayMap<>(sGroupProjectionMap);
         sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership._ID,
                 android.provider.Contacts.GroupMembership._ID);
         sGroupMembershipProjectionMap.put(android.provider.Contacts.GroupMembership.PERSON_ID,
@@ -448,7 +448,7 @@ public class LegacyApiSupport {
                 android.provider.Contacts.GroupMembership.GROUP_SYNC_ACCOUNT_TYPE,
                 android.provider.Contacts.GroupMembership.GROUP_SYNC_ACCOUNT_TYPE);
 
-        sPhotoProjectionMap = new HashMap<String, String>();
+        sPhotoProjectionMap = new ArrayMap<>();
         sPhotoProjectionMap.put(android.provider.Contacts.Photos._ID,
                 android.provider.Contacts.Photos._ID);
         sPhotoProjectionMap.put(android.provider.Contacts.Photos.PERSON_ID,

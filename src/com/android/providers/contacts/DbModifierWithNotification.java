@@ -36,6 +36,7 @@ import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
+import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.common.io.MoreCloseables;
@@ -46,7 +47,6 @@ import com.google.android.collect.Lists;
 import com.google.common.collect.Iterables;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -262,7 +262,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
      * always expected to have the source package field set.
      */
     private Set<String> getModifiedPackages(String whereClause, String[] whereArgs) {
-        Set<String> modifiedPackages = new HashSet<String>();
+        Set<String> modifiedPackages = new ArraySet<>();
         Cursor cursor = mDb.query(mTableName, PROJECTION,
                 DbQueryUtils.concatenateClauses(NON_NULL_SOURCE_PACKAGE_SELECTION, whereClause),
                 whereArgs, null, null, null);
@@ -280,7 +280,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
      * package field set.
      */
     private Set<String> getModifiedPackages(ContentValues values) {
-        Set<String> impactedPackages = new HashSet<String>();
+        Set<String> impactedPackages = new ArraySet<>();
         if(values.containsKey(VoicemailContract.SOURCE_PACKAGE_FIELD)) {
             impactedPackages.add(values.getAsString(VoicemailContract.SOURCE_PACKAGE_FIELD));
         }
