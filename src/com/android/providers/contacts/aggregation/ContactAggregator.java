@@ -25,6 +25,7 @@ import android.provider.ContactsContract.Contacts.AggregationSuggestions;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.text.TextUtils;
+import android.util.ArraySet;
 import android.util.Log;
 import com.android.providers.contacts.ContactsDatabaseHelper;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
@@ -43,7 +44,6 @@ import com.android.providers.contacts.database.ContactsTableUtil;
 import com.google.android.collect.Sets;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -95,8 +95,8 @@ public class ContactAggregator extends AbstractContactAggregator {
         boolean needReaggregate = false;
 
         final ContactMatcher matcher = new ContactMatcher();
-        final Set<Long> rawContactIdsInSameAccount = new HashSet<Long>();
-        final Set<Long> rawContactIdsInOtherAccount = new HashSet<Long>();
+        final Set<Long> rawContactIdsInSameAccount = new ArraySet<>();
+        final Set<Long> rawContactIdsInOtherAccount = new ArraySet<>();
         if (aggregationMode == RawContacts.AGGREGATION_MODE_DEFAULT) {
             candidates.clear();
             matcher.clear();
@@ -202,7 +202,7 @@ public class ContactAggregator extends AbstractContactAggregator {
             }
         } else if (needReaggregate) {
             // re-aggregate
-            final Set<Long> allRawContactIdSet = new HashSet<Long>();
+            final Set<Long> allRawContactIdSet = new ArraySet<>();
             allRawContactIdSet.addAll(rawContactIdsInSameAccount);
             allRawContactIdSet.addAll(rawContactIdsInOtherAccount);
             // If there is no other raw contacts aggregated with the given raw contact currently,
@@ -345,7 +345,7 @@ public class ContactAggregator extends AbstractContactAggregator {
         }
 
 
-        final Set<Long> rawContactIdSet = new HashSet<Long>();
+        final Set<Long> rawContactIdSet = new ArraySet<>();
         rawContactIdSet.add(rawContactId);
         if (rawContactIdsInSameAccount.size() > 0 &&
                 isDataMaching(db, rawContactIdSet, rawContactIdsInSameAccount)) {
@@ -419,7 +419,7 @@ public class ContactAggregator extends AbstractContactAggregator {
         // Find the connected component based on the aggregation exceptions or
         // identity/email/phone matching for all the raw contacts of [contactId] and the give
         // raw contact.
-        final Set<Long> allIds = new HashSet<Long>();
+        final Set<Long> allIds = new ArraySet<>();
         allIds.add(rawContactId);
         allIds.addAll(existingRawContactIds);
         final Set<Set<Long>> connectedRawContactSets = findConnectedRawContacts(db, allIds);
@@ -821,7 +821,7 @@ public class ContactAggregator extends AbstractContactAggregator {
      */
     private void lookupApproximateNameMatches(SQLiteDatabase db, MatchCandidateList candidates,
             ContactMatcher matcher) {
-        HashSet<String> firstLetters = new HashSet<String>();
+        ArraySet<String> firstLetters = new ArraySet<>();
         for (int i = 0; i < candidates.mCount; i++) {
             final NameMatchCandidate candidate = candidates.mList.get(i);
             if (candidate.mName.length() >= 2) {

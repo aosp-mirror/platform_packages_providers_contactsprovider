@@ -23,6 +23,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
+
 import com.android.providers.contacts.ContactsDatabaseHelper.Clauses;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
@@ -33,7 +34,7 @@ import com.android.providers.contacts.ContactsProvider2.GroupIdCacheEntry;
 import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Handler for group membership data rows.
@@ -62,11 +63,11 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
                     + " AND " + Tables.DATA + "." + GroupMembership.RAW_CONTACT_ID + "=?"
                     + " AND " + Groups.FAVORITES + "!=0";
 
-    private final HashMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache;
+    private final Map<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache;
 
     public DataRowHandlerForGroupMembership(Context context, ContactsDatabaseHelper dbHelper,
             AbstractContactAggregator aggregator,
-            HashMap<String, ArrayList<GroupIdCacheEntry>> groupIdCache) {
+            Map<String, ArrayList<GroupIdCacheEntry>> groupIdCache) {
         super(context, dbHelper, aggregator, GroupMembership.CONTENT_ITEM_TYPE);
         mGroupIdCache = groupIdCache;
     }

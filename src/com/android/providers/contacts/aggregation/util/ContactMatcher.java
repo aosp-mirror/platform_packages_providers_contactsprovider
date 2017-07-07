@@ -18,11 +18,11 @@ package com.android.providers.contacts.aggregation.util;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.util.Hex;
 
+import android.util.ArrayMap;
 import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -153,7 +153,7 @@ public class ContactMatcher {
         return sMaxScore[index];
     }
 
-    private final HashMap<Long, MatchScore> mScores = new HashMap<Long, MatchScore>();
+    private final ArrayMap<Long, MatchScore> mScores = new ArrayMap<>();
     private final ArrayList<MatchScore> mScoreList = new ArrayList<MatchScore>();
     private int mScoreCount = 0;
 
