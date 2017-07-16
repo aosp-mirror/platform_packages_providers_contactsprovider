@@ -29,7 +29,7 @@
     <string name="debug_dump_database_message" msgid="406438635002392290">"Upravo ćete 1) napraviti kopiju svoje baze podataka koja sadrži sve informacije o kontaktima i sve popise poziva u unutrašnjoj pohrani i 2) poslati tu kopiju e-poštom. Ne zaboravite izbrisati kopiju čim je uspješno kopirate s uređaja ili čim primite poruku e-pošte."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Izbriši sada"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Započni"</string>
-    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Izaberite program za slanje fajla"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Odaberite program za slanje fajla"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"Baza podataka kontakata je u prilogu"</string>
     <string name="debug_dump_email_body" msgid="4577749800871444318">"U prilogu je moja baza podataka kontakata sa svim informacijama o kontaktima. Rukujte oprezno."</string>
 </resources>
