@@ -25,8 +25,8 @@
     <string name="default_directory" msgid="93961630309570294">"संपर्क"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"अन्य"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"इनका ध्‍वनि‍मेल: "</string>
-    <string name="debug_dump_title" msgid="4916885724165570279">"संपर्क डेटाबेस की प्रतिलिपि बनाएं"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"आप 1) मोबाइल मेमोरी में अपने उस डेटाबेस की प्रतिलिपि बनाने वाले हैं जिसमें सभी संपर्कों संबंधी जानकारी और सभी कॉल लॉग शामिल हैं, और 2) उसे ईमेल करने वाले हैं. जैसे ही आप डिवाइस से इसकी प्रतिलिपि सफलतापूर्वक बना लें या ईमेल प्राप्त हो जाए तो प्रतिलिपि को हटाना न भूलें."</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"संपर्क डेटाबेस की कॉपी बनाएं"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"आप 1) मोबाइल मेमोरी में अपने उस डेटाबेस की कॉपी बनाने वाले हैं जिसमें सभी संपर्कों संबंधी जानकारी और सभी कॉल लॉग शामिल हैं, और 2) उसे ईमेल करने वाले हैं. जैसे ही आप डिवाइस से इसकी कॉपी सफलतापूर्वक बना लें या ईमेल प्राप्त हो जाए तो कॉपी को हटाना न भूलें."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"अभी हटाएं"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"प्रारंभ करें"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"अपनी फ़ाइल भेजने के लिए कोई प्रोग्राम चुनें"</string>
