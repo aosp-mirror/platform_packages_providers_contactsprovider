@@ -47,6 +47,8 @@ public class CallLogDatabaseHelper {
 
     private static final String SHADOW_DATABASE_NAME = "calllog_shadow.db";
 
+    private static final int IDLE_CONNECTION_TIMEOUT_MS = 30000;
+
     private static CallLogDatabaseHelper sInstance;
 
     /** Instance for the "shadow" provider. */
@@ -87,6 +89,8 @@ public class CallLogDatabaseHelper {
         public OpenHelper(Context context, String name, SQLiteDatabase.CursorFactory factory,
                 int version) {
             super(context, name, factory, version);
+            // Memory optimization - close idle connections after 30s of inactivity
+            setIdleConnectionTimeout(IDLE_CONNECTION_TIMEOUT_MS);
         }
 
         @Override
