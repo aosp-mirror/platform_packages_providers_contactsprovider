@@ -144,6 +144,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     @VisibleForTesting
     static final boolean DISALLOW_SUB_QUERIES = false;
 
+    private static final int IDLE_CONNECTION_TIMEOUT_MS = 30000;
+
     public interface Tables {
         public static final String CONTACTS = "contacts";
         public static final String DELETED_CONTACTS = "deleted_contacts";
@@ -1064,6 +1066,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             enableWal = false;
         }
         setWriteAheadLoggingEnabled(enableWal);
+        // Memory optimization - close idle connections after 30s of inactivity
+        setIdleConnectionTimeout(IDLE_CONNECTION_TIMEOUT_MS);
         mDatabaseOptimizationEnabled = optimizationEnabled;
         mIsTestInstance = isTestInstance;
         Resources resources = context.getResources();
