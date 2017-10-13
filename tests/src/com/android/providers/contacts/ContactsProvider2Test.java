@@ -7021,7 +7021,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(ContactsContract.RawContacts.SEND_TO_VOICEMAIL, 1);
         values.put(ContactsContract.RawContacts.AGGREGATION_MODE,
                 RawContacts.AGGREGATION_MODE_IMMEDIATE);
-        values.put(ContactsContract.RawContacts.STARRED, 1);
         assertEquals(1, mResolver.update(uri, values, null, null));
         assertEquals(version, getVersion(uri));
 
@@ -7872,6 +7871,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         assertStoredValue(contactUri, Contacts.STARRED, "0");
 
+        assertDirty(rawContactUri1, true);
+        assertDirty(rawContactUri2, true);
+        clearDirty(rawContactUri1);
+        clearDirty(rawContactUri2);
+
         ContentValues values = new ContentValues();
         values.put(RawContacts.STARRED, "1");
 
@@ -7880,20 +7884,41 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(rawContactUri1, RawContacts.STARRED, "1");
         assertStoredValue(rawContactUri2, RawContacts.STARRED, "0");
         assertStoredValue(contactUri, Contacts.STARRED, "1");
+        assertDirty(rawContactUri1, true);
+        assertNetworkNotified(true);
 
+        clearDirty(rawContactUri1);
         values.put(RawContacts.STARRED, "0");
         mResolver.update(rawContactUri1, values, null, null);
 
         assertStoredValue(rawContactUri1, RawContacts.STARRED, "0");
         assertStoredValue(rawContactUri2, RawContacts.STARRED, "0");
         assertStoredValue(contactUri, Contacts.STARRED, "0");
+        assertDirty(rawContactUri1, true);
+        assertNetworkNotified(true);
 
+        clearDirty(rawContactUri1);
         values.put(Contacts.STARRED, "1");
         mResolver.update(contactUri, values, null, null);
 
         assertStoredValue(rawContactUri1, RawContacts.STARRED, "1");
         assertStoredValue(rawContactUri2, RawContacts.STARRED, "1");
         assertStoredValue(contactUri, Contacts.STARRED, "1");
+        assertDirty(rawContactUri1, true);
+        assertNetworkNotified(true);
+    }
+
+    public void testUpdateContactOptionsSetStarred() {
+        long rawContactId = RawContactUtil.createRawContact(mResolver);
+        long contactId = queryContactId(rawContactId);
+        String lookupKey = queryLookupKey(contactId);
+        ContentValues values =new ContentValues();
+        values.put(Contacts.STARRED, 1);
+
+        Uri contactLookupUri = ContentUris.withAppendedId(
+            Uri.withAppendedPath(Contacts.CONTENT_LOOKUP_URI, lookupKey), contactId);
+        mResolver.update(contactLookupUri, values, null, null);
+        assertNetworkNotified(true);
     }
 
     public void testSetAndClearSuperPrimaryEmail() {
