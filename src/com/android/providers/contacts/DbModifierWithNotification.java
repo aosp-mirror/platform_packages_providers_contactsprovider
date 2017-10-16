@@ -17,7 +17,6 @@
 
 package com.android.providers.contacts;
 
-import static android.Manifest.permission.ADD_VOICEMAIL;
 import static android.Manifest.permission.READ_VOICEMAIL;
 
 import android.content.ComponentName;
@@ -25,8 +24,6 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ActivityInfo;
-import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.database.DatabaseUtils.InsertHelper;
 import android.database.sqlite.SQLiteDatabase;
@@ -37,17 +34,15 @@ import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.ArraySet;
-import android.util.Log;
 
 import com.android.common.io.MoreCloseables;
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
 import com.android.providers.contacts.util.DbQueryUtils;
 
 import com.google.android.collect.Lists;
 import com.google.common.collect.Iterables;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -57,6 +52,7 @@ import java.util.Set;
  * of then got affected by the change.
  */
 public class DbModifierWithNotification implements DatabaseModifier {
+
     private static final String TAG = "DbModifierWithNotify";
 
     private static final String[] PROJECTION = new String[] {
@@ -73,8 +69,11 @@ public class DbModifierWithNotification implements DatabaseModifier {
     private final Context mContext;
     private final Uri mBaseUri;
     private final boolean mIsCallsTable;
-    private final VoicemailPermissions mVoicemailPermissions;
+    private final VoicemailNotifier mVoicemailNotifier;
 
+    private boolean mIsBulkOperation = false;
+
+    private static VoicemailNotifier sVoicemailNotifierForTest;
 
     public DbModifierWithNotification(String tableName, SQLiteDatabase db, Context context) {
         this(tableName, db, null, context);
@@ -94,7 +93,8 @@ public class DbModifierWithNotification implements DatabaseModifier {
         mBaseUri = mTableName.equals(Tables.VOICEMAIL_STATUS) ?
                 Status.CONTENT_URI : Voicemails.CONTENT_URI;
         mIsCallsTable = mTableName.equals(Tables.CALLS);
-        mVoicemailPermissions = new VoicemailPermissions(mContext);
+        mVoicemailNotifier = sVoicemailNotifierForTest != null ? sVoicemailNotifierForTest
+                : new VoicemailNotifier(mContext, mBaseUri);
     }
 
     @Override
@@ -143,13 +143,21 @@ public class DbModifierWithNotification implements DatabaseModifier {
         }
     }
 
-    private void notifyVoicemailChangeOnInsert(Uri notificationUri, Set<String> packagesModified) {
+    private void notifyVoicemailChangeOnInsert(
+            Uri notificationUri, Set<String> packagesModified) {
         if (mIsCallsTable) {
-            notifyVoicemailChange(notificationUri, packagesModified,
-                    VoicemailContract.ACTION_NEW_VOICEMAIL, Intent.ACTION_PROVIDER_CHANGED);
-        } else {
-            notifyVoicemailChange(notificationUri, packagesModified,
-                    Intent.ACTION_PROVIDER_CHANGED);
+            mVoicemailNotifier.addIntentActions(VoicemailContract.ACTION_NEW_VOICEMAIL);
+        }
+        notifyVoicemailChange(notificationUri, packagesModified);
+    }
+
+    private void notifyVoicemailChange(Uri notificationUri,
+            Set<String> modifiedPackages) {
+        mVoicemailNotifier.addUri(notificationUri);
+        mVoicemailNotifier.addModifiedPackages(modifiedPackages);
+        mVoicemailNotifier.addIntentActions(Intent.ACTION_PROVIDER_CHANGED);
+        if (!mIsBulkOperation) {
+            mVoicemailNotifier.sendNotification();
         }
     }
 
@@ -197,7 +205,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
 
         int count = mDb.update(table, values, whereClause, whereArgs);
         if (count > 0 && isVoicemail) {
-            notifyVoicemailChange(mBaseUri, packagesModified, Intent.ACTION_PROVIDER_CHANGED);
+            notifyVoicemailChange(mBaseUri, packagesModified);
         }
         if (count > 0 && mIsCallsTable) {
             notifyCallLogChange();
@@ -247,12 +255,31 @@ public class DbModifierWithNotification implements DatabaseModifier {
         }
 
         if (count > 0 && isVoicemail) {
-            notifyVoicemailChange(mBaseUri, packagesModified, Intent.ACTION_PROVIDER_CHANGED);
+            notifyVoicemailChange(mBaseUri, packagesModified);
         }
         if (count > 0 && mIsCallsTable) {
             notifyCallLogChange();
         }
         return count;
+    }
+
+    @Override
+    public void startBulkOperation() {
+        mIsBulkOperation = true;
+        mDb.beginTransaction();
+    }
+
+    @Override
+    public void yieldBulkOperation() {
+        mDb.yieldIfContendedSafely();
+    }
+
+    @Override
+    public void finishBulkOperation() {
+        mDb.setTransactionSuccessful();
+        mDb.endTransaction();
+        mIsBulkOperation = false;
+        mVoicemailNotifier.sendNotification();
     }
 
     /**
@@ -266,7 +293,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
         Cursor cursor = mDb.query(mTableName, PROJECTION,
                 DbQueryUtils.concatenateClauses(NON_NULL_SOURCE_PACKAGE_SELECTION, whereClause),
                 whereArgs, null, null, null);
-        while(cursor.moveToNext()) {
+        while (cursor.moveToNext()) {
             modifiedPackages.add(cursor.getString(SOURCE_PACKAGE_COLUMN_INDEX));
         }
         MoreCloseables.closeQuietly(cursor);
@@ -281,7 +308,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
      */
     private Set<String> getModifiedPackages(ContentValues values) {
         Set<String> impactedPackages = new ArraySet<>();
-        if(values.containsKey(VoicemailContract.SOURCE_PACKAGE_FIELD)) {
+        if (values.containsKey(VoicemailContract.SOURCE_PACKAGE_FIELD)) {
             impactedPackages.add(values.getAsString(VoicemailContract.SOURCE_PACKAGE_FIELD));
         }
         return impactedPackages;
@@ -302,58 +329,6 @@ public class DbModifierWithNotification implements DatabaseModifier {
         return packagesModified.size() == 1 && (callingPackages.contains(
                 Iterables.getOnlyElement(packagesModified))
                         || callingPackages.contains(mContext.getPackageName()));
-    }
-
-    private void notifyVoicemailChange(Uri notificationUri, Set<String> modifiedPackages,
-            String... intentActions) {
-        // Notify the observers.
-        // Must be done only once, even if there are multiple broadcast intents.
-        mContext.getContentResolver().notifyChange(notificationUri, null, true);
-        Collection<String> callingPackages = getCallingPackages();
-        // Now fire individual intents.
-        for (String intentAction : intentActions) {
-            // self_change extra should be included only for provider_changed events.
-            boolean includeSelfChangeExtra = intentAction.equals(Intent.ACTION_PROVIDER_CHANGED);
-            for (ComponentName component :
-                    getBroadcastReceiverComponents(intentAction, notificationUri)) {
-                // Ignore any package that is not affected by the change and don't have full access
-                // either.
-                if (!modifiedPackages.contains(component.getPackageName()) &&
-                        !mVoicemailPermissions.packageHasReadAccess(
-                                component.getPackageName())) {
-                    continue;
-                }
-
-                Intent intent = new Intent(intentAction, notificationUri);
-                intent.setComponent(component);
-                if (includeSelfChangeExtra && callingPackages != null) {
-                    intent.putExtra(VoicemailContract.EXTRA_SELF_CHANGE,
-                            callingPackages.contains(component.getPackageName()));
-                }
-                String permissionNeeded = modifiedPackages.contains(component.getPackageName()) ?
-                        ADD_VOICEMAIL : READ_VOICEMAIL;
-                mContext.sendBroadcast(intent, permissionNeeded);
-                Log.v(TAG, String.format("Sent intent. act:%s, url:%s, comp:%s, perm:%s," +
-                        " self_change:%s", intent.getAction(), intent.getData(),
-                        component.getClassName(), permissionNeeded,
-                        intent.hasExtra(VoicemailContract.EXTRA_SELF_CHANGE) ?
-                                intent.getBooleanExtra(VoicemailContract.EXTRA_SELF_CHANGE, false) :
-                                        null));
-            }
-        }
-    }
-
-    /** Determines the components that can possibly receive the specified intent. */
-    private List<ComponentName> getBroadcastReceiverComponents(String intentAction, Uri uri) {
-        Intent intent = new Intent(intentAction, uri);
-        List<ComponentName> receiverComponents = new ArrayList<ComponentName>();
-        // For broadcast receivers ResolveInfo.activityInfo is the one that is populated.
-        for (ResolveInfo resolveInfo :
-                mContext.getPackageManager().queryBroadcastReceivers(intent, 0)) {
-            ActivityInfo activityInfo = resolveInfo.activityInfo;
-            receiverComponents.add(new ComponentName(activityInfo.packageName, activityInfo.name));
-        }
-        return receiverComponents;
     }
 
     /**
@@ -392,5 +367,10 @@ public class DbModifierWithNotification implements DatabaseModifier {
             return System.currentTimeMillis();
         }
         return CallLogProvider.getTimeForTestMillis();
+    }
+
+    @VisibleForTesting
+    static void setVoicemailNotifierForTest(VoicemailNotifier notifier){
+        sVoicemailNotifierForTest = notifier;
     }
 }

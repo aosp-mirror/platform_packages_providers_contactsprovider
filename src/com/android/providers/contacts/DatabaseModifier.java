@@ -49,4 +49,10 @@ public interface DatabaseModifier {
      * {@link SQLiteDatabase#delete(String, String, String[])} method.
      */
     public abstract int delete(String table, String whereClause, String[] whereArgs);
+
+    void startBulkOperation();
+
+    void yieldBulkOperation();
+
+    void finishBulkOperation();
 }

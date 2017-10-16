@@ -20,6 +20,7 @@ import static android.provider.VoicemailContract.SOURCE_PACKAGE_FIELD;
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
+import android.annotation.NonNull;
 import android.app.AppOpsManager;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
@@ -154,6 +155,12 @@ public class VoicemailContentProvider extends ContentProvider
         }
         UriData uriData = checkPermissionsAndCreateUriDataForWrite(uri, values);
         return getTableDelegate(uriData).insert(uriData, values);
+    }
+
+    @Override
+    public int bulkInsert(@NonNull Uri uri, @NonNull ContentValues[] values) {
+        UriData uriData = checkPermissionsAndCreateUriDataForWrite(uri, values);
+        return getTableDelegate(uriData).bulkInsert(uriData, values);
     }
 
     @Override
