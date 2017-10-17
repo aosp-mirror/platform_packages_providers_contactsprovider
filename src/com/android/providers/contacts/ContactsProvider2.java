@@ -4649,6 +4649,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (flagExists(values, RawContacts.STARRED)) {
                 if (!callerIsSyncAdapter) {
                     updateFavoritesMembership(rawContactId, flagIsSet(values, RawContacts.STARRED));
+                    mTransactionContext.get().markRawContactDirtyAndChanged(
+                        rawContactId, callerIsSyncAdapter);
+                    mSyncToNetwork |= !callerIsSyncAdapter;
                 }
                 aggregator.updateStarred(rawContactId);
                 aggregator.updatePinned(rawContactId);
@@ -4662,6 +4665,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             SELECTION_STARRED_FROM_RAW_CONTACTS,
                             new String[] {Long.toString(rawContactId)});
                     updateFavoritesMembership(rawContactId, starred);
+                    mTransactionContext.get().markRawContactDirtyAndChanged(
+                        rawContactId, callerIsSyncAdapter);
+                    mSyncToNetwork |= !callerIsSyncAdapter;
                 }
             }
             if (flagExists(values, RawContacts.SEND_TO_VOICEMAIL)) {
@@ -4832,6 +4838,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     if (hasStarredValue) {
                         updateFavoritesMembership(rawContactId,
                                 flagIsSet(values, RawContacts.STARRED));
+                        mSyncToNetwork |= !callerIsSyncAdapter;
                     }
 
                     if (hasStarredValue || hasPinnedValue || hasVoiceMailValue) {
