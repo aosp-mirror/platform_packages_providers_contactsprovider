@@ -383,7 +383,7 @@ public class CallLogProvider extends ContentProvider {
         // Add the computed fields to the copied values.
         mCallLogInsertionHelper.addComputedValues(copiedValues);
 
-        long rowId = getDatabaseModifier(mCallsInserter).insert(copiedValues);
+        long rowId = createDatabaseModifier(mCallsInserter).insert(copiedValues);
         if (rowId > 0) {
             return ContentUris.withAppendedId(uri, rowId);
         }
@@ -423,7 +423,7 @@ public class CallLogProvider extends ContentProvider {
                 throw new UnsupportedOperationException("Cannot update URL: " + uri);
         }
 
-        return getDatabaseModifier(db).update(uri, Tables.CALLS, values, selectionBuilder.build(),
+        return createDatabaseModifier(db).update(uri, Tables.CALLS, values, selectionBuilder.build(),
                 selectionArgs);
     }
 
@@ -445,7 +445,7 @@ public class CallLogProvider extends ContentProvider {
             case CALLS:
                 // TODO: Special case - We may want to forward the delete request on user 0 to the
                 // shadow provider too.
-                return getDatabaseModifier(db).delete(Tables.CALLS,
+                return createDatabaseModifier(db).delete(Tables.CALLS,
                         selectionBuilder.build(), selectionArgs);
             default:
                 throw new UnsupportedOperationException("Cannot delete that URL: " + uri);
@@ -460,15 +460,15 @@ public class CallLogProvider extends ContentProvider {
      * Returns a {@link DatabaseModifier} that takes care of sending necessary notifications
      * after the operation is performed.
      */
-    private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
+    private DatabaseModifier createDatabaseModifier(SQLiteDatabase db) {
         return new DbModifierWithNotification(Tables.CALLS, db, getContext());
     }
 
     /**
-     * Same as {@link #getDatabaseModifier(SQLiteDatabase)} but used for insert helper operations
+     * Same as {@link #createDatabaseModifier(SQLiteDatabase)} but used for insert helper operations
      * only.
      */
-    private DatabaseModifier getDatabaseModifier(DatabaseUtils.InsertHelper insertHelper) {
+    private DatabaseModifier createDatabaseModifier(DatabaseUtils.InsertHelper insertHelper) {
         return new DbModifierWithNotification(Tables.CALLS, insertHelper, getContext());
     }
 

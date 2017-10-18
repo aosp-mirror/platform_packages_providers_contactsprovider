@@ -20,7 +20,6 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.BatteryStats.Uid.Proc;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
 import android.provider.CallLog;
@@ -32,6 +31,7 @@ import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import com.android.common.io.MoreCloseables;
+import org.mockito.Mockito;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -39,6 +39,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.List;
+
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for {@link VoicemailContentProvider}.
@@ -51,7 +54,12 @@ import java.util.List;
 // TODO: Test that calltype and voicemail_uri are auto populated by the provider.
 @SmallTest
 public class VoicemailProviderTest extends BaseVoicemailProviderTest {
-    /** Fields specific to call_log provider that should not be exposed by voicemail provider. */
+
+    private static final String SYSTEM_PROPERTY_DEXMAKER_DEXCACHE = "dexmaker.dexcache";
+
+    /**
+     * Fields specific to call_log provider that should not be exposed by voicemail provider.
+     */
     private static final String[] CALLLOG_PROVIDER_SPECIFIC_COLUMNS = {
             Calls.CACHED_NAME,
             Calls.CACHED_NUMBER_LABEL,
@@ -60,23 +68,37 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
             Calls.VOICEMAIL_URI,
             Calls.COUNTRY_ISO
     };
-    /** Total number of columns exposed by voicemail provider. */
+    /**
+     * Total number of columns exposed by voicemail provider.
+     */
     private static final int NUM_VOICEMAIL_FIELDS = 24;
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
         setUpForOwnPermission();
+        System.setProperty(SYSTEM_PROPERTY_DEXMAKER_DEXCACHE, getContext().getCacheDir().getPath());
+        Thread.currentThread().setContextClassLoader(VoicemailContentProvider.class.getClassLoader());
         addProvider(CallLogProviderTestable.class, CallLog.AUTHORITY);
     }
 
-    /** Returns the appropriate /voicemail URI. */
+    @Override
+    protected  void tearDown() throws Exception {
+        System.clearProperty(SYSTEM_PROPERTY_DEXMAKER_DEXCACHE);
+        DbModifierWithNotification.setVoicemailNotifierForTest(null);
+    }
+
+    /**
+     * Returns the appropriate /voicemail URI.
+     */
     private Uri voicemailUri() {
         return mUseSourceUri ?
                 Voicemails.buildSourceUri(mActor.packageName) : Voicemails.CONTENT_URI;
     }
 
-    /** Returns the appropriate /status URI. */
+    /**
+     * Returns the appropriate /status URI.
+     */
     private Uri statusUri() {
         return mUseSourceUri ?
                 Status.buildSourceUri(mActor.packageName) : Status.CONTENT_URI;
@@ -116,6 +138,14 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         } finally {
             c.close();
         }
+    }
+
+    public void testBulkInsert() {
+        VoicemailNotifier notifier = mock(VoicemailNotifier.class);
+        DbModifierWithNotification.setVoicemailNotifierForTest(notifier);
+        mResolver.bulkInsert(voicemailUri(),
+                new ContentValues[] {getTestVoicemailValues(), getTestVoicemailValues()});
+        verify(notifier, Mockito.times(1)).sendNotification();
     }
 
     // Test to ensure that media content can be written and read back.
