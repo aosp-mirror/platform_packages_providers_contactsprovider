@@ -425,6 +425,19 @@ public class ContactLocaleUtils {
             keys.add(romajiName);
             return keys.iterator();
         }
+
+        /**
+         * Returns the number for "#" bucket index.
+         * Adds an additional 'misc' bucket for Kanji characters to the base class set.
+         */
+        @Override
+        public int getNumberBucketIndex() {
+            final int numberBucketIndex = super.getNumberBucketIndex();
+            if (numberBucketIndex > mMiscBucketIndex) {
+                return numberBucketIndex + 1;
+            }
+            return numberBucketIndex;
+        }
     }
 
     /**

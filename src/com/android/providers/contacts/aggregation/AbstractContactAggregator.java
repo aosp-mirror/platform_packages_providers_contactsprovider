@@ -69,6 +69,7 @@ import android.provider.ContactsContract.StatusUpdates;
 import android.text.TextUtils;
 import android.util.EventLog;
 import android.util.Log;
+import android.util.Slog;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -917,6 +918,10 @@ public abstract class AbstractContactAggregator {
      * Updates the contact ID for the specified contact and marks the raw contact as aggregated.
      */
     private void setContactIdAndMarkAggregated(long rawContactId, long contactId) {
+        if (contactId == 0) {
+            // Use Slog instead of Log, to prevent the process from crashing.
+            Slog.wtfStack(TAG, "Detected contact-id 0");
+        }
         mContactIdAndMarkAggregatedUpdate.bindLong(1, contactId);
         mContactIdAndMarkAggregatedUpdate.bindLong(2, rawContactId);
         mContactIdAndMarkAggregatedUpdate.execute();
@@ -1263,8 +1268,8 @@ public abstract class AbstractContactAggregator {
                         + RawContacts.SOURCE_ID + ","
                         + RawContacts.CUSTOM_RINGTONE + ","
                         + RawContacts.SEND_TO_VOICEMAIL + ","
-                        + RawContacts.LAST_TIME_CONTACTED + ","
-                        + RawContacts.TIMES_CONTACTED + ","
+                        + RawContacts.RAW_LAST_TIME_CONTACTED + ","
+                        + RawContacts.RAW_TIMES_CONTACTED + ","
                         + RawContacts.STARRED + ","
                         + RawContacts.PINNED + ","
                         + DataColumns.CONCRETE_ID + ","
@@ -1299,8 +1304,8 @@ public abstract class AbstractContactAggregator {
         int SOURCE_ID = 6;
         int CUSTOM_RINGTONE = 7;
         int SEND_TO_VOICEMAIL = 8;
-        int LAST_TIME_CONTACTED = 9;
-        int TIMES_CONTACTED = 10;
+        int RAW_LAST_TIME_CONTACTED = 9;
+        int RAW_TIMES_CONTACTED = 10;
         int STARRED = 11;
         int PINNED = 12;
         int DATA_ID = 13;
@@ -1319,8 +1324,8 @@ public abstract class AbstractContactAggregator {
                         + Contacts.PHOTO_FILE_ID + "=?, "
                         + Contacts.SEND_TO_VOICEMAIL + "=?, "
                         + Contacts.CUSTOM_RINGTONE + "=?, "
-                        + Contacts.LAST_TIME_CONTACTED + "=?, "
-                        + Contacts.TIMES_CONTACTED + "=?, "
+                        + Contacts.RAW_LAST_TIME_CONTACTED + "=?, "
+                        + Contacts.RAW_TIMES_CONTACTED + "=?, "
                         + Contacts.STARRED + "=?, "
                         + Contacts.PINNED + "=?, "
                         + Contacts.HAS_PHONE_NUMBER + "=?, "
@@ -1335,8 +1340,8 @@ public abstract class AbstractContactAggregator {
                         + Contacts.PHOTO_FILE_ID + ", "
                         + Contacts.SEND_TO_VOICEMAIL + ", "
                         + Contacts.CUSTOM_RINGTONE + ", "
-                        + Contacts.LAST_TIME_CONTACTED + ", "
-                        + Contacts.TIMES_CONTACTED + ", "
+                        + Contacts.RAW_LAST_TIME_CONTACTED + ", "
+                        + Contacts.RAW_TIMES_CONTACTED + ", "
                         + Contacts.STARRED + ", "
                         + Contacts.PINNED + ", "
                         + Contacts.HAS_PHONE_NUMBER + ", "
@@ -1350,8 +1355,8 @@ public abstract class AbstractContactAggregator {
         int PHOTO_FILE_ID = 3;
         int SEND_TO_VOICEMAIL = 4;
         int CUSTOM_RINGTONE = 5;
-        int LAST_TIME_CONTACTED = 6;
-        int TIMES_CONTACTED = 7;
+        int RAW_LAST_TIME_CONTACTED = 6;
+        int RAW_TIMES_CONTACTED = 7;
         int STARRED = 8;
         int PINNED = 9;
         int HAS_PHONE_NUMBER = 10;
@@ -1439,12 +1444,12 @@ public abstract class AbstractContactAggregator {
                         contactCustomRingtone = c.getString(RawContactsQuery.CUSTOM_RINGTONE);
                     }
 
-                    long lastTimeContacted = c.getLong(RawContactsQuery.LAST_TIME_CONTACTED);
+                    long lastTimeContacted = c.getLong(RawContactsQuery.RAW_LAST_TIME_CONTACTED);
                     if (lastTimeContacted > contactLastTimeContacted) {
                         contactLastTimeContacted = lastTimeContacted;
                     }
 
-                    int timesContacted = c.getInt(RawContactsQuery.TIMES_CONTACTED);
+                    int timesContacted = c.getInt(RawContactsQuery.RAW_TIMES_CONTACTED);
                     if (timesContacted > contactTimesContacted) {
                         contactTimesContacted = timesContacted;
                     }
@@ -1523,9 +1528,9 @@ public abstract class AbstractContactAggregator {
                 totalRowCount == contactSendToVoicemail ? 1 : 0);
         DatabaseUtils.bindObjectToProgram(statement, ContactReplaceSqlStatement.CUSTOM_RINGTONE,
                 contactCustomRingtone);
-        statement.bindLong(ContactReplaceSqlStatement.LAST_TIME_CONTACTED,
+        statement.bindLong(ContactReplaceSqlStatement.RAW_LAST_TIME_CONTACTED,
                 contactLastTimeContacted);
-        statement.bindLong(ContactReplaceSqlStatement.TIMES_CONTACTED,
+        statement.bindLong(ContactReplaceSqlStatement.RAW_TIMES_CONTACTED,
                 contactTimesContacted);
         statement.bindLong(ContactReplaceSqlStatement.STARRED,
                 contactStarred);

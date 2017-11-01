@@ -113,9 +113,9 @@ public class ContactsTransaction {
             mDatabasesForTransaction.add(0, db);
             mDatabaseTagMap.put(tag, db);
             if (listener != null) {
-                db.beginTransactionWithListener(listener);
+                db.beginTransactionWithListenerNonExclusive(listener);
             } else {
-                db.beginTransaction();
+                db.beginTransactionNonExclusive();
             }
         }
     }

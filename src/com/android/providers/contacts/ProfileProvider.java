@@ -48,8 +48,12 @@ public class ProfileProvider extends AbstractContactsProvider {
     }
 
     @Override
-    protected ProfileDatabaseHelper getDatabaseHelper(Context context) {
+    protected ProfileDatabaseHelper newDatabaseHelper(Context context) {
         return ProfileDatabaseHelper.getInstance(context);
+    }
+
+    public ProfileDatabaseHelper getDatabaseHelper() {
+        return (ProfileDatabaseHelper) super.getDatabaseHelper();
     }
 
     @Override
@@ -67,8 +71,12 @@ public class ProfileProvider extends AbstractContactsProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder, CancellationSignal cancellationSignal) {
         incrementStats(mQueryStats);
-        return mDelegate.queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1,
-                cancellationSignal);
+        try {
+            return mDelegate.queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1,
+                    cancellationSignal);
+        } finally {
+            finishOperation();
+        }
     }
 
     @Override
@@ -148,6 +156,9 @@ public class ProfileProvider extends AbstractContactsProvider {
 
     private void sendProfileChangedBroadcast() {
         final Intent intent = new Intent(Intents.ACTION_PROFILE_CHANGED);
+        mDelegate.getContext().sendBroadcast(intent, READ_CONTACTS_PERMISSION);
+        // TODO b/35323708 update user profile data here instead of notifying Settings
+        intent.setPackage("com.android.settings");
         mDelegate.getContext().sendBroadcast(intent, READ_CONTACTS_PERMISSION);
     }
 

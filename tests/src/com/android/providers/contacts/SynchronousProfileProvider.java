@@ -32,9 +32,10 @@ public class SynchronousProfileProvider extends ProfileProvider {
     }
 
     @Override
-    protected ProfileDatabaseHelper getDatabaseHelper(final Context context) {
+    protected ProfileDatabaseHelper newDatabaseHelper(final Context context) {
         if (sDbHelper == null) {
-            sDbHelper = ProfileDatabaseHelper.getNewInstanceForTest(context);
+            sDbHelper = ProfileDatabaseHelper.getNewInstanceForTest(context,
+                    TestUtils.getProfileDatabaseFilename(getContext()));
         }
         return sDbHelper;
     }

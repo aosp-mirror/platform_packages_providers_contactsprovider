@@ -16,9 +16,10 @@
 
 package com.android.providers.contacts;
 
+import com.android.providers.contacts.sqlite.DatabaseAnalyzer;
+import com.android.providers.contacts.sqlite.SqlChecker;
+import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
 import com.android.providers.contacts.util.PropertyUtils;
-import com.google.android.collect.Sets;
-import com.google.common.annotations.VisibleForTesting;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -49,14 +50,19 @@ import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
+import android.provider.ContactsContract.CommonDataKinds.Event;
 import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
+import android.provider.ContactsContract.CommonDataKinds.Identity;
 import android.provider.ContactsContract.CommonDataKinds.Im;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
+import android.provider.ContactsContract.CommonDataKinds.Note;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
+import android.provider.ContactsContract.CommonDataKinds.Relation;
 import android.provider.ContactsContract.CommonDataKinds.SipAddress;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
+import android.provider.ContactsContract.CommonDataKinds.Website;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Data;
@@ -70,6 +76,7 @@ import android.provider.ContactsContract.MetadataSyncState;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.PinnedPositions;
+import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
@@ -81,10 +88,14 @@ import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
 import android.text.util.Rfc822Token;
 import android.text.util.Rfc822Tokenizer;
+import android.util.ArrayMap;
+import android.util.ArraySet;
 import android.util.Base64;
 import android.util.Log;
+import android.util.Slog;
 
 import com.android.common.content.SyncStateContentProviderHelper;
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
@@ -95,9 +106,9 @@ import libcore.icu.ICU;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Database helper for contacts. Designed as a singleton to make sure that all
@@ -123,9 +134,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   900-999 Lollipop
      *   1000-1099 M
      *   1100-1199 N
+     *   1200-1299 O
      * </pre>
      */
-    static final int DATABASE_VERSION = 1111;
+    static final int DATABASE_VERSION = 1202;
+    private static final int MINIMUM_SUPPORTED_VERSION = 700;
+
+    @VisibleForTesting
+    static final boolean DISALLOW_SUB_QUERIES = false;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -313,7 +329,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String ENTITIES = "view_entities";
         public static final String RAW_ENTITIES = "view_raw_entities";
         public static final String GROUPS = "view_groups";
+
+        /** The data_usage_stat table joined with other tables. */
         public static final String DATA_USAGE_STAT = "view_data_usage_stat";
+
+        /** The data_usage_stat table with the low-res columns. */
+        public static final String DATA_USAGE_LR = "view_data_usage";
         public static final String STREAM_ITEMS = "view_stream_items";
         public static final String METADATA_SYNC = "view_metadata_sync";
         public static final String METADATA_SYNC_STATE = "view_metadata_sync_state";
@@ -335,6 +356,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String ICU_VERSION = "icu_version";
         String LOCALE = "locale";
         String DATABASE_TIME_CREATED = "database_time_created";
+        String KNOWN_DIRECTORY_PACKAGES = "knownDirectoryPackages";
     }
 
     public interface Clauses {
@@ -396,10 +418,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         public static final String CONCRETE_PHOTO_FILE_ID = Tables.CONTACTS + "."
                 + Contacts.PHOTO_FILE_ID;
-        public static final String CONCRETE_TIMES_CONTACTED = Tables.CONTACTS + "."
-                + Contacts.TIMES_CONTACTED;
-        public static final String CONCRETE_LAST_TIME_CONTACTED = Tables.CONTACTS + "."
-                + Contacts.LAST_TIME_CONTACTED;
+
+        public static final String CONCRETE_RAW_TIMES_CONTACTED = Tables.CONTACTS + "."
+                + Contacts.RAW_TIMES_CONTACTED;
+        public static final String CONCRETE_RAW_LAST_TIME_CONTACTED = Tables.CONTACTS + "."
+                + Contacts.RAW_LAST_TIME_CONTACTED;
+
         public static final String CONCRETE_STARRED = Tables.CONTACTS + "." + Contacts.STARRED;
         public static final String CONCRETE_PINNED = Tables.CONTACTS + "." + Contacts.PINNED;
         public static final String CONCRETE_CUSTOM_RINGTONE = Tables.CONTACTS + "."
@@ -444,10 +468,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Tables.RAW_CONTACTS + "." + RawContacts.CUSTOM_RINGTONE;
         public static final String CONCRETE_SEND_TO_VOICEMAIL =
                 Tables.RAW_CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL;
-        public static final String CONCRETE_LAST_TIME_CONTACTED =
-                Tables.RAW_CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED;
-        public static final String CONCRETE_TIMES_CONTACTED =
-                Tables.RAW_CONTACTS + "." + RawContacts.TIMES_CONTACTED;
+        public static final String CONCRETE_RAW_LAST_TIME_CONTACTED =
+                Tables.RAW_CONTACTS + "." + RawContacts.RAW_LAST_TIME_CONTACTED;
+        public static final String CONCRETE_RAW_TIMES_CONTACTED =
+                Tables.RAW_CONTACTS + "." + RawContacts.RAW_TIMES_CONTACTED;
         public static final String CONCRETE_STARRED =
                 Tables.RAW_CONTACTS + "." + RawContacts.STARRED;
         public static final String CONCRETE_PINNED =
@@ -714,14 +738,24 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String CONCRETE_DATA_ID = Tables.DATA_USAGE_STAT + "." + DATA_ID;
 
         /** type: INTEGER (long) */
-        public static final String LAST_TIME_USED = "last_time_used";
-        public static final String CONCRETE_LAST_TIME_USED =
-                Tables.DATA_USAGE_STAT + "." + LAST_TIME_USED;
+        public static final String RAW_LAST_TIME_USED = Data.RAW_LAST_TIME_USED;
+        public static final String LR_LAST_TIME_USED = Data.LR_LAST_TIME_USED;
 
         /** type: INTEGER */
-        public static final String TIMES_USED = "times_used";
-        public static final String CONCRETE_TIMES_USED =
-                Tables.DATA_USAGE_STAT + "." + TIMES_USED;
+        public static final String RAW_TIMES_USED = Data.RAW_TIMES_USED;
+        public static final String LR_TIMES_USED = Data.LR_TIMES_USED;
+
+        public static final String CONCRETE_RAW_LAST_TIME_USED =
+                Tables.DATA_USAGE_STAT + "." + RAW_LAST_TIME_USED;
+
+        public static final String CONCRETE_RAW_TIMES_USED =
+                Tables.DATA_USAGE_STAT + "." + RAW_TIMES_USED;
+
+        public static final String CONCRETE_LR_LAST_TIME_USED =
+                Tables.DATA_USAGE_STAT + "." + LR_LAST_TIME_USED;
+
+        public static final String CONCRETE_LR_TIMES_USED =
+                Tables.DATA_USAGE_STAT + "." + LR_TIMES_USED;
 
         /** type: INTEGER */
         public static final String USAGE_TYPE_INT = "usage_type";
@@ -770,26 +804,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final int ADDRESS = 2;
     }
 
-    private interface Upgrade303Query {
-        public static final String TABLE = Tables.DATA;
-
-        public static final String SELECTION =
-                DataColumns.MIMETYPE_ID + "=?" +
-                    " AND " + Data._ID + " NOT IN " +
-                    "(SELECT " + NameLookupColumns.DATA_ID + " FROM " + Tables.NAME_LOOKUP + ")" +
-                    " AND " + Data.DATA1 + " NOT NULL";
-
-        public static final String COLUMNS[] = {
-                Data._ID,
-                Data.RAW_CONTACT_ID,
-                Data.DATA1,
-        };
-
-        public static final int ID = 0;
-        public static final int RAW_CONTACT_ID = 1;
-        public static final int DATA1 = 2;
-    }
-
     private interface StructuredNameQuery {
         public static final String TABLE = Tables.DATA;
 
@@ -821,37 +835,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final int ID = 0;
         public static final int RAW_CONTACT_ID = 1;
         public static final int NAME = 2;
-    }
-
-    private interface StructName205Query {
-        String TABLE = Tables.DATA_JOIN_RAW_CONTACTS;
-        String COLUMNS[] = {
-                DataColumns.CONCRETE_ID,
-                Data.RAW_CONTACT_ID,
-                RawContacts.DISPLAY_NAME_SOURCE,
-                RawContacts.DISPLAY_NAME_PRIMARY,
-                StructuredName.PREFIX,
-                StructuredName.GIVEN_NAME,
-                StructuredName.MIDDLE_NAME,
-                StructuredName.FAMILY_NAME,
-                StructuredName.SUFFIX,
-                StructuredName.PHONETIC_FAMILY_NAME,
-                StructuredName.PHONETIC_MIDDLE_NAME,
-                StructuredName.PHONETIC_GIVEN_NAME,
-        };
-
-        int ID = 0;
-        int RAW_CONTACT_ID = 1;
-        int DISPLAY_NAME_SOURCE = 2;
-        int DISPLAY_NAME = 3;
-        int PREFIX = 4;
-        int GIVEN_NAME = 5;
-        int MIDDLE_NAME = 6;
-        int FAMILY_NAME = 7;
-        int SUFFIX = 8;
-        int PHONETIC_FAMILY_NAME = 9;
-        int PHONETIC_MIDDLE_NAME = 10;
-        int PHONETIC_GIVEN_NAME = 11;
     }
 
     private interface RawContactNameQuery {
@@ -894,21 +877,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final int FULL_NAME_STYLE = 11;                   // data10
         public static final int ORGANIZATION_PHONETIC_NAME_STYLE = 11;  // data10
         public static final int PHONETIC_NAME_STYLE = 12;               // data11
-    }
-
-    private interface Organization205Query {
-        String TABLE = Tables.DATA_JOIN_RAW_CONTACTS;
-        String COLUMNS[] = {
-                DataColumns.CONCRETE_ID,
-                Data.RAW_CONTACT_ID,
-                Organization.COMPANY,
-                Organization.PHONETIC_NAME,
-        };
-
-        int ID = 0;
-        int RAW_CONTACT_ID = 1;
-        int COMPANY = 2;
-        int PHONETIC_NAME = 3;
     }
 
     public final static class NameLookupType {
@@ -957,62 +925,101 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
+    /** Placeholder for the methods to build the "low-res" SQL expressions. */
+    @VisibleForTesting
+    interface LowRes {
+        /** To be replaced with a real column name.  Only used within this interface. */
+        String TEMPLATE_PLACEHOLDER = "XX";
+
+        /**
+         * To be replaced with a constant in the expression.
+         * Only used within this interface.
+         */
+        String CONSTANT_PLACEHOLDER = "YY";
+
+        /** Only used within this interface. */
+        int TIMES_USED_GRANULARITY = 10;
+
+        /** Only used within this interface. */
+        int LAST_TIME_USED_GRANULARITY = 24 * 60 * 60;
+
+        /**
+         * Template to build the "low-res times used/contacted".  Only used within this interface.
+         * The outermost cast is needed to tell SQLite that the result is of the integer type.
+         */
+        String TEMPLATE_TIMES_USED =
+                ("cast(ifnull((case when (XX) <= 0 then 0"
+                + " when (XX) < (YY) then (XX)"
+                + " else (cast((XX) as int) / (YY)) * (YY) end), 0) as int)")
+                .replaceAll(CONSTANT_PLACEHOLDER, String.valueOf(TIMES_USED_GRANULARITY));
+
+        /**
+         * Template to build the "low-res last time used/contacted".
+         * Only used within this interface.
+         * The outermost cast is needed to tell SQLite that the result is of the integer type.
+         */
+        String TEMPLATE_LAST_TIME_USED =
+                ("cast((cast((XX) as int) / (YY)) * (YY) as int)")
+                .replaceAll(CONSTANT_PLACEHOLDER, String.valueOf(LAST_TIME_USED_GRANULARITY));
+
+        /**
+         * Build the SQL expression for the "low-res times used/contacted" expression from the
+         * give column name.
+         */
+        static String getTimesUsedExpression(String column) {
+            return TEMPLATE_TIMES_USED.replaceAll(TEMPLATE_PLACEHOLDER, column);
+        }
+
+        /**
+         * Build the SQL expression for the "low-res last time used/contacted" expression from the
+         * give column name.
+         */
+        static String getLastTimeUsedExpression(String column) {
+            return TEMPLATE_LAST_TIME_USED.replaceAll(TEMPLATE_PLACEHOLDER, column);
+        }
+    }
+
     private static final String TAG = "ContactsDatabaseHelper";
 
     private static final String DATABASE_NAME = "contacts2.db";
-    private static final String DATABASE_PRESENCE = "presence_db";
 
     private static ContactsDatabaseHelper sSingleton = null;
 
-    /** In-memory cache of previously found MIME-type mappings */
+    /** In-memory map of commonly found MIME-types to their ids in the MIMETYPES table */
     @VisibleForTesting
-    final ConcurrentHashMap<String, Long> mMimetypeCache = new ConcurrentHashMap<>();
+    final ArrayMap<String, Long> mCommonMimeTypeIdsCache = new ArrayMap<>();
 
-    /** In-memory cache the packages table */
     @VisibleForTesting
-    final ConcurrentHashMap<String, Long> mPackageCache = new ConcurrentHashMap<>();
+    static final String[] COMMON_MIME_TYPES = {
+            Email.CONTENT_ITEM_TYPE,
+            Im.CONTENT_ITEM_TYPE,
+            Nickname.CONTENT_ITEM_TYPE,
+            Organization.CONTENT_ITEM_TYPE,
+            Phone.CONTENT_ITEM_TYPE,
+            SipAddress.CONTENT_ITEM_TYPE,
+            StructuredName.CONTENT_ITEM_TYPE,
+            StructuredPostal.CONTENT_ITEM_TYPE,
+            Identity.CONTENT_ITEM_TYPE,
+            android.provider.ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE,
+            GroupMembership.CONTENT_ITEM_TYPE,
+            Note.CONTENT_ITEM_TYPE,
+            Event.CONTENT_ITEM_TYPE,
+            Website.CONTENT_ITEM_TYPE,
+            Relation.CONTENT_ITEM_TYPE,
+            "vnd.com.google.cursor.item/contact_misc"
+    };
 
     private final Context mContext;
     private final boolean mDatabaseOptimizationEnabled;
+    private final boolean mIsTestInstance;
     private final SyncStateContentProviderHelper mSyncState;
     private final CountryMonitor mCountryMonitor;
 
-    private long mMimeTypeIdEmail;
-    private long mMimeTypeIdIm;
-    private long mMimeTypeIdNickname;
-    private long mMimeTypeIdOrganization;
-    private long mMimeTypeIdPhone;
-    private long mMimeTypeIdSip;
-    private long mMimeTypeIdStructuredName;
-    private long mMimeTypeIdStructuredPostal;
-
-    /** Compiled statements for querying and inserting mappings */
-    private SQLiteStatement mContactIdQuery;
-    private SQLiteStatement mAggregationModeQuery;
-    private SQLiteStatement mDataMimetypeQuery;
-
-    /** Precompiled SQL statement for setting a data record to the primary. */
-    private SQLiteStatement mSetPrimaryStatement;
-    /** Precompiled SQL statement for setting a data record to the super primary. */
-    private SQLiteStatement mSetSuperPrimaryStatement;
-    /** Precompiled SQL statement for clearing super primary of a single record. */
-    private SQLiteStatement mClearSuperPrimaryStatement;
-    /** Precompiled SQL statement for updating a contact display name */
-    private SQLiteStatement mRawContactDisplayNameUpdate;
-
-    private SQLiteStatement mNameLookupInsert;
-    private SQLiteStatement mNameLookupDelete;
-    private SQLiteStatement mStatusUpdateAutoTimestamp;
-    private SQLiteStatement mStatusUpdateInsert;
-    private SQLiteStatement mStatusUpdateReplace;
-    private SQLiteStatement mStatusAttributionUpdate;
-    private SQLiteStatement mStatusUpdateDelete;
-    private SQLiteStatement mResetNameVerifiedForOtherRawContacts;
-    private SQLiteStatement mContactInDefaultDirectoryQuery;
-    private SQLiteStatement mMetadataSyncInsert;
-    private SQLiteStatement mMetadataSyncUpdate;
-
-    private StringBuilder mSb = new StringBuilder();
+    /**
+     * Time when the DB was created.  It's persisted in {@link DbProperties#DATABASE_TIME_CREATED},
+     * but loaded into memory so it can be accessed even when the DB is busy.
+     */
+    private long mDatabaseCreationTime;
 
     private MessageDigest mMessageDigest;
     {
@@ -1032,7 +1039,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     public static synchronized ContactsDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
-            sSingleton = new ContactsDatabaseHelper(context, DATABASE_NAME, true);
+            sSingleton = new ContactsDatabaseHelper(context, DATABASE_NAME, true,
+                    /* isTestInstance=*/ false);
         }
         return sSingleton;
     }
@@ -1041,16 +1049,20 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Returns a new instance for unit tests.
      */
     @NeededForTesting
-    static ContactsDatabaseHelper getNewInstanceForTest(Context context) {
-        return new ContactsDatabaseHelper(context, null, false);
+    public static ContactsDatabaseHelper getNewInstanceForTest(Context context, String filename) {
+        return new ContactsDatabaseHelper(context, filename, false, /* isTestInstance=*/ true);
     }
 
     protected ContactsDatabaseHelper(
-            Context context, String databaseName, boolean optimizationEnabled) {
-        super(context, databaseName, null, DATABASE_VERSION);
+            Context context, String databaseName, boolean optimizationEnabled,
+            boolean isTestInstance) {
+        super(context, databaseName, null, DATABASE_VERSION, MINIMUM_SUPPORTED_VERSION, null);
+        boolean enableWal = android.provider.Settings.Global.getInt(context.getContentResolver(),
+                android.provider.Settings.Global.CONTACTS_DATABASE_WAL_ENABLED, 1) == 1;
+        setWriteAheadLoggingEnabled(enableWal);
         mDatabaseOptimizationEnabled = optimizationEnabled;
+        mIsTestInstance = isTestInstance;
         Resources resources = context.getResources();
-
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
         mCountryMonitor = new CountryMonitor(context);
@@ -1063,61 +1075,70 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * Clear all the cached database information and re-initialize it.
+     * Populate ids of known mimetypes into a map for easy access
      *
      * @param db target database
      */
-    private void refreshDatabaseCaches(SQLiteDatabase db) {
-        mStatusUpdateDelete = null;
-        mStatusUpdateReplace = null;
-        mStatusUpdateInsert = null;
-        mStatusUpdateAutoTimestamp = null;
-        mStatusAttributionUpdate = null;
-        mResetNameVerifiedForOtherRawContacts = null;
-        mRawContactDisplayNameUpdate = null;
-        mSetPrimaryStatement = null;
-        mClearSuperPrimaryStatement = null;
-        mSetSuperPrimaryStatement = null;
-        mNameLookupInsert = null;
-        mNameLookupDelete = null;
-        mDataMimetypeQuery = null;
-        mContactIdQuery = null;
-        mAggregationModeQuery = null;
-        mContactInDefaultDirectoryQuery = null;
-
-        initializeCache(db);
+    private void prepopulateCommonMimeTypes(SQLiteDatabase db) {
+        mCommonMimeTypeIdsCache.clear();
+        for(String commonMimeType: COMMON_MIME_TYPES) {
+            mCommonMimeTypeIdsCache.put(commonMimeType, insertMimeType(db, commonMimeType));
+        }
     }
 
-    /**
-     * (Re-)initialize the cached database information.
-     *
-     * @param db target database
-     */
-    private void initializeCache(SQLiteDatabase db) {
-        mMimetypeCache.clear();
-        mPackageCache.clear();
-
-        // TODO: This could be optimized into one query instead of 7
-        //        Also: We shouldn't have those fields in the first place. This should just be
-        //        in the cache
-        mMimeTypeIdEmail = lookupMimeTypeId(Email.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdIm = lookupMimeTypeId(Im.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdNickname = lookupMimeTypeId(Nickname.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdOrganization = lookupMimeTypeId(Organization.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdPhone = lookupMimeTypeId(Phone.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdSip = lookupMimeTypeId(SipAddress.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdStructuredName = lookupMimeTypeId(StructuredName.CONTENT_ITEM_TYPE, db);
-        mMimeTypeIdStructuredPostal = lookupMimeTypeId(StructuredPostal.CONTENT_ITEM_TYPE, db);
+    @Override
+    public void onBeforeDelete(SQLiteDatabase db) {
+        Log.w(TAG, "Database version " + db.getVersion() + " for " + DATABASE_NAME
+                + " is no longer supported. Data will be lost on upgrading to " + DATABASE_VERSION);
     }
 
     @Override
     public void onOpen(SQLiteDatabase db) {
-        refreshDatabaseCaches(db);
-
+        Log.d(TAG, "WAL enabled for " + getDatabaseName() + ": " + db.isWriteAheadLoggingEnabled());
+        prepopulateCommonMimeTypes(db);
         mSyncState.onDatabaseOpened(db);
+        // Deleting any state from the presence tables to mimic their behavior from the time they
+        // were in-memory tables
+        db.execSQL("DELETE FROM " + Tables.PRESENCE + ";");
+        db.execSQL("DELETE FROM " + Tables.AGGREGATED_PRESENCE + ";");
 
-        db.execSQL("ATTACH DATABASE ':memory:' AS " + DATABASE_PRESENCE + ";");
-        db.execSQL("CREATE TABLE IF NOT EXISTS " + DATABASE_PRESENCE + "." + Tables.PRESENCE + " ("+
+        loadDatabaseCreationTime(db);
+    }
+
+    protected void setDatabaseCreationTime(SQLiteDatabase db) {
+        // Note we don't do this in the profile DB helper.
+        mDatabaseCreationTime = System.currentTimeMillis();
+        PropertyUtils.setProperty(db, DbProperties.DATABASE_TIME_CREATED, String.valueOf(
+                mDatabaseCreationTime));
+    }
+
+    protected void loadDatabaseCreationTime(SQLiteDatabase db) {
+        // Note we don't do this in the profile DB helper.
+
+        mDatabaseCreationTime = 0;
+        final String timestamp = PropertyUtils.getProperty(db,
+                DbProperties.DATABASE_TIME_CREATED, "");
+        if (!TextUtils.isEmpty(timestamp)) {
+            try {
+                mDatabaseCreationTime = Long.parseLong(timestamp);
+            } catch (NumberFormatException e) {
+                Log.w(TAG, "Failed to parse timestamp: " + timestamp);
+            }
+        }
+        if (AbstractContactsProvider.VERBOSE_LOGGING) {
+            Log.v(TAG, "Open: creation time=" + mDatabaseCreationTime);
+        }
+        if (mDatabaseCreationTime == 0) {
+            Log.w(TAG, "Unable to load creating time; resetting.");
+            // Hmm, failed to load the timestamp.  Just set the current time then.
+            mDatabaseCreationTime = System.currentTimeMillis();
+            PropertyUtils.setProperty(db,
+                    DbProperties.DATABASE_TIME_CREATED, Long.toString(mDatabaseCreationTime));
+        }
+    }
+
+    private void createPresenceTables(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.PRESENCE + " ("+
                 StatusUpdates.DATA_ID + " INTEGER PRIMARY KEY REFERENCES data(_id)," +
                 StatusUpdates.PROTOCOL + " INTEGER NOT NULL," +
                 StatusUpdates.CUSTOM_PROTOCOL + " TEXT," +
@@ -1131,21 +1152,21 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     + ", " + StatusUpdates.IM_HANDLE + ", " + StatusUpdates.IM_ACCOUNT + ")" +
         ");");
 
-        db.execSQL("CREATE INDEX IF NOT EXISTS " + DATABASE_PRESENCE + ".presenceIndex" + " ON "
+        db.execSQL("CREATE INDEX IF NOT EXISTS presenceIndex" + " ON "
                 + Tables.PRESENCE + " (" + PresenceColumns.RAW_CONTACT_ID + ");");
-        db.execSQL("CREATE INDEX IF NOT EXISTS " + DATABASE_PRESENCE + ".presenceIndex2" + " ON "
+        db.execSQL("CREATE INDEX IF NOT EXISTS presenceIndex2" + " ON "
                 + Tables.PRESENCE + " (" + PresenceColumns.CONTACT_ID + ");");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS "
-                + DATABASE_PRESENCE + "." + Tables.AGGREGATED_PRESENCE + " ("+
+                + Tables.AGGREGATED_PRESENCE + " ("+
                 AggregatedPresenceColumns.CONTACT_ID
                         + " INTEGER PRIMARY KEY REFERENCES contacts(_id)," +
                 StatusUpdates.PRESENCE + " INTEGER," +
                 StatusUpdates.CHAT_CAPABILITY + " INTEGER NOT NULL DEFAULT 0" +
         ");");
 
-        db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_deleted"
-                + " BEFORE DELETE ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS " + Tables.PRESENCE + "_deleted"
+                + " BEFORE DELETE ON " + Tables.PRESENCE
                 + " BEGIN "
                 + "   DELETE FROM " + Tables.AGGREGATED_PRESENCE
                 + "     WHERE " + AggregatedPresenceColumns.CONTACT_ID + " = " +
@@ -1184,14 +1205,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     + ")"
                 + " AND " + PresenceColumns.CONTACT_ID + "=NEW." + PresenceColumns.CONTACT_ID + ";";
 
-        db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_inserted"
-                + " AFTER INSERT ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS " + Tables.PRESENCE + "_inserted"
+                + " AFTER INSERT ON " + Tables.PRESENCE
                 + " BEGIN "
                 + replaceAggregatePresenceSql
                 + " END");
 
-        db.execSQL("CREATE TRIGGER " + DATABASE_PRESENCE + "." + Tables.PRESENCE + "_updated"
-                + " AFTER UPDATE ON " + DATABASE_PRESENCE + "." + Tables.PRESENCE
+        db.execSQL("CREATE TRIGGER IF NOT EXISTS " + Tables.PRESENCE + "_updated"
+                + " AFTER UPDATE ON " + Tables.PRESENCE
                 + " BEGIN "
                 + replaceAggregatePresenceSql
                 + " END");
@@ -1199,7 +1220,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        Log.i(TAG, "Bootstrapping database version: " + DATABASE_VERSION);
+        Log.i(TAG, "Bootstrapping database " + DATABASE_NAME + " version: " + DATABASE_VERSION);
 
         mSyncState.createDatabase(db);
 
@@ -1207,8 +1228,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         // The create time is needed by BOOT_COMPLETE to send broadcasts.
         PropertyUtils.createPropertiesTable(db);
 
-        PropertyUtils.setProperty(db, DbProperties.DATABASE_TIME_CREATED, String.valueOf(
-                System.currentTimeMillis()));
+        setDatabaseCreationTime(db);
 
         db.execSQL("CREATE TABLE " + Tables.ACCOUNTS + " (" +
                 AccountsColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -1216,6 +1236,20 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 AccountsColumns.ACCOUNT_TYPE + " TEXT, " +
                 AccountsColumns.DATA_SET + " TEXT" +
         ");");
+
+        // Note, there are two sets of the usage stat columns: LR_* and RAW_*.
+        // RAW_* contain the real values, which clients can't access.  The column names start
+        // with a special prefix, which clients are prohibited from using in queries (including
+        // "where" of deletes/updates.)
+        // The LR_* columns have the original, public names.  The views have the LR columns too,
+        // which contain the "low-res" numbers.  The tables, though, do *not* have to have these
+        // columns, because we won't use them anyway.  However, because old versions of the tables
+        // had those columns, and SQLite doesn't allow removing existing columns, meaning upgraded
+        // tables will have these LR_* columns anyway.  So, in order to make a new database look
+        // the same as an upgraded database, we create the LR columns in a new database too.
+        // Otherwise, we would easily end up with writing SQLs that will run fine in a new DB
+        // but not in an upgraded database, and because all unit tests will run with a new database,
+        // we can't easily catch these sort of issues.
 
         // One row per group of contacts corresponding to the same person
         db.execSQL("CREATE TABLE " + Tables.CONTACTS + " (" +
@@ -1225,8 +1259,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Contacts.PHOTO_FILE_ID + " INTEGER REFERENCES photo_files(_id)," +
                 Contacts.CUSTOM_RINGTONE + " TEXT," +
                 Contacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
-                Contacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
-                Contacts.LAST_TIME_CONTACTED + " INTEGER," +
+
+                Contacts.RAW_TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
+                Contacts.RAW_LAST_TIME_CONTACTED + " INTEGER," +
+
+                Contacts.LR_TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
+                Contacts.LR_LAST_TIME_CONTACTED + " INTEGER," +
+
                 Contacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
                 Contacts.PINNED + " INTEGER NOT NULL DEFAULT " + PinnedPositions.UNPINNED + "," +
                 Contacts.HAS_PHONE_NUMBER + " INTEGER NOT NULL DEFAULT 0," +
@@ -1258,8 +1297,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 RawContactsColumns.AGGREGATION_NEEDED + " INTEGER NOT NULL DEFAULT 1," +
                 RawContacts.CUSTOM_RINGTONE + " TEXT," +
                 RawContacts.SEND_TO_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0," +
-                RawContacts.TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
-                RawContacts.LAST_TIME_CONTACTED + " INTEGER," +
+
+                RawContacts.RAW_TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
+                RawContacts.RAW_LAST_TIME_CONTACTED + " INTEGER," +
+
+                RawContacts.LR_TIMES_CONTACTED + " INTEGER NOT NULL DEFAULT 0," +
+                RawContacts.LR_LAST_TIME_CONTACTED + " INTEGER," +
+
                 RawContacts.STARRED + " INTEGER NOT NULL DEFAULT 0," +
                 RawContacts.PINNED + " INTEGER NOT NULL DEFAULT "  + PinnedPositions.UNPINNED +
                     "," + RawContacts.DISPLAY_NAME_PRIMARY + " TEXT," +
@@ -1547,8 +1591,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 DataUsageStatColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 DataUsageStatColumns.DATA_ID + " INTEGER NOT NULL, " +
                 DataUsageStatColumns.USAGE_TYPE_INT + " INTEGER NOT NULL DEFAULT 0, " +
-                DataUsageStatColumns.TIMES_USED + " INTEGER NOT NULL DEFAULT 0, " +
-                DataUsageStatColumns.LAST_TIME_USED + " INTEGER NOT NULL DEFAULT 0, " +
+
+                DataUsageStatColumns.RAW_TIMES_USED + " INTEGER NOT NULL DEFAULT 0, " +
+                DataUsageStatColumns.RAW_LAST_TIME_USED + " INTEGER NOT NULL DEFAULT 0, " +
+
+                DataUsageStatColumns.LR_TIMES_USED + " INTEGER NOT NULL DEFAULT 0, " +
+                DataUsageStatColumns.LR_LAST_TIME_USED + " INTEGER NOT NULL DEFAULT 0, " +
+
                 "FOREIGN KEY(" + DataUsageStatColumns.DATA_ID + ") REFERENCES "
                         + Tables.DATA + "(" + Data._ID + ")" +
         ");");
@@ -1591,6 +1640,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         createGroupsView(db);
         createContactsTriggers(db);
         createContactsIndexes(db, false /* we build stats table later */);
+        createPresenceTables(db);
 
         loadNicknameLookupTable(db);
 
@@ -1607,16 +1657,23 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             updateSqliteStats(db);
         }
 
+        postOnCreate();
+    }
+
+    protected void postOnCreate() {
+        // Only do this for the main DB, but not for the profile DB.
+
+        notifyProviderStatusChange(mContext);
+
+        // Trigger all sync adapters.
         ContentResolver.requestSync(null /* all accounts */,
                 ContactsContract.AUTHORITY, new Bundle());
 
-        // Only send broadcasts for regular contacts db.
-        if (dbForProfile() == 0) {
-            final Intent dbCreatedIntent = new Intent(
-                    ContactsContract.Intents.CONTACTS_DATABASE_CREATED);
-            dbCreatedIntent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
-            mContext.sendBroadcast(dbCreatedIntent, android.Manifest.permission.READ_CONTACTS);
-        }
+        // Send the broadcast.
+        final Intent dbCreatedIntent = new Intent(
+                ContactsContract.Intents.CONTACTS_DATABASE_CREATED);
+        dbCreatedIntent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
+        mContext.sendBroadcast(dbCreatedIntent, android.Manifest.permission.READ_CONTACTS);
     }
 
     protected void initializeAutoIncrementSequences(SQLiteDatabase db) {
@@ -1646,7 +1703,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void createSearchIndexTable(SQLiteDatabase db, boolean rebuildSqliteStats) {
-        db.beginTransaction();
+        db.beginTransactionNonExclusive();
         try {
             db.execSQL("DROP TABLE IF EXISTS " + Tables.SEARCH_INDEX);
             db.execSQL("CREATE VIRTUAL TABLE " + Tables.SEARCH_INDEX
@@ -1829,7 +1886,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_STAT + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_LR + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.STREAM_ITEMS + ";");
+        db.execSQL("DROP VIEW IF EXISTS " + Views.METADATA_SYNC_STATE + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.METADATA_SYNC + ";");
 
         String dataColumns =
@@ -1896,17 +1955,24 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         String contactOptionColumns =
                 ContactsColumns.CONCRETE_CUSTOM_RINGTONE
-                        + " AS " + RawContacts.CUSTOM_RINGTONE + ","
+                        + " AS " + Contacts.CUSTOM_RINGTONE + ","
                 + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
-                        + " AS " + RawContacts.SEND_TO_VOICEMAIL + ","
-                + ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
-                        + " AS " + RawContacts.LAST_TIME_CONTACTED + ","
-                + ContactsColumns.CONCRETE_TIMES_CONTACTED
-                        + " AS " + RawContacts.TIMES_CONTACTED + ","
+                        + " AS " + Contacts.SEND_TO_VOICEMAIL + ","
+
+                + ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED
+                        + " AS " + Contacts.RAW_LAST_TIME_CONTACTED + ","
+                + ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED
+                        + " AS " + Contacts.RAW_TIMES_CONTACTED + ","
+
+                + LowRes.getLastTimeUsedExpression(ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED)
+                        + " AS " + Contacts.LR_LAST_TIME_CONTACTED + ","
+                + LowRes.getTimesUsedExpression(ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED)
+                        + " AS " + Contacts.LR_TIMES_CONTACTED + ","
+
                 + ContactsColumns.CONCRETE_STARRED
-                        + " AS " + RawContacts.STARRED + ","
+                        + " AS " + Contacts.STARRED + ","
                 + ContactsColumns.CONCRETE_PINNED
-                        + " AS " + RawContacts.PINNED;
+                        + " AS " + Contacts.PINNED;
 
         String contactNameColumns =
                 "name_raw_contact." + RawContacts.DISPLAY_NAME_SOURCE
@@ -1972,8 +2038,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String rawContactOptionColumns =
                 RawContacts.CUSTOM_RINGTONE + ","
                 + RawContacts.SEND_TO_VOICEMAIL + ","
-                + RawContacts.LAST_TIME_CONTACTED + ","
-                + RawContacts.TIMES_CONTACTED + ","
+                + RawContacts.RAW_LAST_TIME_CONTACTED + ","
+                + LowRes.getLastTimeUsedExpression(RawContacts.RAW_LAST_TIME_CONTACTED)
+                        + " AS " + RawContacts.LR_LAST_TIME_CONTACTED + ","
+                + RawContacts.RAW_TIMES_CONTACTED + ","
+                + LowRes.getTimesUsedExpression(RawContacts.RAW_TIMES_CONTACTED)
+                        + " AS " + RawContacts.LR_TIMES_CONTACTED + ","
                 + RawContacts.STARRED + ","
                 + RawContacts.PINNED;
 
@@ -2010,16 +2080,23 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         + " AS " + Contacts.CUSTOM_RINGTONE + ", "
                 + contactNameColumns + ", "
                 + baseContactColumns + ", "
-                + ContactsColumns.CONCRETE_LAST_TIME_CONTACTED
-                        + " AS " + Contacts.LAST_TIME_CONTACTED + ", "
+
+                + ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED
+                        + " AS " + Contacts.RAW_LAST_TIME_CONTACTED + ", "
+                + LowRes.getLastTimeUsedExpression(ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED)
+                        + " AS " + Contacts.LR_LAST_TIME_CONTACTED + ", "
+
                 + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
                         + " AS " + Contacts.SEND_TO_VOICEMAIL + ", "
                 + ContactsColumns.CONCRETE_STARRED
                         + " AS " + Contacts.STARRED + ", "
                 + ContactsColumns.CONCRETE_PINNED
                 + " AS " + Contacts.PINNED + ", "
-                + ContactsColumns.CONCRETE_TIMES_CONTACTED
-                        + " AS " + Contacts.TIMES_CONTACTED;
+
+                + ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED
+                        + " AS " + Contacts.RAW_TIMES_CONTACTED + ", "
+                + LowRes.getTimesUsedExpression(ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED)
+                        + " AS " + Contacts.LR_TIMES_CONTACTED;
 
         String contactsSelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
@@ -2109,15 +2186,34 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE VIEW " + Views.ENTITIES + " AS "
                 + entitiesSelect);
 
+        // Data usage view, with the low res columns, with no joins.
+        final String dataUsageViewSelect = "SELECT "
+                + DataUsageStatColumns._ID + ", "
+                + DataUsageStatColumns.DATA_ID + ", "
+                + DataUsageStatColumns.USAGE_TYPE_INT + ", "
+                + DataUsageStatColumns.RAW_TIMES_USED + ", "
+                + DataUsageStatColumns.RAW_LAST_TIME_USED + ","
+                + LowRes.getTimesUsedExpression(DataUsageStatColumns.RAW_TIMES_USED)
+                    + " AS " + DataUsageStatColumns.LR_TIMES_USED + ","
+                + LowRes.getLastTimeUsedExpression(DataUsageStatColumns.RAW_LAST_TIME_USED)
+                    + " AS " + DataUsageStatColumns.LR_LAST_TIME_USED
+                + " FROM " + Tables.DATA_USAGE_STAT;
+
+        // When the data_usage_stat table is needed with the low-res columns, use this, which is
+        // faster than the DATA_USAGE_STAT view since it doesn't involve joins.
+        db.execSQL("CREATE VIEW " + Views.DATA_USAGE_LR + " AS " + dataUsageViewSelect);
+
         String dataUsageStatSelect = "SELECT "
                 + DataUsageStatColumns.CONCRETE_ID + " AS " + DataUsageStatColumns._ID + ", "
                 + DataUsageStatColumns.DATA_ID + ", "
                 + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + RawContacts.CONTACT_ID + ", "
                 + MimetypesColumns.CONCRETE_MIMETYPE + " AS " + Data.MIMETYPE + ", "
                 + DataUsageStatColumns.USAGE_TYPE_INT + ", "
-                + DataUsageStatColumns.TIMES_USED + ", "
-                + DataUsageStatColumns.LAST_TIME_USED
-                + " FROM " + Tables.DATA_USAGE_STAT
+                + DataUsageStatColumns.RAW_TIMES_USED + ", "
+                + DataUsageStatColumns.RAW_LAST_TIME_USED + ", "
+                + DataUsageStatColumns.LR_TIMES_USED + ", "
+                + DataUsageStatColumns.LR_LAST_TIME_USED
+                + " FROM " + Views.DATA_USAGE_LR + " AS " + Tables.DATA_USAGE_STAT
                 + " JOIN " + Tables.DATA + " ON ("
                 +   DataColumns.CONCRETE_ID + "=" + DataUsageStatColumns.CONCRETE_DATA_ID + ")"
                 + " JOIN " + Tables.RAW_CONTACTS + " ON ("
@@ -2279,34 +2375,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        if (oldVersion < 99) {
-            Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion
-                    + ", data will be lost!");
+        Log.i(TAG,
+                "Upgrading " + DATABASE_NAME + " from version " + oldVersion + " to " + newVersion);
 
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.CONTACTS + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.RAW_CONTACTS + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.PACKAGES + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.MIMETYPES + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.DATA + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.PHONE_LOOKUP + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.NAME_LOOKUP + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.NICKNAME_LOOKUP + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.GROUPS + ";");
-            db.execSQL("DROP TABLE IF EXISTS activities;");
-            db.execSQL("DROP TABLE IF EXISTS calls;");
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.SETTINGS + ";");
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.STATUS_UPDATES + ";");
-
-            // TODO: we should not be dropping agg_exceptions and contact_options. In case that
-            // table's schema changes, we should try to preserve the data, because it was entered
-            // by the user and has never been synched to the server.
-            db.execSQL("DROP TABLE IF EXISTS " + Tables.AGGREGATION_EXCEPTIONS + ";");
-
-            onCreate(db);
-            return;
-        }
-
-        Log.i(TAG, "Upgrading from version " + oldVersion + " to " + newVersion);
+        prepopulateCommonMimeTypes(db);
 
         boolean upgradeViewsAndTriggers = false;
         boolean upgradeNameLookup = false;
@@ -2315,428 +2387,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         boolean rescanDirectories = false;
         boolean rebuildSqliteStats = false;
         boolean upgradeLocaleSpecificData = false;
-
-        if (oldVersion == 99) {
-            upgradeViewsAndTriggers = true;
-            oldVersion++;
-        }
-
-        if (oldVersion == 100) {
-            db.execSQL("CREATE INDEX IF NOT EXISTS mimetypes_mimetype_index ON "
-                    + Tables.MIMETYPES + " ("
-                            + MimetypesColumns.MIMETYPE + ","
-                            + MimetypesColumns._ID + ");");
-            updateIndexStats(db, Tables.MIMETYPES,
-                    "mimetypes_mimetype_index", "50 1 1");
-
-            upgradeViewsAndTriggers = true;
-            oldVersion++;
-        }
-
-        if (oldVersion == 101) {
-            upgradeViewsAndTriggers = true;
-            oldVersion++;
-        }
-
-        if (oldVersion == 102) {
-            upgradeViewsAndTriggers = true;
-            oldVersion++;
-        }
-
-        if (oldVersion == 103) {
-            upgradeViewsAndTriggers = true;
-            oldVersion++;
-        }
-
-        if (oldVersion == 104 || oldVersion == 201) {
-            LegacyApiSupport.createSettingsTable(db);
-            upgradeViewsAndTriggers = true;
-            oldVersion++;
-        }
-
-        if (oldVersion == 105) {
-            upgradeToVersion202(db);
-            upgradeNameLookup = true;
-            oldVersion = 202;
-        }
-
-        if (oldVersion == 202) {
-            upgradeToVersion203(db);
-            upgradeViewsAndTriggers = true;
-            oldVersion++;
-        }
-
-        if (oldVersion == 203) {
-            upgradeViewsAndTriggers = true;
-            oldVersion++;
-        }
-
-        if (oldVersion == 204) {
-            upgradeToVersion205(db);
-            upgradeViewsAndTriggers = true;
-            oldVersion++;
-        }
-
-        if (oldVersion == 205) {
-            upgrateToVersion206(db);
-            upgradeViewsAndTriggers = true;
-            oldVersion++;
-        }
-
-        if (oldVersion == 206) {
-            // Fix for the bug where name lookup records for organizations would get removed by
-            // unrelated updates of the data rows. No longer needed.
-            oldVersion = 300;
-        }
-
-        if (oldVersion == 300) {
-            upgradeViewsAndTriggers = true;
-            oldVersion = 301;
-        }
-
-        if (oldVersion == 301) {
-            upgradeViewsAndTriggers = true;
-            oldVersion = 302;
-        }
-
-        if (oldVersion == 302) {
-            upgradeEmailToVersion303(db);
-            upgradeNicknameToVersion303(db);
-            oldVersion = 303;
-        }
-
-        if (oldVersion == 303) {
-            upgradeToVersion304(db);
-            oldVersion = 304;
-        }
-
-        if (oldVersion == 304) {
-            upgradeNameLookup = true;
-            oldVersion = 305;
-        }
-
-        if (oldVersion == 305) {
-            upgradeToVersion306(db);
-            oldVersion = 306;
-        }
-
-        if (oldVersion == 306) {
-            upgradeToVersion307(db);
-            oldVersion = 307;
-        }
-
-        if (oldVersion == 307) {
-            upgradeToVersion308(db);
-            oldVersion = 308;
-        }
-
-        // Gingerbread upgrades.
-        if (oldVersion < 350) {
-            upgradeViewsAndTriggers = true;
-            oldVersion = 351;
-        }
-
-        if (oldVersion == 351) {
-            upgradeNameLookup = true;
-            oldVersion = 352;
-        }
-
-        if (oldVersion == 352) {
-            upgradeToVersion353(db);
-            oldVersion = 353;
-        }
-
-        // Honeycomb upgrades.
-        if (oldVersion < 400) {
-            upgradeViewsAndTriggers = true;
-            upgradeToVersion400(db);
-            oldVersion = 400;
-        }
-
-        if (oldVersion == 400) {
-            upgradeViewsAndTriggers = true;
-            upgradeToVersion401(db);
-            oldVersion = 401;
-        }
-
-        if (oldVersion == 401) {
-            upgradeToVersion402(db);
-            oldVersion = 402;
-        }
-
-        if (oldVersion == 402) {
-            upgradeViewsAndTriggers = true;
-            upgradeToVersion403(db);
-            oldVersion = 403;
-        }
-
-        if (oldVersion == 403) {
-            upgradeViewsAndTriggers = true;
-            oldVersion = 404;
-        }
-
-        if (oldVersion == 404) {
-            upgradeViewsAndTriggers = true;
-            upgradeToVersion405(db);
-            oldVersion = 405;
-        }
-
-        if (oldVersion == 405) {
-            upgradeViewsAndTriggers = true;
-            upgradeToVersion406(db);
-            oldVersion = 406;
-        }
-
-        if (oldVersion == 406) {
-            upgradeViewsAndTriggers = true;
-            oldVersion = 407;
-        }
-
-        if (oldVersion == 407) {
-            oldVersion = 408;  // Obsolete.
-        }
-
-        if (oldVersion == 408) {
-            upgradeViewsAndTriggers = true;
-            upgradeToVersion409(db);
-            oldVersion = 409;
-        }
-
-        if (oldVersion == 409) {
-            upgradeViewsAndTriggers = true;
-            oldVersion = 410;
-        }
-
-        if (oldVersion == 410) {
-            upgradeToVersion411(db);
-            oldVersion = 411;
-        }
-
-        if (oldVersion == 411) {
-            // Same upgrade as 353, only on Honeycomb devices.
-            upgradeToVersion353(db);
-            oldVersion = 412;
-        }
-
-        if (oldVersion == 412) {
-            upgradeToVersion413(db);
-            oldVersion = 413;
-        }
-
-        if (oldVersion == 413) {
-            upgradeNameLookup = true;
-            oldVersion = 414;
-        }
-
-        if (oldVersion == 414) {
-            upgradeToVersion415(db);
-            upgradeViewsAndTriggers = true;
-            oldVersion = 415;
-        }
-
-        if (oldVersion == 415) {
-            upgradeToVersion416(db);
-            oldVersion = 416;
-        }
-
-        if (oldVersion == 416) {
-            upgradeLegacyApiSupport = true;
-            oldVersion = 417;
-        }
-
-        // Honeycomb-MR1 upgrades.
-        if (oldVersion < 500) {
-            upgradeSearchIndex = true;
-        }
-
-        if (oldVersion < 501) {
-            upgradeSearchIndex = true;
-            upgradeToVersion501(db);
-            oldVersion = 501;
-        }
-
-        if (oldVersion < 502) {
-            upgradeSearchIndex = true;
-            upgradeToVersion502(db);
-            oldVersion = 502;
-        }
-
-        if (oldVersion < 503) {
-            upgradeSearchIndex = true;
-            oldVersion = 503;
-        }
-
-        if (oldVersion < 504) {
-            upgradeToVersion504(db);
-            oldVersion = 504;
-        }
-
-        if (oldVersion < 600) {
-            // This change used to add the profile raw contact ID to the Accounts table.  That
-            // column is no longer needed (as of version 614) since the profile records are stored in
-            // a separate copy of the database for security reasons.  So this change is now a no-op.
-            upgradeViewsAndTriggers = true;
-            oldVersion = 600;
-        }
-
-        if (oldVersion < 601) {
-            upgradeToVersion601(db);
-            oldVersion = 601;
-        }
-
-        if (oldVersion < 602) {
-            upgradeToVersion602(db);
-            oldVersion = 602;
-        }
-
-        if (oldVersion < 603) {
-            upgradeViewsAndTriggers = true;
-            oldVersion = 603;
-        }
-
-        if (oldVersion < 604) {
-            upgradeToVersion604(db);
-            oldVersion = 604;
-        }
-
-        if (oldVersion < 605) {
-            upgradeViewsAndTriggers = true;
-            // This version used to create the stream item and stream item photos tables, but
-            // a newer version of those tables is created in version 609 below. So omitting the
-            // creation in this upgrade step to avoid a create->drop->create.
-            oldVersion = 605;
-        }
-
-        if (oldVersion < 606) {
-            upgradeViewsAndTriggers = true;
-            upgradeLegacyApiSupport = true;
-            upgradeToVersion606(db);
-            oldVersion = 606;
-        }
-
-        if (oldVersion < 607) {
-            upgradeViewsAndTriggers = true;
-            // We added "action" and "action_uri" to groups here, but realized this was not a smart
-            // move. This upgrade step has been removed (all dogfood phones that executed this step
-            // will have those columns, but that shouldn't hurt. Unfortunately, SQLite makes it
-            // hard to remove columns).
-            oldVersion = 607;
-        }
-
-        if (oldVersion < 608) {
-            upgradeViewsAndTriggers = true;
-            upgradeToVersion608(db);
-            oldVersion = 608;
-        }
-
-        if (oldVersion < 609) {
-            // This version used to create the stream item and stream item photos tables, but a
-            // newer version of those tables is created in version 613 below.  So omitting the
-            // creation in this upgrade step to avoid a create->drop->create.
-            oldVersion = 609;
-        }
-
-        if (oldVersion < 610) {
-            upgradeToVersion610(db);
-            oldVersion = 610;
-        }
-
-        if (oldVersion < 611) {
-            upgradeViewsAndTriggers = true;
-            upgradeToVersion611(db);
-            oldVersion = 611;
-        }
-
-        if (oldVersion < 612) {
-            upgradeViewsAndTriggers = true;
-            upgradeToVersion612(db);
-            oldVersion = 612;
-        }
-
-        if (oldVersion < 613) {
-            upgradeToVersion613(db);
-            oldVersion = 613;
-        }
-
-        if (oldVersion < 614) {
-            // This creates the "view_stream_items" view.
-            upgradeViewsAndTriggers = true;
-            oldVersion = 614;
-        }
-
-        if (oldVersion < 615) {
-            upgradeToVersion615(db);
-            oldVersion = 615;
-        }
-
-        if (oldVersion < 616) {
-            // This updates the "view_stream_items" view.
-            upgradeViewsAndTriggers = true;
-            oldVersion = 616;
-        }
-
-        if (oldVersion < 617) {
-            // This version upgrade obsoleted the profile_raw_contact_id field of the Accounts
-            // table, but we aren't removing the column because it is very little data (and not
-            // referenced anymore).  We do need to upgrade the views to handle the simplified
-            // per-database "is profile" columns.
-            upgradeViewsAndTriggers = true;
-            oldVersion = 617;
-        }
-
-        if (oldVersion < 618) {
-            upgradeToVersion618(db);
-            oldVersion = 618;
-        }
-
-        if (oldVersion < 619) {
-            upgradeViewsAndTriggers = true;
-            oldVersion = 619;
-        }
-
-        if (oldVersion < 620) {
-            upgradeViewsAndTriggers = true;
-            oldVersion = 620;
-        }
-
-        if (oldVersion < 621) {
-            upgradeSearchIndex = true;
-            oldVersion = 621;
-        }
-
-        if (oldVersion < 622) {
-            upgradeToVersion622(db);
-            oldVersion = 622;
-        }
-
-        if (oldVersion < 623) {
-            // Change FTS to normalize names using collation key.
-            upgradeSearchIndex = true;
-            oldVersion = 623;
-        }
-
-        if (oldVersion < 624) {
-            // Upgraded the SQLite index stats.
-            upgradeViewsAndTriggers = true;
-            oldVersion = 624;
-        }
-
-        if (oldVersion < 625) {
-            // Fix for search for hyphenated names
-            upgradeSearchIndex = true;
-            oldVersion = 625;
-        }
-
-        if (oldVersion < 626) {
-            upgradeToVersion626(db);
-            upgradeViewsAndTriggers = true;
-            oldVersion = 626;
-        }
-
-        if (oldVersion < 700) {
-            rescanDirectories = true;
-            oldVersion = 700;
-        }
 
         if (oldVersion < 701) {
             upgradeToVersion701(db);
@@ -2992,6 +2642,22 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1111;
         }
 
+        if (isUpgradeRequired(oldVersion, newVersion, 1200)) {
+            createPresenceTables(db);
+            oldVersion = 1200;
+        }
+
+        if (isUpgradeRequired(oldVersion, newVersion, 1201)) {
+            upgradeToVersion1201(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1201;
+        }
+
+        if (isUpgradeRequired(oldVersion, newVersion, 1202)) {
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1202;
+        }
+
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
         // yet, until CallLogDatabaseHelper moves the data.
 
@@ -3046,471 +2712,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return oldVersion < version && newVersion >= version;
     }
 
-    private void upgradeToVersion202(SQLiteDatabase db) {
-        db.execSQL(
-                "ALTER TABLE " + Tables.PHONE_LOOKUP +
-                " ADD " + PhoneLookupColumns.MIN_MATCH + " TEXT;");
-
-        db.execSQL("CREATE INDEX phone_lookup_min_match_index ON " + Tables.PHONE_LOOKUP + " (" +
-                PhoneLookupColumns.MIN_MATCH + "," +
-                PhoneLookupColumns.RAW_CONTACT_ID + "," +
-                PhoneLookupColumns.DATA_ID +
-        ");");
-
-        updateIndexStats(db, Tables.PHONE_LOOKUP,
-                "phone_lookup_min_match_index", "10000 2 2 1");
-
-        SQLiteStatement update = db.compileStatement(
-                "UPDATE " + Tables.PHONE_LOOKUP +
-                " SET " + PhoneLookupColumns.MIN_MATCH + "=?" +
-                " WHERE " + PhoneLookupColumns.DATA_ID + "=?");
-
-        // Populate the new column
-        Cursor c = db.query(Tables.PHONE_LOOKUP + " JOIN " + Tables.DATA +
-                " ON (" + PhoneLookupColumns.DATA_ID + "=" + DataColumns.CONCRETE_ID + ")",
-                new String[] {Data._ID, Phone.NUMBER}, null, null, null, null, null);
-        try {
-            while (c.moveToNext()) {
-                long dataId = c.getLong(0);
-                String number = c.getString(1);
-                if (!TextUtils.isEmpty(number)) {
-                    update.bindString(1, PhoneNumberUtils.toCallerIDMinMatch(number));
-                    update.bindLong(2, dataId);
-                    update.execute();
-                }
-            }
-        } finally {
-            c.close();
-        }
-    }
-
-    private void upgradeToVersion203(SQLiteDatabase db) {
-        // Garbage-collect first. A bug in Eclair was sometimes leaving
-        // raw_contacts in the database that no longer had contacts associated
-        // with them.  To avoid failures during this database upgrade, drop
-        // the orphaned raw_contacts.
-        db.execSQL(
-                "DELETE FROM raw_contacts" +
-                " WHERE contact_id NOT NULL" +
-                " AND contact_id NOT IN (SELECT _id FROM contacts)");
-
-        db.execSQL(
-                "ALTER TABLE " + Tables.CONTACTS +
-                " ADD " + Contacts.NAME_RAW_CONTACT_ID + " INTEGER REFERENCES raw_contacts(_id)");
-        db.execSQL(
-                "ALTER TABLE " + Tables.RAW_CONTACTS +
-                " ADD contact_in_visible_group INTEGER NOT NULL DEFAULT 0");
-
-        // For each Contact, find the RawContact that contributed the display name
-        db.execSQL(
-                "UPDATE " + Tables.CONTACTS +
-                        " SET " + Contacts.NAME_RAW_CONTACT_ID + "=(" +
-                        " SELECT " + RawContacts._ID +
-                        " FROM " + Tables.RAW_CONTACTS +
-                        " WHERE " + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID +
-                        " AND " + RawContactsColumns.CONCRETE_DISPLAY_NAME + "=" +
-                        Tables.CONTACTS + "." + Contacts.DISPLAY_NAME +
-                        " ORDER BY " + RawContacts._ID +
-                        " LIMIT 1)"
-        );
-
-        db.execSQL("CREATE INDEX contacts_name_raw_contact_id_index ON " + Tables.CONTACTS + " (" +
-                Contacts.NAME_RAW_CONTACT_ID +
-        ");");
-
-        // If for some unknown reason we missed some names, let's make sure there are
-        // no contacts without a name, picking a raw contact "at random".
-        db.execSQL(
-                "UPDATE " + Tables.CONTACTS +
-                " SET " + Contacts.NAME_RAW_CONTACT_ID + "=(" +
-                        " SELECT " + RawContacts._ID +
-                        " FROM " + Tables.RAW_CONTACTS +
-                        " WHERE " + RawContacts.CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID +
-                        " ORDER BY " + RawContacts._ID +
-                        " LIMIT 1)" +
-                " WHERE " + Contacts.NAME_RAW_CONTACT_ID + " IS NULL"
-        );
-
-        // Wipe out DISPLAY_NAME on the Contacts table as it is no longer in use.
-        db.execSQL(
-                "UPDATE " + Tables.CONTACTS +
-                " SET " + Contacts.DISPLAY_NAME + "=NULL"
-        );
-
-        // Copy the IN_VISIBLE_GROUP flag down to all raw contacts to allow
-        // indexing on (display_name, in_visible_group)
-        db.execSQL(
-                "UPDATE " + Tables.RAW_CONTACTS +
-                " SET contact_in_visible_group=(" +
-                        "SELECT " + Contacts.IN_VISIBLE_GROUP +
-                        " FROM " + Tables.CONTACTS +
-                        " WHERE " + Contacts._ID + "=" + RawContacts.CONTACT_ID + ")" +
-                " WHERE " + RawContacts.CONTACT_ID + " NOT NULL"
-        );
-
-        db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
-                "contact_in_visible_group" + "," +
-                RawContactsColumns.DISPLAY_NAME + " COLLATE LOCALIZED ASC" +
-        ");");
-
-        db.execSQL("DROP INDEX contacts_visible_index");
-        db.execSQL("CREATE INDEX contacts_visible_index ON " + Tables.CONTACTS + " (" +
-                Contacts.IN_VISIBLE_GROUP +
-        ");");
-    }
-
-    private void upgradeToVersion205(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.DISPLAY_NAME_ALTERNATIVE + " TEXT;");
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.PHONETIC_NAME + " TEXT;");
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.PHONETIC_NAME_STYLE + " INTEGER;");
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.SORT_KEY_PRIMARY
-                + " TEXT COLLATE " + ContactsProvider2.PHONEBOOK_COLLATOR_NAME + ";");
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD " + RawContacts.SORT_KEY_ALTERNATIVE
-                + " TEXT COLLATE " + ContactsProvider2.PHONEBOOK_COLLATOR_NAME + ";");
-
-        NameSplitter splitter = createNameSplitter();
-
-        SQLiteStatement rawContactUpdate = db.compileStatement(
-                "UPDATE " + Tables.RAW_CONTACTS +
-                " SET " +
-                        RawContacts.DISPLAY_NAME_PRIMARY + "=?," +
-                        RawContacts.DISPLAY_NAME_ALTERNATIVE + "=?," +
-                        RawContacts.PHONETIC_NAME + "=?," +
-                        RawContacts.PHONETIC_NAME_STYLE + "=?," +
-                        RawContacts.SORT_KEY_PRIMARY + "=?," +
-                        RawContacts.SORT_KEY_ALTERNATIVE + "=?" +
-                " WHERE " + RawContacts._ID + "=?");
-
-        upgradeStructuredNamesToVersion205(db, rawContactUpdate, splitter);
-        upgradeOrganizationsToVersion205(db, rawContactUpdate, splitter);
-
-        db.execSQL("DROP INDEX raw_contact_sort_key1_index");
-        db.execSQL("CREATE INDEX raw_contact_sort_key1_index ON " + Tables.RAW_CONTACTS + " (" +
-                "contact_in_visible_group" + "," +
-                RawContacts.SORT_KEY_PRIMARY +
-        ");");
-
-        db.execSQL("CREATE INDEX raw_contact_sort_key2_index ON " + Tables.RAW_CONTACTS + " (" +
-                "contact_in_visible_group" + "," +
-                RawContacts.SORT_KEY_ALTERNATIVE +
-        ");");
-    }
-
-    private void upgradeStructuredNamesToVersion205(
-            SQLiteDatabase db, SQLiteStatement rawContactUpdate, NameSplitter splitter) {
-
-        // Process structured names to detect the style of the full name and phonetic name.
-        long mMimeType;
-        try {
-            mMimeType = DatabaseUtils.longForQuery(db,
-                    "SELECT " + MimetypesColumns._ID +
-                    " FROM " + Tables.MIMETYPES +
-                    " WHERE " + MimetypesColumns.MIMETYPE
-                            + "='" + StructuredName.CONTENT_ITEM_TYPE + "'", null);
-
-        } catch (SQLiteDoneException e) {
-            // No structured names in the database.
-            return;
-        }
-
-        SQLiteStatement structuredNameUpdate = db.compileStatement(
-                "UPDATE " + Tables.DATA +
-                        " SET " +
-                        StructuredName.FULL_NAME_STYLE + "=?," +
-                        StructuredName.DISPLAY_NAME + "=?," +
-                        StructuredName.PHONETIC_NAME_STYLE + "=?" +
-                        " WHERE " + Data._ID + "=?");
-
-        NameSplitter.Name name = new NameSplitter.Name();
-        Cursor cursor = db.query(StructName205Query.TABLE,
-                StructName205Query.COLUMNS,
-                DataColumns.MIMETYPE_ID + "=" + mMimeType, null, null, null, null);
-        try {
-            while (cursor.moveToNext()) {
-                long dataId = cursor.getLong(StructName205Query.ID);
-                long rawContactId = cursor.getLong(StructName205Query.RAW_CONTACT_ID);
-                int displayNameSource = cursor.getInt(StructName205Query.DISPLAY_NAME_SOURCE);
-
-                name.clear();
-                name.prefix = cursor.getString(StructName205Query.PREFIX);
-                name.givenNames = cursor.getString(StructName205Query.GIVEN_NAME);
-                name.middleName = cursor.getString(StructName205Query.MIDDLE_NAME);
-                name.familyName = cursor.getString(StructName205Query.FAMILY_NAME);
-                name.suffix = cursor.getString(StructName205Query.SUFFIX);
-                name.phoneticFamilyName = cursor.getString(StructName205Query.PHONETIC_FAMILY_NAME);
-                name.phoneticMiddleName = cursor.getString(StructName205Query.PHONETIC_MIDDLE_NAME);
-                name.phoneticGivenName = cursor.getString(StructName205Query.PHONETIC_GIVEN_NAME);
-
-                upgradeNameToVersion205(dataId, rawContactId, displayNameSource, name,
-                        structuredNameUpdate, rawContactUpdate, splitter);
-            }
-        } finally {
-            cursor.close();
-        }
-    }
-
-    private void upgradeNameToVersion205(
-            long dataId,
-            long rawContactId,
-            int displayNameSource,
-            NameSplitter.Name name,
-            SQLiteStatement structuredNameUpdate,
-            SQLiteStatement rawContactUpdate,
-            NameSplitter splitter) {
-
-        splitter.guessNameStyle(name);
-        int unadjustedFullNameStyle = name.fullNameStyle;
-        name.fullNameStyle = splitter.getAdjustedFullNameStyle(name.fullNameStyle);
-        String displayName = splitter.join(name, true, true);
-
-        // Don't update database with the adjusted fullNameStyle as it is locale
-        // related
-        structuredNameUpdate.bindLong(1, unadjustedFullNameStyle);
-        DatabaseUtils.bindObjectToProgram(structuredNameUpdate, 2, displayName);
-        structuredNameUpdate.bindLong(3, name.phoneticNameStyle);
-        structuredNameUpdate.bindLong(4, dataId);
-        structuredNameUpdate.execute();
-
-        if (displayNameSource == DisplayNameSources.STRUCTURED_NAME) {
-            String displayNameAlternative = splitter.join(name, false, false);
-            String phoneticName = splitter.joinPhoneticName(name);
-            String sortKey = null;
-            String sortKeyAlternative = null;
-
-            if (phoneticName != null) {
-                sortKey = sortKeyAlternative = phoneticName;
-            } else if (name.fullNameStyle == FullNameStyle.CHINESE ||
-                    name.fullNameStyle == FullNameStyle.CJK) {
-                sortKey = sortKeyAlternative = displayName;
-            }
-
-            if (sortKey == null) {
-                sortKey = displayName;
-                sortKeyAlternative = displayNameAlternative;
-            }
-
-            updateRawContact205(rawContactUpdate, rawContactId, displayName,
-                    displayNameAlternative, name.phoneticNameStyle, phoneticName, sortKey,
-                    sortKeyAlternative);
-        }
-    }
-
-    private void upgradeOrganizationsToVersion205(
-            SQLiteDatabase db, SQLiteStatement rawContactUpdate, NameSplitter splitter) {
-
-        final long mimeType = lookupMimeTypeId(db, Organization.CONTENT_ITEM_TYPE);
-        SQLiteStatement organizationUpdate = db.compileStatement(
-                "UPDATE " + Tables.DATA +
-                " SET " +
-                        Organization.PHONETIC_NAME_STYLE + "=?" +
-                " WHERE " + Data._ID + "=?");
-
-        Cursor cursor = db.query(Organization205Query.TABLE, Organization205Query.COLUMNS,
-                DataColumns.MIMETYPE_ID + "=" + mimeType + " AND "
-                        + RawContacts.DISPLAY_NAME_SOURCE + "=" + DisplayNameSources.ORGANIZATION,
-                null, null, null, null);
-        try {
-            while (cursor.moveToNext()) {
-                long dataId = cursor.getLong(Organization205Query.ID);
-                long rawContactId = cursor.getLong(Organization205Query.RAW_CONTACT_ID);
-                String company = cursor.getString(Organization205Query.COMPANY);
-                String phoneticName = cursor.getString(Organization205Query.PHONETIC_NAME);
-
-                int phoneticNameStyle = splitter.guessPhoneticNameStyle(phoneticName);
-
-                organizationUpdate.bindLong(1, phoneticNameStyle);
-                organizationUpdate.bindLong(2, dataId);
-                organizationUpdate.execute();
-
-                String sortKey = company;
-
-                updateRawContact205(rawContactUpdate, rawContactId, company,
-                        company, phoneticNameStyle, phoneticName, sortKey, sortKey);
-            }
-        } finally {
-            cursor.close();
-        }
-    }
-
-    private void updateRawContact205(SQLiteStatement rawContactUpdate, long rawContactId,
-            String displayName, String displayNameAlternative, int phoneticNameStyle,
-            String phoneticName, String sortKeyPrimary, String sortKeyAlternative) {
-        bindString(rawContactUpdate, 1, displayName);
-        bindString(rawContactUpdate, 2, displayNameAlternative);
-        bindString(rawContactUpdate, 3, phoneticName);
-        rawContactUpdate.bindLong(4, phoneticNameStyle);
-        bindString(rawContactUpdate, 5, sortKeyPrimary);
-        bindString(rawContactUpdate, 6, sortKeyAlternative);
-        rawContactUpdate.bindLong(7, rawContactId);
-        rawContactUpdate.execute();
-    }
-
-    private void upgrateToVersion206(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE " + Tables.RAW_CONTACTS
-                + " ADD name_verified INTEGER NOT NULL DEFAULT 0;");
-    }
-
-    /**
-     * The {@link ContactsProvider2#update} method was deleting name lookup for new
-     * emails during the sync.  We need to restore the lost name lookup rows.
-     */
-    private void upgradeEmailToVersion303(SQLiteDatabase db) {
-        final long mimeTypeId = lookupMimeTypeId(db, Email.CONTENT_ITEM_TYPE);
-        if (mimeTypeId == -1) {
-            return;
-        }
-
-        ContentValues values = new ContentValues();
-
-        // Find all data rows with the mime type "email" that are missing name lookup
-        Cursor cursor = db.query(Upgrade303Query.TABLE, Upgrade303Query.COLUMNS,
-                Upgrade303Query.SELECTION, new String[] {String.valueOf(mimeTypeId)},
-                null, null, null);
-        try {
-            while (cursor.moveToNext()) {
-                long dataId = cursor.getLong(Upgrade303Query.ID);
-                long rawContactId = cursor.getLong(Upgrade303Query.RAW_CONTACT_ID);
-                String value = cursor.getString(Upgrade303Query.DATA1);
-                value = extractHandleFromEmailAddress(value);
-
-                if (value != null) {
-                    values.put(NameLookupColumns.DATA_ID, dataId);
-                    values.put(NameLookupColumns.RAW_CONTACT_ID, rawContactId);
-                    values.put(NameLookupColumns.NAME_TYPE, NameLookupType.EMAIL_BASED_NICKNAME);
-                    values.put(NameLookupColumns.NORMALIZED_NAME, NameNormalizer.normalize(value));
-                    db.insert(Tables.NAME_LOOKUP, null, values);
-                }
-            }
-        } finally {
-            cursor.close();
-        }
-    }
-
-    /**
-     * The {@link ContactsProvider2#update} method was deleting name lookup for new
-     * nicknames during the sync.  We need to restore the lost name lookup rows.
-     */
-    private void upgradeNicknameToVersion303(SQLiteDatabase db) {
-        final long mimeTypeId = lookupMimeTypeId(db, Nickname.CONTENT_ITEM_TYPE);
-        if (mimeTypeId == -1) {
-            return;
-        }
-
-        ContentValues values = new ContentValues();
-
-        // Find all data rows with the mime type "nickname" that are missing name lookup
-        Cursor cursor = db.query(Upgrade303Query.TABLE, Upgrade303Query.COLUMNS,
-                Upgrade303Query.SELECTION, new String[] {String.valueOf(mimeTypeId)},
-                null, null, null);
-        try {
-            while (cursor.moveToNext()) {
-                long dataId = cursor.getLong(Upgrade303Query.ID);
-                long rawContactId = cursor.getLong(Upgrade303Query.RAW_CONTACT_ID);
-                String value = cursor.getString(Upgrade303Query.DATA1);
-
-                values.put(NameLookupColumns.DATA_ID, dataId);
-                values.put(NameLookupColumns.RAW_CONTACT_ID, rawContactId);
-                values.put(NameLookupColumns.NAME_TYPE, NameLookupType.NICKNAME);
-                values.put(NameLookupColumns.NORMALIZED_NAME, NameNormalizer.normalize(value));
-                db.insert(Tables.NAME_LOOKUP, null, values);
-            }
-        } finally {
-            cursor.close();
-        }
-    }
-
-    private void upgradeToVersion304(SQLiteDatabase db) {
-        // Mimetype table requires an index on mime type.
-        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS mime_type ON " + Tables.MIMETYPES + " (" +
-                MimetypesColumns.MIMETYPE +
-        ");");
-    }
-
-    private void upgradeToVersion306(SQLiteDatabase db) {
-        // Fix invalid lookup that was used for Exchange contacts (it was not escaped)
-        // It happened when a new contact was created AND synchronized
-        final StringBuilder lookupKeyBuilder = new StringBuilder();
-        final SQLiteStatement updateStatement = db.compileStatement(
-                "UPDATE contacts " +
-                "SET lookup=? " +
-                "WHERE _id=?");
-        final Cursor contactIdCursor = db.rawQuery(
-                "SELECT DISTINCT contact_id " +
-                "FROM raw_contacts " +
-                "WHERE deleted=0 AND account_type='com.android.exchange'",
-                null);
-        try {
-            while (contactIdCursor.moveToNext()) {
-                final long contactId = contactIdCursor.getLong(0);
-                lookupKeyBuilder.setLength(0);
-                final Cursor c = db.rawQuery(
-                        "SELECT account_type, account_name, _id, sourceid, display_name " +
-                        "FROM raw_contacts " +
-                        "WHERE contact_id=? " +
-                        "ORDER BY _id",
-                        new String[] {String.valueOf(contactId)});
-                try {
-                    while (c.moveToNext()) {
-                        ContactLookupKey.appendToLookupKey(lookupKeyBuilder,
-                                c.getString(0),
-                                c.getString(1),
-                                c.getLong(2),
-                                c.getString(3),
-                                c.getString(4));
-                    }
-                } finally {
-                    c.close();
-                }
-
-                if (lookupKeyBuilder.length() == 0) {
-                    updateStatement.bindNull(1);
-                } else {
-                    updateStatement.bindString(1, Uri.encode(lookupKeyBuilder.toString()));
-                }
-                updateStatement.bindLong(2, contactId);
-
-                updateStatement.execute();
-            }
-        } finally {
-            updateStatement.close();
-            contactIdCursor.close();
-        }
-    }
-
-    private void upgradeToVersion307(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE properties (" +
-                "property_key TEXT PRIMARY_KEY, " +
-                "property_value TEXT" +
-        ");");
-    }
-
-    private void upgradeToVersion308(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE accounts (" +
-                "account_name TEXT, " +
-                "account_type TEXT " +
-        ");");
-
-        db.execSQL("INSERT INTO accounts " +
-                "SELECT DISTINCT account_name, account_type FROM raw_contacts");
-    }
-
-    private void upgradeToVersion400(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE " + Tables.GROUPS
-                + " ADD " + Groups.FAVORITES + " INTEGER NOT NULL DEFAULT 0;");
-        db.execSQL("ALTER TABLE " + Tables.GROUPS
-                + " ADD " + Groups.AUTO_ADD + " INTEGER NOT NULL DEFAULT 0;");
-    }
-
-    private void upgradeToVersion353(SQLiteDatabase db) {
-        db.execSQL("DELETE FROM contacts " +
-                "WHERE NOT EXISTS (SELECT 1 FROM raw_contacts WHERE contact_id=contacts._id)");
-    }
-
     private void rebuildNameLookup(SQLiteDatabase db, boolean rebuildSqliteStats) {
         db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
         insertNameLookup(db);
@@ -3551,7 +2752,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         Log.i(TAG, "Upgrading locale data for " + locales
                 + " (ICU v" + ICU.getIcuVersion() + ")");
         final long start = SystemClock.elapsedRealtime();
-        initializeCache(db);
         rebuildLocaleData(db, locales, rebuildSqliteStats);
         Log.i(TAG, "Locale update completed in " + (SystemClock.elapsedRealtime() - start) + "ms");
     }
@@ -3618,7 +2818,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private void insertNameLookup(SQLiteDatabase db) {
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP);
 
-        SQLiteStatement nameLookupInsert = db.compileStatement(
+        final SQLiteStatement nameLookupInsert = db.compileStatement(
                 "INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
                         + NameLookupColumns.RAW_CONTACT_ID + ","
                         + NameLookupColumns.DATA_ID + ","
@@ -3727,442 +2927,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         stmt.bindLong(3, lookupType);
         stmt.bindString(4, normalizedName);
         stmt.executeInsert();
-    }
-
-    /**
-     * Changing the VISIBLE bit from a field on both RawContacts and Contacts to a separate table.
-     */
-    private void upgradeToVersion401(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE " + Tables.VISIBLE_CONTACTS + " (" +
-                Contacts._ID + " INTEGER PRIMARY KEY" +
-                ");");
-        db.execSQL("INSERT INTO " + Tables.VISIBLE_CONTACTS +
-                " SELECT " + Contacts._ID +
-                " FROM " + Tables.CONTACTS +
-                " WHERE " + Contacts.IN_VISIBLE_GROUP + "!=0");
-        db.execSQL("DROP INDEX contacts_visible_index");
-    }
-
-    /**
-     * Introducing a new table: directories.
-     */
-    private void upgradeToVersion402(SQLiteDatabase db) {
-        createDirectoriesTable(db);
-    }
-
-    private void upgradeToVersion403(SQLiteDatabase db) {
-        db.execSQL("DROP TABLE IF EXISTS directories;");
-        createDirectoriesTable(db);
-
-        db.execSQL("ALTER TABLE raw_contacts"
-                + " ADD raw_contact_is_read_only INTEGER NOT NULL DEFAULT 0;");
-
-        db.execSQL("ALTER TABLE data"
-                + " ADD is_read_only INTEGER NOT NULL DEFAULT 0;");
-    }
-
-    private void upgradeToVersion405(SQLiteDatabase db) {
-        db.execSQL("DROP TABLE IF EXISTS phone_lookup;");
-        // Private phone numbers table used for lookup
-        db.execSQL("CREATE TABLE " + Tables.PHONE_LOOKUP + " (" +
-                PhoneLookupColumns.DATA_ID
-                + " INTEGER REFERENCES data(_id) NOT NULL," +
-                PhoneLookupColumns.RAW_CONTACT_ID
-                + " INTEGER REFERENCES raw_contacts(_id) NOT NULL," +
-                PhoneLookupColumns.NORMALIZED_NUMBER + " TEXT NOT NULL," +
-                PhoneLookupColumns.MIN_MATCH + " TEXT NOT NULL" +
-        ");");
-
-        db.execSQL("CREATE INDEX phone_lookup_index ON " + Tables.PHONE_LOOKUP + " (" +
-                PhoneLookupColumns.NORMALIZED_NUMBER + "," +
-                PhoneLookupColumns.RAW_CONTACT_ID + "," +
-                PhoneLookupColumns.DATA_ID +
-        ");");
-
-        db.execSQL("CREATE INDEX phone_lookup_min_match_index ON " + Tables.PHONE_LOOKUP + " (" +
-                PhoneLookupColumns.MIN_MATCH + "," +
-                PhoneLookupColumns.RAW_CONTACT_ID + "," +
-                PhoneLookupColumns.DATA_ID +
-        ");");
-
-        final long mimeTypeId = lookupMimeTypeId(db, Phone.CONTENT_ITEM_TYPE);
-        if (mimeTypeId == -1) {
-            return;
-        }
-
-        Cursor cursor = db.rawQuery(
-                    "SELECT _id, " + Phone.RAW_CONTACT_ID + ", " + Phone.NUMBER +
-                    " FROM " + Tables.DATA +
-                    " WHERE " + DataColumns.MIMETYPE_ID + "=" + mimeTypeId
-                            + " AND " + Phone.NUMBER + " NOT NULL", null);
-
-        ContentValues phoneValues = new ContentValues();
-        try {
-            while (cursor.moveToNext()) {
-                long dataID = cursor.getLong(0);
-                long rawContactID = cursor.getLong(1);
-                String number = cursor.getString(2);
-                String normalizedNumber = PhoneNumberUtils.normalizeNumber(number);
-                if (!TextUtils.isEmpty(normalizedNumber)) {
-                    phoneValues.clear();
-                    phoneValues.put(PhoneLookupColumns.RAW_CONTACT_ID, rawContactID);
-                    phoneValues.put(PhoneLookupColumns.DATA_ID, dataID);
-                    phoneValues.put(PhoneLookupColumns.NORMALIZED_NUMBER, normalizedNumber);
-                    phoneValues.put(PhoneLookupColumns.MIN_MATCH,
-                            PhoneNumberUtils.toCallerIDMinMatch(normalizedNumber));
-                    db.insert(Tables.PHONE_LOOKUP, null, phoneValues);
-                }
-            }
-        } finally {
-            cursor.close();
-        }
-    }
-
-    private void upgradeToVersion406(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE calls ADD countryiso TEXT;");
-    }
-
-    private void upgradeToVersion409(SQLiteDatabase db) {
-        db.execSQL("DROP TABLE IF EXISTS directories;");
-        createDirectoriesTable(db);
-    }
-
-    /**
-     * Adding DEFAULT_DIRECTORY table.
-     * DEFAULT_DIRECTORY should contain every contact which should be shown to users in default.
-     * - if a contact doesn't belong to any account (local contact), it should be in
-     *   default_directory
-     * - if a contact belongs to an account that doesn't have a "default" group, it should be in
-     *   default_directory
-     * - if a contact belongs to an account that has a "default" group (like Google directory,
-     *   which has "My contacts" group as default), it should be in default_directory.
-     *
-     * This logic assumes that accounts with the "default" group should have at least one
-     * group with AUTO_ADD (implying it is the default group) flag in the groups table.
-     */
-    private void upgradeToVersion411(SQLiteDatabase db) {
-        db.execSQL("DROP TABLE IF EXISTS " + Tables.DEFAULT_DIRECTORY);
-        db.execSQL("CREATE TABLE default_directory (_id INTEGER PRIMARY KEY);");
-
-        // Process contacts without an account
-        db.execSQL("INSERT OR IGNORE INTO default_directory " +
-                " SELECT contact_id " +
-                " FROM raw_contacts " +
-                " WHERE raw_contacts.account_name IS NULL " +
-                "   AND raw_contacts.account_type IS NULL ");
-
-        // Process accounts that don't have a default group (e.g. Exchange).
-        db.execSQL("INSERT OR IGNORE INTO default_directory " +
-                " SELECT contact_id " +
-                " FROM raw_contacts " +
-                " WHERE NOT EXISTS" +
-                " (SELECT _id " +
-                "  FROM groups " +
-                "  WHERE raw_contacts.account_name = groups.account_name" +
-                "    AND raw_contacts.account_type = groups.account_type" +
-                "    AND groups.auto_add != 0)");
-
-        final long mimetype = lookupMimeTypeId(db, GroupMembership.CONTENT_ITEM_TYPE);
-
-        // Process accounts that do have a default group (e.g. Google)
-        db.execSQL("INSERT OR IGNORE INTO default_directory " +
-                " SELECT contact_id " +
-                " FROM raw_contacts " +
-                " JOIN data " +
-                "   ON (raw_contacts._id=raw_contact_id)" +
-                " WHERE mimetype_id=" + mimetype +
-                " AND EXISTS" +
-                " (SELECT _id" +
-                "  FROM groups" +
-                "  WHERE raw_contacts.account_name = groups.account_name" +
-                "    AND raw_contacts.account_type = groups.account_type" +
-                "    AND groups.auto_add != 0)");
-    }
-
-    private void upgradeToVersion413(SQLiteDatabase db) {
-        db.execSQL("DROP TABLE IF EXISTS directories;");
-        createDirectoriesTable(db);
-    }
-
-    private void upgradeToVersion415(SQLiteDatabase db) {
-        db.execSQL(
-                "ALTER TABLE " + Tables.GROUPS +
-                " ADD " + Groups.GROUP_IS_READ_ONLY + " INTEGER NOT NULL DEFAULT 0");
-        db.execSQL(
-                "UPDATE " + Tables.GROUPS +
-                        "   SET " + Groups.GROUP_IS_READ_ONLY + "=1" +
-                        " WHERE " + Groups.SYSTEM_ID + " NOT NULL");
-    }
-
-    private void upgradeToVersion416(SQLiteDatabase db) {
-        db.execSQL("CREATE INDEX phone_lookup_data_id_min_match_index ON " + Tables.PHONE_LOOKUP +
-                " (" + PhoneLookupColumns.DATA_ID + ", " + PhoneLookupColumns.MIN_MATCH + ");");
-    }
-
-    private void upgradeToVersion501(SQLiteDatabase db) {
-        // Remove organization rows from the name lookup, we now use search index for that
-        db.execSQL("DELETE FROM name_lookup WHERE name_type=5");
-    }
-
-    private void upgradeToVersion502(SQLiteDatabase db) {
-        // Remove Chinese and Korean name lookup - this data is now in the search index
-        db.execSQL("DELETE FROM name_lookup WHERE name_type IN (6, 7)");
-    }
-
-    private void upgradeToVersion504(SQLiteDatabase db) {
-        initializeCache(db);
-
-        // Find all names with prefixes and recreate display name
-        Cursor cursor = db.rawQuery(
-                "SELECT " + StructuredName.RAW_CONTACT_ID +
-                " FROM " + Tables.DATA +
-                " WHERE " + DataColumns.MIMETYPE_ID + "=?"
-                        + " AND " + StructuredName.PREFIX + " NOT NULL",
-                new String[] {String.valueOf(mMimeTypeIdStructuredName)});
-
-        try {
-            while(cursor.moveToNext()) {
-                long rawContactId = cursor.getLong(0);
-                updateRawContactDisplayName(db, rawContactId);
-            }
-
-        } finally {
-            cursor.close();
-        }
-    }
-
-    private void upgradeToVersion601(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE data_usage_stat(" +
-                "stat_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "data_id INTEGER NOT NULL, " +
-                "usage_type INTEGER NOT NULL DEFAULT 0, " +
-                "times_used INTEGER NOT NULL DEFAULT 0, " +
-                "last_time_used INTEGER NOT NULL DEFAULT 0, " +
-                "FOREIGN KEY(data_id) REFERENCES data(_id));");
-        db.execSQL("CREATE UNIQUE INDEX data_usage_stat_index ON " +
-                "data_usage_stat (data_id, usage_type)");
-    }
-
-    private void upgradeToVersion602(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE calls ADD voicemail_uri TEXT;");
-        db.execSQL("ALTER TABLE calls ADD _data TEXT;");
-        db.execSQL("ALTER TABLE calls ADD has_content INTEGER;");
-        db.execSQL("ALTER TABLE calls ADD mime_type TEXT;");
-        db.execSQL("ALTER TABLE calls ADD source_data TEXT;");
-        db.execSQL("ALTER TABLE calls ADD source_package TEXT;");
-        db.execSQL("ALTER TABLE calls ADD state INTEGER;");
-    }
-
-    private void upgradeToVersion604(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE voicemail_status (" +
-                "_id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "source_package TEXT UNIQUE NOT NULL," +
-                "settings_uri TEXT," +
-                "voicemail_access_uri TEXT," +
-                "configuration_state INTEGER," +
-                "data_channel_state INTEGER," +
-                "notification_channel_state INTEGER" +
-        ");");
-    }
-
-    private void upgradeToVersion606(SQLiteDatabase db) {
-        db.execSQL("DROP VIEW IF EXISTS view_contacts_restricted;");
-        db.execSQL("DROP VIEW IF EXISTS view_data_restricted;");
-        db.execSQL("DROP VIEW IF EXISTS view_raw_contacts_restricted;");
-        db.execSQL("DROP VIEW IF EXISTS view_raw_entities_restricted;");
-        db.execSQL("DROP VIEW IF EXISTS view_entities_restricted;");
-        db.execSQL("DROP VIEW IF EXISTS view_data_usage_stat_restricted;");
-        db.execSQL("DROP INDEX IF EXISTS contacts_restricted_index");
-
-        // We should remove the restricted columns here as well, but unfortunately SQLite doesn't
-        // provide ALTER TABLE DROP COLUMN. As they have DEFAULT 0, we can keep but ignore them
-    }
-
-    private void upgradeToVersion608(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE contacts ADD photo_file_id INTEGER REFERENCES photo_files(_id);");
-
-        db.execSQL("CREATE TABLE photo_files(" +
-                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "height INTEGER NOT NULL, " +
-                "width INTEGER NOT NULL, " +
-                "filesize INTEGER NOT NULL);");
-    }
-
-    private void upgradeToVersion610(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE calls ADD is_read INTEGER;");
-    }
-
-    private void upgradeToVersion611(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE raw_contacts ADD data_set TEXT DEFAULT NULL;");
-        db.execSQL("ALTER TABLE groups ADD data_set TEXT DEFAULT NULL;");
-        db.execSQL("ALTER TABLE accounts ADD data_set TEXT DEFAULT NULL;");
-
-        db.execSQL("CREATE INDEX raw_contacts_source_id_data_set_index ON raw_contacts " +
-                "(sourceid, account_type, account_name, data_set);");
-
-        db.execSQL("CREATE INDEX groups_source_id_data_set_index ON groups " +
-                "(sourceid, account_type, account_name, data_set);");
-    }
-
-    private void upgradeToVersion612(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE calls ADD geocoded_location TEXT DEFAULT NULL;");
-        // Old calls will not have a geocoded location; new calls will get it when inserted.
-    }
-
-    private void upgradeToVersion613(SQLiteDatabase db) {
-        // The stream item and stream item photos APIs were not in-use by anyone in the time
-        // between their initial creation (in v609) and this update.  So we're just dropping
-        // and re-creating them to get appropriate columns.  The delta is as follows:
-        // - In stream_items, package_id was replaced by res_package.
-        // - In stream_item_photos, picture was replaced by photo_file_id.
-        // - Instead of resource IDs for icon and label, we use resource name strings now
-        // - Added sync columns
-        // - Removed action and action_uri
-        // - Text and comments are now nullable
-
-        db.execSQL("DROP TABLE IF EXISTS stream_items");
-        db.execSQL("DROP TABLE IF EXISTS stream_item_photos");
-
-        db.execSQL("CREATE TABLE stream_items(" +
-                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "raw_contact_id INTEGER NOT NULL, " +
-                "res_package TEXT, " +
-                "icon TEXT, " +
-                "label TEXT, " +
-                "text TEXT, " +
-                "timestamp INTEGER NOT NULL, " +
-                "comments TEXT, " +
-                "stream_item_sync1 TEXT, " +
-                "stream_item_sync2 TEXT, " +
-                "stream_item_sync3 TEXT, " +
-                "stream_item_sync4 TEXT, " +
-                "FOREIGN KEY(raw_contact_id) REFERENCES raw_contacts(_id));");
-
-        db.execSQL("CREATE TABLE stream_item_photos(" +
-                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "stream_item_id INTEGER NOT NULL, " +
-                "sort_index INTEGER, " +
-                "photo_file_id INTEGER NOT NULL, " +
-                "stream_item_photo_sync1 TEXT, " +
-                "stream_item_photo_sync2 TEXT, " +
-                "stream_item_photo_sync3 TEXT, " +
-                "stream_item_photo_sync4 TEXT, " +
-                "FOREIGN KEY(stream_item_id) REFERENCES stream_items(_id));");
-    }
-
-    private void upgradeToVersion615(SQLiteDatabase db) {
-        // Old calls will not have up to date values for these columns, they will be filled in
-        // as needed.
-        db.execSQL("ALTER TABLE calls ADD lookup_uri TEXT DEFAULT NULL;");
-        db.execSQL("ALTER TABLE calls ADD matched_number TEXT DEFAULT NULL;");
-        db.execSQL("ALTER TABLE calls ADD normalized_number TEXT DEFAULT NULL;");
-        db.execSQL("ALTER TABLE calls ADD photo_id INTEGER NOT NULL DEFAULT 0;");
-    }
-
-    private void upgradeToVersion618(SQLiteDatabase db) {
-        // The Settings table needs a data_set column which technically should be part of the
-        // primary key but can't be because it may be null.  Since SQLite doesn't support nuking
-        // the primary key, we'll drop the old table, re-create it, and copy the settings back in.
-        db.execSQL("CREATE TEMPORARY TABLE settings_backup(" +
-                "account_name STRING NOT NULL," +
-                "account_type STRING NOT NULL," +
-                "ungrouped_visible INTEGER NOT NULL DEFAULT 0," +
-                "should_sync INTEGER NOT NULL DEFAULT 1" +
-        ");");
-        db.execSQL("INSERT INTO settings_backup " +
-                "SELECT account_name, account_type, ungrouped_visible, should_sync" +
-                " FROM settings");
-        db.execSQL("DROP TABLE settings");
-        db.execSQL("CREATE TABLE settings (" +
-                "account_name STRING NOT NULL," +
-                "account_type STRING NOT NULL," +
-                "data_set STRING," +
-                "ungrouped_visible INTEGER NOT NULL DEFAULT 0," +
-                "should_sync INTEGER NOT NULL DEFAULT 1" +
-        ");");
-        db.execSQL("INSERT INTO settings " +
-                "SELECT account_name, account_type, NULL, ungrouped_visible, should_sync " +
-                "FROM settings_backup");
-        db.execSQL("DROP TABLE settings_backup");
-    }
-
-    private void upgradeToVersion622(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE calls ADD formatted_number TEXT DEFAULT NULL;");
-    }
-
-    private void upgradeToVersion626(SQLiteDatabase db) {
-        db.execSQL("DROP TABLE IF EXISTS accounts");
-
-        db.execSQL("CREATE TABLE accounts (" +
-                "_id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "account_name TEXT, " +
-                "account_type TEXT, " +
-                "data_set TEXT" +
-        ");");
-
-        // Add "account_id" column to groups and raw_contacts
-        db.execSQL("ALTER TABLE raw_contacts ADD " +
-                "account_id INTEGER REFERENCES accounts(_id)");
-        db.execSQL("ALTER TABLE groups ADD " +
-                "account_id INTEGER REFERENCES accounts(_id)");
-
-        // Update indexes.
-        db.execSQL("DROP INDEX IF EXISTS raw_contacts_source_id_index");
-        db.execSQL("DROP INDEX IF EXISTS raw_contacts_source_id_data_set_index");
-        db.execSQL("DROP INDEX IF EXISTS groups_source_id_index");
-        db.execSQL("DROP INDEX IF EXISTS groups_source_id_data_set_index");
-
-        db.execSQL("CREATE INDEX raw_contacts_source_id_account_id_index ON raw_contacts ("
-                + "sourceid, account_id);");
-        db.execSQL("CREATE INDEX groups_source_id_account_id_index ON groups ("
-                + "sourceid, account_id);");
-
-        // Migrate account_name/account_type/data_set to accounts table
-
-        final Set<AccountWithDataSet> accountsWithDataSets = Sets.newHashSet();
-        upgradeToVersion626_findAccountsWithDataSets(accountsWithDataSets, db, "raw_contacts");
-        upgradeToVersion626_findAccountsWithDataSets(accountsWithDataSets, db, "groups");
-
-        for (AccountWithDataSet accountWithDataSet : accountsWithDataSets) {
-            db.execSQL("INSERT INTO accounts (account_name,account_type,data_set)VALUES(?, ?, ?)",
-                    new String[] {
-                            accountWithDataSet.getAccountName(),
-                            accountWithDataSet.getAccountType(),
-                            accountWithDataSet.getDataSet()
-                    });
-        }
-        upgradeToVersion626_fillAccountId(db, "raw_contacts");
-        upgradeToVersion626_fillAccountId(db, "groups");
-    }
-
-    private static void upgradeToVersion626_findAccountsWithDataSets(
-            Set<AccountWithDataSet> result, SQLiteDatabase db, String table) {
-        Cursor c = db.rawQuery(
-                "SELECT DISTINCT account_name, account_type, data_set FROM " + table, null);
-        try {
-            while (c.moveToNext()) {
-                result.add(AccountWithDataSet.get(c.getString(0), c.getString(1), c.getString(2)));
-            }
-        } finally {
-            c.close();
-        }
-    }
-
-    private static void upgradeToVersion626_fillAccountId(SQLiteDatabase db, String table) {
-        StringBuilder sb = new StringBuilder();
-
-        // Set account_id and null out account_name, account_type and data_set
-
-        sb.append("UPDATE " + table + " SET account_id = (SELECT _id FROM accounts WHERE ");
-
-        addJoinExpressionAllowingNull(sb, table + ".account_name", "accounts.account_name");
-        sb.append("AND");
-        addJoinExpressionAllowingNull(sb, table + ".account_type", "accounts.account_type");
-        sb.append("AND");
-        addJoinExpressionAllowingNull(sb, table + ".data_set", "accounts.data_set");
-
-        sb.append("), account_name = null, account_type = null, data_set = null");
-        db.execSQL(sb.toString());
     }
 
     private void upgradeToVersion701(SQLiteDatabase db) {
@@ -4637,6 +3401,35 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         FastScrollingIndexCache.getInstance(mContext).invalidate();
     }
 
+    private void upgradeToVersion1201(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE contacts ADD x_times_contacted INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE contacts ADD x_last_time_contacted INTEGER");
+
+        db.execSQL("ALTER TABLE raw_contacts ADD x_times_contacted INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE raw_contacts ADD x_last_time_contacted INTEGER");
+
+        db.execSQL("ALTER TABLE data_usage_stat ADD x_times_used INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE data_usage_stat ADD x_last_time_used INTEGER NOT NULL DEFAULT 0");
+
+        db.execSQL("UPDATE contacts SET "
+                + "x_times_contacted = ifnull(times_contacted,0),"
+                + "x_last_time_contacted = ifnull(last_time_contacted,0),"
+                + "times_contacted = 0,"
+                + "last_time_contacted = 0");
+
+        db.execSQL("UPDATE raw_contacts SET "
+                + "x_times_contacted = ifnull(times_contacted,0),"
+                + "x_last_time_contacted = ifnull(last_time_contacted,0),"
+                + "times_contacted = 0,"
+                + "last_time_contacted = 0");
+
+        db.execSQL("UPDATE data_usage_stat SET "
+                + "x_times_used = ifnull(times_used,0),"
+                + "x_last_time_used = ifnull(last_time_used,0),"
+                + "times_used = 0,"
+                + "last_time_used = 0");
+    }
+
     /**
      * This method is only used in upgradeToVersion1101 method, and should not be used in other
      * places now. Because data15 is not used to generate hash_id for photo, and the new generating
@@ -4711,20 +3504,52 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return tokens[0].getAddress().trim();
     }
 
-    private static long lookupMimeTypeId(SQLiteDatabase db, String mimeType) {
-        try {
-            return DatabaseUtils.longForQuery(db,
-                    "SELECT " + MimetypesColumns._ID +
-                    " FROM " + Tables.MIMETYPES +
-                    " WHERE " + MimetypesColumns.MIMETYPE
-                            + "='" + mimeType + "'", null);
-        } catch (SQLiteDoneException e) {
-            // No rows of this type in the database.
-            return -1;
+    /**
+     * Inserts a new mimetype into the table Tables.MIMETYPES and returns its id. Use
+     * {@link #lookupMimeTypeId(SQLiteDatabase, String)} to lookup id of a mimetype that is
+     * guaranteed to be in the database
+     *
+     * @param db the SQLiteDatabase object returned by {@link #getWritableDatabase()}
+     * @param mimeType The mimetype to insert
+     * @return the id of the newly inserted row
+     */
+    private long insertMimeType(SQLiteDatabase db, String mimeType) {
+        final String insert = "INSERT INTO " + Tables.MIMETYPES + "("
+                + MimetypesColumns.MIMETYPE +
+                ") VALUES (?)";
+        long id = insertWithOneArgAndReturnId(db, insert, mimeType);
+        if (id >= 0) {
+            return id;
         }
+        return lookupMimeTypeId(db, mimeType);
     }
 
-    private void bindString(SQLiteStatement stmt, int index, String value) {
+    /**
+     * Looks up Tables.MIMETYPES for the mime type and returns its id. Returns -1 if the mime type
+     * is not found. Use {@link #insertMimeType(SQLiteDatabase, String)} when it is doubtful whether
+     * the mimetype already exists in the table or not.
+     *
+     * @param db
+     * @param mimeType
+     * @return the id of the row containing the mime type or -1 if the mime type was not found.
+     */
+    private long lookupMimeTypeId(SQLiteDatabase db, String mimeType) {
+        Long id = mCommonMimeTypeIdsCache.get(mimeType);
+        if (id != null) {
+            return id;
+        }
+        final String query = "SELECT " +
+                MimetypesColumns._ID + " FROM " + Tables.MIMETYPES + " WHERE "
+                + MimetypesColumns.MIMETYPE +
+                "=?";
+        id = queryIdWithOneArg(db, query, mimeType);
+        if (id < 0) {
+            Log.e(TAG, "Mimetype " + mimeType + " not found in the MIMETYPES table");
+        }
+        return id;
+    }
+
+    private static void bindString(SQLiteStatement stmt, int index, String value) {
         if (value == null) {
             stmt.bindNull(index);
         } else {
@@ -4738,18 +3563,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         } else {
             stmt.bindLong(index, value.longValue());
         }
-    }
-
-    /**
-     * Add a string like "(((column1) = (column2)) OR ((column1) IS NULL AND (column2) IS NULL))"
-     */
-    private static StringBuilder addJoinExpressionAllowingNull(
-            StringBuilder sb, String column1, String column2) {
-
-        sb.append("(((").append(column1).append(")=(").append(column2);
-        sb.append("))OR((");
-        sb.append(column1).append(") IS NULL AND (").append(column2).append(") IS NULL))");
-        return sb;
     }
 
     /**
@@ -4909,6 +3722,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             updateIndexStats(db, "search_index_segdir",
                     "sqlite_autoindex_search_index_segdir_1", "9 5 1");
 
+            updateIndexStats(db, Tables.PRESENCE, "presenceIndex", "1 1");
+            updateIndexStats(db, Tables.PRESENCE, "presenceIndex2", "1 1");
+            updateIndexStats(db, Tables.AGGREGATED_PRESENCE, null, "1");
+
             // Force SQLite to reload sqlite_stat1.
             db.execSQL("ANALYZE sqlite_master;");
         } catch (SQLException e) {
@@ -4958,9 +3775,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DELETE FROM " + Tables.DELETED_CONTACTS + ";");
         db.execSQL("DELETE FROM " + Tables.MIMETYPES + ";");
         db.execSQL("DELETE FROM " + Tables.PACKAGES + ";");
+        db.execSQL("DELETE FROM " + Tables.PRESENCE + ";");
+        db.execSQL("DELETE FROM " + Tables.AGGREGATED_PRESENCE + ";");
 
-        initializeCache(db);
-
+        prepopulateCommonMimeTypes(db);
         // Note: we are not removing reference data from Tables.NICKNAME_LOOKUP
     }
 
@@ -4990,53 +3808,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    /**
-     * Internal method used by {@link #getPackageId} and {@link #getMimeTypeId}.
-     *
-     * Note in the contacts provider we avoid using synchronization because it could risk deadlocks.
-     * So here, instead of using locks, we use ConcurrentHashMap + retry.
-     *
-     * Note we can't use a transaction here becuause this method is called from
-     * onCommitTransaction() too, unfortunately.
-     */
-    private static long getIdCached(SQLiteDatabase db, ConcurrentHashMap<String, Long> cache,
-            String querySql, String insertSql, String value) {
-        // First, try the in-memory cache.
-        if (cache.containsKey(value)) {
-            return cache.get(value);
-        }
-
-        // Then, try the database.
-        long id = queryIdWithOneArg(db, querySql, value);
-        if (id >= 0) {
-            cache.put(value, id);
-            return id;
-        }
-
-        // Not found in the database.  Try inserting.
-        id = insertWithOneArgAndReturnId(db, insertSql, value);
-        if (id >= 0) {
-            cache.put(value, id);
-            return id;
-        }
-
-        // Insert failed, which means a race.  Let's retry...
-
-        // We log here to detect an infinity loop (which shouldn't happen).
-        // Conflicts should be pretty rare, so it shouldn't spam logcat.
-        Log.i(TAG, "Cache conflict detected: value=" + value);
-        try {
-            Thread.sleep(1); // Just wait a little bit before retry.
-        } catch (InterruptedException ignore) {
-        }
-        return getIdCached(db, cache, querySql, insertSql, value);
-    }
-
     @VisibleForTesting
     static long queryIdWithOneArg(SQLiteDatabase db, String sql, String sqlArgument) {
         final SQLiteStatement query = db.compileStatement(sql);
         try {
-            DatabaseUtils.bindObjectToProgram(query, 1, sqlArgument);
+            bindString(query, 1, sqlArgument);
             try {
                 return query.simpleQueryForLong();
             } catch (SQLiteDoneException notFound) {
@@ -5051,7 +3827,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     static long insertWithOneArgAndReturnId(SQLiteDatabase db, String sql, String sqlArgument) {
         final SQLiteStatement insert = db.compileStatement(sql);
         try {
-            DatabaseUtils.bindObjectToProgram(insert, 1, sqlArgument);
+            bindString(insert, 1, sqlArgument);
             try {
                 return insert.executeInsert();
             } catch (SQLiteConstraintException conflict) {
@@ -5076,57 +3852,59 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "INSERT INTO " + Tables.PACKAGES + "("
                         + PackagesColumns.PACKAGE +
                 ") VALUES (?)";
-        return getIdCached(getWritableDatabase(), mPackageCache, query, insert, packageName);
+
+        SQLiteDatabase db = getWritableDatabase();
+        long id = queryIdWithOneArg(db, query, packageName);
+        if (id >= 0) {
+            return id;
+        }
+        id = insertWithOneArgAndReturnId(db, insert, packageName);
+        if (id >= 0) {
+            return id;
+        }
+        // just in case there was a race while doing insert above
+        return queryIdWithOneArg(db, query, packageName);
     }
 
     /**
      * Convert a mimetype into an integer, using {@link Tables#MIMETYPES} for
      * lookups and possible allocation of new IDs as needed.
      */
-    public long getMimeTypeId(String mimetype) {
-        return lookupMimeTypeId(mimetype, getWritableDatabase());
-    }
-
-    private long lookupMimeTypeId(String mimetype, SQLiteDatabase db) {
-        final String query =
-                "SELECT " + MimetypesColumns._ID +
-                " FROM " + Tables.MIMETYPES +
-                " WHERE " + MimetypesColumns.MIMETYPE + "=?";
-
-        final String insert =
-                "INSERT INTO " + Tables.MIMETYPES + "("
-                        + MimetypesColumns.MIMETYPE +
-                ") VALUES (?)";
-
-        return getIdCached(db, mMimetypeCache, query, insert, mimetype);
+    public long getMimeTypeId(String mimeType) {
+        SQLiteDatabase db = getWritableDatabase();
+        long id = lookupMimeTypeId(db, mimeType);
+        if (id < 0) {
+            return insertMimeType(db, mimeType);
+        }
+        return id;
     }
 
     public long getMimeTypeIdForStructuredName() {
-        return mMimeTypeIdStructuredName;
+        return lookupMimeTypeId(getWritableDatabase(), StructuredName.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForStructuredPostal() {
-        return mMimeTypeIdStructuredPostal;
+        return lookupMimeTypeId(getWritableDatabase(), StructuredPostal.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForOrganization() {
-        return mMimeTypeIdOrganization;
+        return lookupMimeTypeId(getWritableDatabase(), Organization.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForIm() {
-        return mMimeTypeIdIm;
+        return lookupMimeTypeId(getWritableDatabase(), Im.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForEmail() {
-        return mMimeTypeIdEmail;
+        return lookupMimeTypeId(getWritableDatabase(), Email.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForPhone() {
-        return mMimeTypeIdPhone;
+        return lookupMimeTypeId(getWritableDatabase(), Phone.CONTENT_ITEM_TYPE);
     }
 
     public long getMimeTypeIdForSip() {
-        return mMimeTypeIdSip;
+        return lookupMimeTypeId(getWritableDatabase(), SipAddress.CONTENT_ITEM_TYPE);
     }
 
     /**
@@ -5137,19 +3915,19 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * {@code STRUCTURED_PHONETIC_NAME}.
      */
     private int getDisplayNameSourceForMimeTypeId(int mimeTypeId) {
-        if (mimeTypeId == mMimeTypeIdStructuredName) {
+        if (mimeTypeId == mCommonMimeTypeIdsCache.get(StructuredName.CONTENT_ITEM_TYPE)) {
             return DisplayNameSources.STRUCTURED_NAME;
         }
-        if (mimeTypeId == mMimeTypeIdEmail) {
+        if (mimeTypeId == mCommonMimeTypeIdsCache.get(Email.CONTENT_ITEM_TYPE)) {
             return DisplayNameSources.EMAIL;
         }
-        if (mimeTypeId == mMimeTypeIdPhone) {
+        if (mimeTypeId == mCommonMimeTypeIdsCache.get(Phone.CONTENT_ITEM_TYPE)) {
             return DisplayNameSources.PHONE;
         }
-        if (mimeTypeId == mMimeTypeIdOrganization) {
+        if (mimeTypeId == mCommonMimeTypeIdsCache.get(Organization.CONTENT_ITEM_TYPE)) {
             return DisplayNameSources.ORGANIZATION;
         }
-        if (mimeTypeId == mMimeTypeIdNickname) {
+        if (mimeTypeId == mCommonMimeTypeIdsCache.get(Nickname.CONTENT_ITEM_TYPE)) {
             return DisplayNameSources.NICKNAME;
         }
         return DisplayNameSources.UNDEFINED;
@@ -5159,35 +3937,25 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Find the mimetype for the given {@link Data#_ID}.
      */
     public String getDataMimeType(long dataId) {
-        if (mDataMimetypeQuery == null) {
-            mDataMimetypeQuery = getWritableDatabase().compileStatement(
+        final SQLiteStatement dataMimetypeQuery = getWritableDatabase().compileStatement(
                     "SELECT " + MimetypesColumns.MIMETYPE +
                     " FROM " + Tables.DATA_JOIN_MIMETYPES +
                     " WHERE " + Tables.DATA + "." + Data._ID + "=?");
-        }
         try {
             // Try database query to find mimetype
-            DatabaseUtils.bindObjectToProgram(mDataMimetypeQuery, 1, dataId);
-            String mimetype = mDataMimetypeQuery.simpleQueryForString();
-            return mimetype;
+            dataMimetypeQuery.bindLong(1, dataId);
+            return dataMimetypeQuery.simpleQueryForString();
         } catch (SQLiteDoneException e) {
             // No valid mapping found, so return null
             return null;
         }
     }
 
-    public void invalidateAllCache() {
-        Log.w(TAG, "invalidateAllCache: [" + getClass().getSimpleName() + "]");
-
-        mMimetypeCache.clear();
-        mPackageCache.clear();
-    }
-
     /**
      * Gets all accounts in the accounts table.
      */
     public Set<AccountWithDataSet> getAllAccountsWithDataSets() {
-        final Set<AccountWithDataSet> result = Sets.newHashSet();
+        final ArraySet<AccountWithDataSet> result = new ArraySet<>();
         Cursor c = getReadableDatabase().rawQuery(
                 "SELECT DISTINCT " +  AccountsColumns._ID + "," + AccountsColumns.ACCOUNT_NAME +
                 "," + AccountsColumns.ACCOUNT_TYPE + "," + AccountsColumns.DATA_SET +
@@ -5351,14 +4119,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public boolean isContactInDefaultDirectory(SQLiteDatabase db, long contactId) {
-        if (mContactInDefaultDirectoryQuery == null) {
-            mContactInDefaultDirectoryQuery = db.compileStatement(
+        final SQLiteStatement contactInDefaultDirectoryQuery = db.compileStatement(
                     "SELECT EXISTS (" +
                             "SELECT 1 FROM " + Tables.DEFAULT_DIRECTORY +
                             " WHERE " + Contacts._ID + "=?)");
-        }
-        mContactInDefaultDirectoryQuery.bindLong(1, contactId);
-        return mContactInDefaultDirectoryQuery.simpleQueryForLong() != 0;
+        contactInDefaultDirectoryQuery.bindLong(1, contactId);
+        return contactInDefaultDirectoryQuery.simpleQueryForLong() != 0;
     }
 
     /**
@@ -5400,30 +4166,26 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * Returns contact ID for the given contact or zero if it is NULL.
      */
     public long getContactId(long rawContactId) {
-        if (mContactIdQuery == null) {
-            mContactIdQuery = getWritableDatabase().compileStatement(
+        final SQLiteStatement contactIdQuery = getWritableDatabase().compileStatement(
                     "SELECT " + RawContacts.CONTACT_ID +
                     " FROM " + Tables.RAW_CONTACTS +
                     " WHERE " + RawContacts._ID + "=?");
-        }
         try {
-            DatabaseUtils.bindObjectToProgram(mContactIdQuery, 1, rawContactId);
-            return mContactIdQuery.simpleQueryForLong();
+            contactIdQuery.bindLong(1, rawContactId);
+            return contactIdQuery.simpleQueryForLong();
         } catch (SQLiteDoneException e) {
             return 0;  // No valid mapping found.
         }
     }
 
     public int getAggregationMode(long rawContactId) {
-        if (mAggregationModeQuery == null) {
-            mAggregationModeQuery = getWritableDatabase().compileStatement(
+        final SQLiteStatement aggregationModeQuery = getWritableDatabase().compileStatement(
                     "SELECT " + RawContacts.AGGREGATION_MODE +
                     " FROM " + Tables.RAW_CONTACTS +
                     " WHERE " + RawContacts._ID + "=?");
-        }
         try {
-            DatabaseUtils.bindObjectToProgram(mAggregationModeQuery, 1, rawContactId);
-            return (int)mAggregationModeQuery.simpleQueryForLong();
+            aggregationModeQuery.bindLong(1, rawContactId);
+            return (int) aggregationModeQuery.simpleQueryForLong();
         } catch (SQLiteDoneException e) {
             return RawContacts.AGGREGATION_MODE_DISABLED;  // No valid row found.
         }
@@ -5580,7 +4342,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             return;
         }
 
-        SQLiteStatement nicknameLookupInsert = db.compileStatement("INSERT INTO "
+        final SQLiteStatement nicknameLookupInsert = db.compileStatement("INSERT INTO "
                 + Tables.NICKNAME_LOOKUP + "(" + NicknameLookupColumns.NAME + ","
                 + NicknameLookupColumns.CLUSTER + ") VALUES (?,?)");
 
@@ -5590,9 +4352,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 for (String name : names) {
                     String normalizedName = NameNormalizer.normalize(name);
                     try {
-                        DatabaseUtils.bindObjectToProgram(nicknameLookupInsert, 1, normalizedName);
-                        DatabaseUtils.bindObjectToProgram(
-                                nicknameLookupInsert, 2, String.valueOf(clusterId));
+                        nicknameLookupInsert.bindString(1, normalizedName);
+                        nicknameLookupInsert.bindString(2, String.valueOf(clusterId));
                         nicknameLookupInsert.executeInsert();
                     } catch (SQLiteException e) {
                         // Print the exception and keep going (this is not a fatal error).
@@ -5648,7 +4409,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         PropertyUtils.setProperty(getWritableDatabase(), key, value);
     }
 
-    public void clearDirectoryScanComplete() {
+    public void forceDirectoryRescan() {
         setProperty(DbProperties.DIRECTORY_SCAN_COMPLETE, "0");
     }
 
@@ -5733,19 +4494,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public void deleteStatusUpdate(long dataId) {
-        if (mStatusUpdateDelete == null) {
-            mStatusUpdateDelete = getWritableDatabase().compileStatement(
+        final SQLiteStatement statusUpdateDelete = getWritableDatabase().compileStatement(
                     "DELETE FROM " + Tables.STATUS_UPDATES +
                     " WHERE " + StatusUpdatesColumns.DATA_ID + "=?");
-        }
-        mStatusUpdateDelete.bindLong(1, dataId);
-        mStatusUpdateDelete.execute();
+        statusUpdateDelete.bindLong(1, dataId);
+        statusUpdateDelete.execute();
     }
 
     public void replaceStatusUpdate(Long dataId, long timestamp, String status, String resPackage,
             Integer iconResource, Integer labelResource) {
-        if (mStatusUpdateReplace == null) {
-            mStatusUpdateReplace = getWritableDatabase().compileStatement(
+        final SQLiteStatement statusUpdateReplace = getWritableDatabase().compileStatement(
                     "INSERT OR REPLACE INTO " + Tables.STATUS_UPDATES + "("
                             + StatusUpdatesColumns.DATA_ID + ", "
                             + StatusUpdates.STATUS_TIMESTAMP + ","
@@ -5754,20 +4512,18 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                             + StatusUpdates.STATUS_ICON + ","
                             + StatusUpdates.STATUS_LABEL + ")" +
                     " VALUES (?,?,?,?,?,?)");
-        }
-        mStatusUpdateReplace.bindLong(1, dataId);
-        mStatusUpdateReplace.bindLong(2, timestamp);
-        bindString(mStatusUpdateReplace, 3, status);
-        bindString(mStatusUpdateReplace, 4, resPackage);
-        bindLong(mStatusUpdateReplace, 5, iconResource);
-        bindLong(mStatusUpdateReplace, 6, labelResource);
-        mStatusUpdateReplace.execute();
+        statusUpdateReplace.bindLong(1, dataId);
+        statusUpdateReplace.bindLong(2, timestamp);
+        bindString(statusUpdateReplace, 3, status);
+        bindString(statusUpdateReplace, 4, resPackage);
+        bindLong(statusUpdateReplace, 5, iconResource);
+        bindLong(statusUpdateReplace, 6, labelResource);
+        statusUpdateReplace.execute();
     }
 
     public void insertStatusUpdate(Long dataId, String status, String resPackage,
             Integer iconResource, Integer labelResource) {
-        if (mStatusUpdateInsert == null) {
-            mStatusUpdateInsert = getWritableDatabase().compileStatement(
+        final SQLiteStatement statusUpdateInsert = getWritableDatabase().compileStatement(
                     "INSERT INTO " + Tables.STATUS_UPDATES + "("
                             + StatusUpdatesColumns.DATA_ID + ", "
                             + StatusUpdates.STATUS + ","
@@ -5775,45 +4531,41 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                             + StatusUpdates.STATUS_ICON + ","
                             + StatusUpdates.STATUS_LABEL + ")" +
                     " VALUES (?,?,?,?,?)");
-        }
         try {
-            mStatusUpdateInsert.bindLong(1, dataId);
-            bindString(mStatusUpdateInsert, 2, status);
-            bindString(mStatusUpdateInsert, 3, resPackage);
-            bindLong(mStatusUpdateInsert, 4, iconResource);
-            bindLong(mStatusUpdateInsert, 5, labelResource);
-            mStatusUpdateInsert.executeInsert();
+            statusUpdateInsert.bindLong(1, dataId);
+            bindString(statusUpdateInsert, 2, status);
+            bindString(statusUpdateInsert, 3, resPackage);
+            bindLong(statusUpdateInsert, 4, iconResource);
+            bindLong(statusUpdateInsert, 5, labelResource);
+            statusUpdateInsert.executeInsert();
         } catch (SQLiteConstraintException e) {
             // The row already exists - update it
-            if (mStatusUpdateAutoTimestamp == null) {
-                mStatusUpdateAutoTimestamp = getWritableDatabase().compileStatement(
+            final SQLiteStatement statusUpdateAutoTimestamp = getWritableDatabase()
+                    .compileStatement(
                         "UPDATE " + Tables.STATUS_UPDATES +
                         " SET " + StatusUpdates.STATUS_TIMESTAMP + "=?,"
                                 + StatusUpdates.STATUS + "=?" +
                         " WHERE " + StatusUpdatesColumns.DATA_ID + "=?"
                                 + " AND " + StatusUpdates.STATUS + "!=?");
-            }
 
             long timestamp = System.currentTimeMillis();
-            mStatusUpdateAutoTimestamp.bindLong(1, timestamp);
-            bindString(mStatusUpdateAutoTimestamp, 2, status);
-            mStatusUpdateAutoTimestamp.bindLong(3, dataId);
-            bindString(mStatusUpdateAutoTimestamp, 4, status);
-            mStatusUpdateAutoTimestamp.execute();
+            statusUpdateAutoTimestamp.bindLong(1, timestamp);
+            bindString(statusUpdateAutoTimestamp, 2, status);
+            statusUpdateAutoTimestamp.bindLong(3, dataId);
+            bindString(statusUpdateAutoTimestamp, 4, status);
+            statusUpdateAutoTimestamp.execute();
 
-            if (mStatusAttributionUpdate == null) {
-                mStatusAttributionUpdate = getWritableDatabase().compileStatement(
+            final SQLiteStatement statusAttributionUpdate = getWritableDatabase().compileStatement(
                         "UPDATE " + Tables.STATUS_UPDATES +
                         " SET " + StatusUpdates.STATUS_RES_PACKAGE + "=?,"
                                 + StatusUpdates.STATUS_ICON + "=?,"
                                 + StatusUpdates.STATUS_LABEL + "=?" +
                         " WHERE " + StatusUpdatesColumns.DATA_ID + "=?");
-            }
-            bindString(mStatusAttributionUpdate, 1, resPackage);
-            bindLong(mStatusAttributionUpdate, 2, iconResource);
-            bindLong(mStatusAttributionUpdate, 3, labelResource);
-            mStatusAttributionUpdate.bindLong(4, dataId);
-            mStatusAttributionUpdate.execute();
+            bindString(statusAttributionUpdate, 1, resPackage);
+            bindLong(statusAttributionUpdate, 2, iconResource);
+            bindLong(statusAttributionUpdate, 3, labelResource);
+            statusAttributionUpdate.bindLong(4, dataId);
+            statusAttributionUpdate.execute();
         }
     }
 
@@ -6013,8 +4765,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 : localeUtils.getBucketIndex(sortKeyAlternative);
         String phonebookLabelAlternative = localeUtils.getBucketLabel(phonebookBucketAlternative);
 
-        if (mRawContactDisplayNameUpdate == null) {
-            mRawContactDisplayNameUpdate = db.compileStatement(
+        final SQLiteStatement rawContactDisplayNameUpdate = db.compileStatement(
                     "UPDATE " + Tables.RAW_CONTACTS +
                     " SET " +
                             RawContacts.DISPLAY_NAME_SOURCE + "=?," +
@@ -6029,21 +4780,20 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                             RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE + "=?," +
                             RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE + "=?" +
                     " WHERE " + RawContacts._ID + "=?");
-        }
 
-        mRawContactDisplayNameUpdate.bindLong(1, bestDisplayNameSource);
-        bindString(mRawContactDisplayNameUpdate, 2, displayNamePrimary);
-        bindString(mRawContactDisplayNameUpdate, 3, displayNameAlternative);
-        bindString(mRawContactDisplayNameUpdate, 4, bestPhoneticName);
-        mRawContactDisplayNameUpdate.bindLong(5, bestPhoneticNameStyle);
-        bindString(mRawContactDisplayNameUpdate, 6, sortKeyPrimary);
-        bindString(mRawContactDisplayNameUpdate, 7, phonebookLabelPrimary);
-        mRawContactDisplayNameUpdate.bindLong(8, phonebookBucketPrimary);
-        bindString(mRawContactDisplayNameUpdate, 9, sortKeyAlternative);
-        bindString(mRawContactDisplayNameUpdate, 10, phonebookLabelAlternative);
-        mRawContactDisplayNameUpdate.bindLong(11, phonebookBucketAlternative);
-        mRawContactDisplayNameUpdate.bindLong(12, rawContactId);
-        mRawContactDisplayNameUpdate.execute();
+        rawContactDisplayNameUpdate.bindLong(1, bestDisplayNameSource);
+        bindString(rawContactDisplayNameUpdate, 2, displayNamePrimary);
+        bindString(rawContactDisplayNameUpdate, 3, displayNameAlternative);
+        bindString(rawContactDisplayNameUpdate, 4, bestPhoneticName);
+        rawContactDisplayNameUpdate.bindLong(5, bestPhoneticNameStyle);
+        bindString(rawContactDisplayNameUpdate, 6, sortKeyPrimary);
+        bindString(rawContactDisplayNameUpdate, 7, phonebookLabelPrimary);
+        rawContactDisplayNameUpdate.bindLong(8, phonebookBucketPrimary);
+        bindString(rawContactDisplayNameUpdate, 9, sortKeyAlternative);
+        bindString(rawContactDisplayNameUpdate, 10, phonebookLabelAlternative);
+        rawContactDisplayNameUpdate.bindLong(11, phonebookBucketAlternative);
+        rawContactDisplayNameUpdate.bindLong(12, rawContactId);
+        rawContactDisplayNameUpdate.execute();
     }
 
     /**
@@ -6054,17 +4804,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * flag of all data items of this raw contacts
      */
     public void setIsPrimary(long rawContactId, long dataId, long mimeTypeId) {
-        if (mSetPrimaryStatement == null) {
-            mSetPrimaryStatement = getWritableDatabase().compileStatement(
+        final SQLiteStatement setPrimaryStatement = getWritableDatabase().compileStatement(
                     "UPDATE " + Tables.DATA +
                     " SET " + Data.IS_PRIMARY + "=(_id=?)" +
                     " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
                     "   AND " + Data.RAW_CONTACT_ID + "=?");
-        }
-        mSetPrimaryStatement.bindLong(1, dataId);
-        mSetPrimaryStatement.bindLong(2, mimeTypeId);
-        mSetPrimaryStatement.bindLong(3, rawContactId);
-        mSetPrimaryStatement.execute();
+        setPrimaryStatement.bindLong(1, dataId);
+        setPrimaryStatement.bindLong(2, mimeTypeId);
+        setPrimaryStatement.bindLong(3, rawContactId);
+        setPrimaryStatement.execute();
     }
 
     /**
@@ -6072,16 +4820,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * other raw contacts of the same joined aggregate
      */
     public void clearSuperPrimary(long rawContactId, long mimeTypeId) {
-        if (mClearSuperPrimaryStatement == null) {
-            mClearSuperPrimaryStatement = getWritableDatabase().compileStatement(
+        final SQLiteStatement clearSuperPrimaryStatement = getWritableDatabase().compileStatement(
                     "UPDATE " + Tables.DATA +
                     " SET " + Data.IS_SUPER_PRIMARY + "=0" +
                     " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
                     "   AND " + Data.RAW_CONTACT_ID + "=?");
-        }
-        mClearSuperPrimaryStatement.bindLong(1, mimeTypeId);
-        mClearSuperPrimaryStatement.bindLong(2, rawContactId);
-        mClearSuperPrimaryStatement.execute();
+        clearSuperPrimaryStatement.bindLong(1, mimeTypeId);
+        clearSuperPrimaryStatement.bindLong(2, rawContactId);
+        clearSuperPrimaryStatement.execute();
     }
 
     /**
@@ -6091,8 +4837,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * @param dataId the id of the data record to be set to primary.
      */
     public void setIsSuperPrimary(long rawContactId, long dataId, long mimeTypeId) {
-        if (mSetSuperPrimaryStatement == null) {
-            mSetSuperPrimaryStatement = getWritableDatabase().compileStatement(
+        final SQLiteStatement setSuperPrimaryStatement = getWritableDatabase().compileStatement(
                     "UPDATE " + Tables.DATA +
                     " SET " + Data.IS_SUPER_PRIMARY + "=(" + Data._ID + "=?)" +
                     " WHERE " + DataColumns.MIMETYPE_ID + "=?" +
@@ -6103,11 +4848,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                                     "SELECT " + RawContacts.CONTACT_ID +
                                     " FROM " + Tables.RAW_CONTACTS +
                                     " WHERE " + RawContacts._ID + "=?))");
-        }
-        mSetSuperPrimaryStatement.bindLong(1, dataId);
-        mSetSuperPrimaryStatement.bindLong(2, mimeTypeId);
-        mSetSuperPrimaryStatement.bindLong(3, rawContactId);
-        mSetSuperPrimaryStatement.execute();
+        setSuperPrimaryStatement.bindLong(1, dataId);
+        setSuperPrimaryStatement.bindLong(2, mimeTypeId);
+        setSuperPrimaryStatement.bindLong(3, rawContactId);
+        setSuperPrimaryStatement.execute();
     }
 
     /**
@@ -6118,33 +4862,29 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             return;
         }
 
-        if (mNameLookupInsert == null) {
-            mNameLookupInsert = getWritableDatabase().compileStatement(
+        final SQLiteStatement nameLookupInsert = getWritableDatabase().compileStatement(
                     "INSERT OR IGNORE INTO " + Tables.NAME_LOOKUP + "("
                             + NameLookupColumns.RAW_CONTACT_ID + ","
                             + NameLookupColumns.DATA_ID + ","
                             + NameLookupColumns.NAME_TYPE + ","
                             + NameLookupColumns.NORMALIZED_NAME
                     + ") VALUES (?,?,?,?)");
-        }
-        mNameLookupInsert.bindLong(1, rawContactId);
-        mNameLookupInsert.bindLong(2, dataId);
-        mNameLookupInsert.bindLong(3, lookupType);
-        bindString(mNameLookupInsert, 4, name);
-        mNameLookupInsert.executeInsert();
+        nameLookupInsert.bindLong(1, rawContactId);
+        nameLookupInsert.bindLong(2, dataId);
+        nameLookupInsert.bindLong(3, lookupType);
+        bindString(nameLookupInsert, 4, name);
+        nameLookupInsert.executeInsert();
     }
 
     /**
      * Deletes all {@link Tables#NAME_LOOKUP} table rows associated with the specified data element.
      */
     public void deleteNameLookup(long dataId) {
-        if (mNameLookupDelete == null) {
-            mNameLookupDelete = getWritableDatabase().compileStatement(
+        final SQLiteStatement nameLookupDelete = getWritableDatabase().compileStatement(
                     "DELETE FROM " + Tables.NAME_LOOKUP +
                     " WHERE " + NameLookupColumns.DATA_ID + "=?");
-        }
-        mNameLookupDelete.bindLong(1, dataId);
-        mNameLookupDelete.execute();
+        nameLookupDelete.bindLong(1, dataId);
+        nameLookupDelete.execute();
     }
 
     public String insertNameLookupForEmail(long rawContactId, long dataId, String email) {
@@ -6224,20 +4964,125 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public long upsertMetadataSync(String backupId, Long accountId, String data, Integer deleted) {
-        if (mMetadataSyncInsert == null) {
-            mMetadataSyncInsert = getWritableDatabase().compileStatement(
+        final SQLiteStatement metadataSyncInsert = getWritableDatabase().compileStatement(
                     "INSERT OR REPLACE INTO " + Tables.METADATA_SYNC + "("
                             + MetadataSync.RAW_CONTACT_BACKUP_ID + ", "
                             + MetadataSyncColumns.ACCOUNT_ID + ", "
                             + MetadataSync.DATA + ","
                             + MetadataSync.DELETED + ")" +
                             " VALUES (?,?,?,?)");
-        }
-        mMetadataSyncInsert.bindString(1, backupId);
-        mMetadataSyncInsert.bindLong(2, accountId);
+        metadataSyncInsert.bindString(1, backupId);
+        metadataSyncInsert.bindLong(2, accountId);
         data = (data == null) ? "" : data;
-        mMetadataSyncInsert.bindString(3, data);
-        mMetadataSyncInsert.bindLong(4, deleted);
-        return mMetadataSyncInsert.executeInsert();
+        metadataSyncInsert.bindString(3, data);
+        metadataSyncInsert.bindLong(4, deleted);
+        return metadataSyncInsert.executeInsert();
+    }
+
+    public static void notifyProviderStatusChange(Context context) {
+        context.getContentResolver().notifyChange(ProviderStatus.CONTENT_URI,
+                /* observer= */ null, /* syncToNetwork= */ false);
+    }
+
+    public long getDatabaseCreationTime() {
+        return mDatabaseCreationTime;
+    }
+
+    private SqlChecker mCachedSqlChecker;
+
+    private SqlChecker getSqlChecker() {
+        // No need for synchronization on mCachedSqlChecker, because worst-case we'll just
+        // initialize it twice.
+        if (mCachedSqlChecker != null) {
+            return mCachedSqlChecker;
+        }
+        final ArrayList<String> invalidTokens = new ArrayList<>();
+
+        if (DISALLOW_SUB_QUERIES) {
+            // Disallow referring to tables and views.  However, we exempt tables whose names are
+            // also used as column names of any tables.  (Right now it's only 'data'.)
+            invalidTokens.addAll(
+                    DatabaseAnalyzer.findTableViewsAllowingColumns(getReadableDatabase()));
+
+            // Disallow token "select" to disallow subqueries.
+            invalidTokens.add("select");
+
+            // Allow the use of "default_directory" for now, as it used to be sort of commonly used...
+            invalidTokens.remove(Tables.DEFAULT_DIRECTORY.toLowerCase());
+        }
+
+        mCachedSqlChecker = new SqlChecker(invalidTokens);
+
+        return mCachedSqlChecker;
+    }
+
+    /**
+     * Ensure (a piece of) SQL is valid and doesn't contain disallowed tokens.
+     */
+    public void validateSql(String callerPackage, String sqlPiece) {
+        // TODO Replace the Runnable with a lambda -- which would crash right now due to an art bug?
+        runSqlValidation(callerPackage, new Runnable() {
+            @Override
+            public void run() {
+                ContactsDatabaseHelper.this.getSqlChecker().ensureNoInvalidTokens(sqlPiece);
+            }
+        });
+    }
+
+    /**
+     * Ensure all keys in {@code values} are valid. (i.e. they're all single token.)
+     */
+    public void validateContentValues(String callerPackage, ContentValues values) {
+        // TODO Replace the Runnable with a lambda -- which would crash right now due to an art bug?
+        runSqlValidation(callerPackage, new Runnable() {
+            @Override
+            public void run() {
+                for (String key : values.keySet()) {
+                    ContactsDatabaseHelper.this.getSqlChecker().ensureSingleTokenOnly(key);
+                }
+            }
+        });
+   }
+
+    /**
+     * Ensure all column names in {@code projection} are valid. (i.e. they're all single token.)
+     */
+    public void validateProjection(String callerPackage, String[] projection) {
+        // TODO Replace the Runnable with a lambda -- which would crash right now due to an art bug?
+        if (projection != null) {
+            runSqlValidation(callerPackage, new Runnable() {
+                @Override
+                public void run() {
+                    for (String column : projection) {
+                        ContactsDatabaseHelper.this.getSqlChecker().ensureSingleTokenOnly(column);
+                    }
+                }
+            });
+        }
+    }
+
+    private void runSqlValidation(String callerPackage, Runnable r) {
+        try {
+            r.run();
+        } catch (InvalidSqlException e) {
+            reportInvalidSql(callerPackage, e);
+        }
+    }
+
+    private void reportInvalidSql(String callerPackage, InvalidSqlException e) {
+        Log.e(TAG, String.format("%s caller=%s", e.getMessage(), callerPackage));
+        throw e;
+    }
+
+    /**
+     * Calls WTF without crashing, so we can collect errors in the wild.  During unit tests, it'll
+     * log only.
+     */
+    public void logWtf(String message) {
+        if (mIsTestInstance) {
+            Slog.w(TAG, "[Test mode, warning only] " + message);
+        } else {
+            Slog.wtfStack(TAG, message);
+        }
     }
 }

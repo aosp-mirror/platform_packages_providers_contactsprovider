@@ -23,7 +23,6 @@ import android.accounts.AccountManagerFuture;
 import android.accounts.AuthenticatorException;
 import android.accounts.OnAccountsUpdateListener;
 import android.accounts.OperationCanceledException;
-import android.app.admin.DevicePolicyManager;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -45,7 +44,6 @@ import android.location.CountryListener;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.IUserManager;
 import android.os.Looper;
 import android.os.UserHandle;
 import android.os.UserManager;
@@ -60,10 +58,8 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
 import android.test.IsolatedContext;
-import android.test.RenamingDelegatingContext;
 import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
-import android.util.Log;
 
 import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.MockSharedPreferences;
@@ -102,6 +98,8 @@ public class ContactsActor {
 
     private Set<String> mGrantedPermissions = Sets.newHashSet();
     private final Set<Uri> mGrantedUriPermissions = Sets.newHashSet();
+
+    private List<ContentProvider> mAllProviders = new ArrayList<>();
 
     private CountryDetector mMockCountryDetector = new CountryDetector(null){
         @Override
@@ -237,6 +235,11 @@ public class ContactsActor {
         public boolean isSameProfileGroup(int userId, int otherUserId) {
             return getUserInfo(userId).profileGroupId == getUserInfo(otherUserId).profileGroupId;
         }
+
+        @Override
+        public boolean isUserUnlocked(int userId) {
+            return true; // Just make it always unlocked for now.
+        }
     }
 
     /**
@@ -291,6 +294,8 @@ public class ContactsActor {
                 // DevicePolicyManager.
                 return overallContext.getSystemService(name);
             }
+
+
 
             @Override
             public String getSystemServiceName(Class<?> serviceClass) {
@@ -353,6 +358,11 @@ public class ContactsActor {
             public void sendBroadcast(Intent intent, String receiverPermission) {
                 // Ignore.
             }
+
+            @Override
+            public Context getApplicationContext() {
+                return this;
+            }
         };
 
         mMockAccountManager = new MockAccountManager(mProviderContext);
@@ -371,7 +381,11 @@ public class ContactsActor {
 
     public <T extends ContentProvider> T addProvider(Class<T> providerClass,
             String authority, Context providerContext) throws Exception {
-        T provider = providerClass.newInstance();
+        return addProvider(providerClass.newInstance(), authority, providerContext);
+    }
+
+    public <T extends ContentProvider> T addProvider(T provider,
+            String authority, Context providerContext) throws Exception {
         ProviderInfo info = new ProviderInfo();
 
         // Here, authority can have "user-id@".  We want to use it for addProvider, but provider
@@ -385,6 +399,7 @@ public class ContactsActor {
             resolver.addProvider(a, provider);
             resolver.addProvider("0@" + a, provider);
         }
+        mAllProviders.add(provider);
         return provider;
     }
 
@@ -443,7 +458,7 @@ public class ContactsActor {
             mGrantedPermissions = grantedPermissions;
             mGrantedUriPermissions = grantedUriPermissions;
 
-            mPackageManager = new ContactsMockPackageManager();
+            mPackageManager = new ContactsMockPackageManager(overallContext);
             mPackageManager.addPackage(1000, PACKAGE_GREY);
             mPackageManager.addPackage(2000, PACKAGE_RED);
             mPackageManager.addPackage(3000, PACKAGE_GREEN);
@@ -726,5 +741,11 @@ public class ContactsActor {
         };
 
         static final int COL_CONTACTS_ID = 0;
+    }
+
+    public void shutdown() {
+        for (ContentProvider provider : mAllProviders) {
+            provider.shutdown();
+        }
     }
 }

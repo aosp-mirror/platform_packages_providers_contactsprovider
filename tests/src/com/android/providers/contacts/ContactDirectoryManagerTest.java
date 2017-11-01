@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
+
 import android.accounts.Account;
 import android.content.ContentValues;
 import android.content.Context;
@@ -120,6 +122,13 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 .getContext().getPackageManager();
     }
 
+    @Override
+    protected String getContextPackageName() {
+        // In this test, we need to use the real package name, because that'll be recorded in the
+        // directory table, and if it's wrong, the tests would get confused.
+        return getContext().getPackageName();
+    }
+
     public void testIsDirectoryProvider() {
         ProviderInfo provider = new ProviderInfo();
 
@@ -172,7 +181,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL,
                 Directory.PHOTO_SUPPORT_FULL);
 
-        mDirectoryManager.scanAllPackages();
+        assertEquals(3, mDirectoryManager.scanAllPackages(/* rescan=*/ false));
 
         Cursor cursor = mResolver.query(Directory.CONTENT_URI, null, null, null,
                 /* order by=*/ Directory.DIRECTORY_AUTHORITY + "," + Directory.ACCOUNT_NAME +
@@ -197,16 +206,49 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
 
         assertTrue(cursor.moveToPosition(3));
-        assertDirectoryRow(cursor, "contactsTestPackage", "com.android.contacts", null, null,
+        assertDirectoryRow(cursor, getContext().getPackageName(),
+                "com.android.contacts", null, null,
                 null, -1 /* =any */, Directory.EXPORT_SUPPORT_NONE,
                 Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
 
         assertTrue(cursor.moveToPosition(4));
-        assertDirectoryRow(cursor, "contactsTestPackage", "com.android.contacts", null, null,
+        assertDirectoryRow(cursor, getContext().getPackageName(),
+                "com.android.contacts", null, null,
                 null, -1 /* =any */, Directory.EXPORT_SUPPORT_NONE,
                 Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
 
         cursor.close();
+    }
+
+    public void testScanAllProviders_scanCondition() throws Exception {
+        testScanAllProviders();
+
+        // Nothing has changed, so no scanning.
+        assertEquals(0, mDirectoryManager.scanAllPackages(/* rescan=*/ false));
+
+        // rescan = true, so a full-scan should happen.
+        assertEquals(3, mDirectoryManager.scanAllPackages(/* rescan=*/ true));
+
+        // Change GAL packages, a scan should happen.
+        mPackageManager.setInstalledPackages(
+                Lists.newArrayList(
+                        createProviderPackage("test.package2", "authority2"),
+                        createPackage("test.packageX", "authorityX", false)));
+        assertEquals(1, mDirectoryManager.scanAllPackages(/* rescan=*/ false));
+
+        // Remove the non-GAL package, no scan should happen.
+        mPackageManager.setInstalledPackages(
+                Lists.newArrayList(
+                        createProviderPackage("test.package2", "authority2")));
+        assertEquals(0, mDirectoryManager.scanAllPackages(/* rescan=*/ false));
+
+        // Remove GAL package 2 and add 1, a scan should happen.
+        mPackageManager.setInstalledPackages(
+                Lists.newArrayList(
+                        createProviderPackage("test.package1", "authority1"),
+                        createPackage("test.packageX", "authorityX", false)));
+        assertEquals(2, mDirectoryManager.scanAllPackages(/* rescan=*/ false));
+
     }
 
     public void testPackageInstalled() throws Exception {
@@ -222,7 +264,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
                 Directory.PHOTO_SUPPORT_FULL);
 
-        mDirectoryManager.scanAllPackages();
+        mDirectoryManager.scanAllPackages(/* rescan=*/ false);
 
         // At this point the manager has discovered a single directory (plus two
         // standard ones).
@@ -283,7 +325,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL,
                 Directory.PHOTO_SUPPORT_FULL);
 
-        mDirectoryManager.scanAllPackages();
+        mDirectoryManager.scanAllPackages(/* rescan=*/ false);
 
         // At this point the manager has discovered two custom directories.
         Cursor cursor = mResolver.query(Directory.CONTENT_URI, null, null, null, null);
@@ -329,7 +371,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL,
                 Directory.PHOTO_SUPPORT_FULL);
 
-        mDirectoryManager.scanAllPackages();
+        mDirectoryManager.scanAllPackages(/* rescan=*/ false);
 
         // At this point the manager has discovered two custom directories.
         Cursor cursor = mResolver.query(Directory.CONTENT_URI, null, null, null, null);
@@ -387,7 +429,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 Directory.EXPORT_SUPPORT_SAME_ACCOUNT_ONLY, Directory.SHORTCUT_SUPPORT_FULL,
                 Directory.PHOTO_SUPPORT_FULL);
 
-        mDirectoryManager.scanAllPackages();
+        mDirectoryManager.scanAllPackages(/* rescan=*/ false);
 
         // At this point the manager has discovered two custom directories.
         Cursor cursor = mResolver.query(Directory.CONTENT_URI, null, null, null, null);
@@ -451,7 +493,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 Directory.EXPORT_SUPPORT_ANY_ACCOUNT, Directory.SHORTCUT_SUPPORT_DATA_ITEMS_ONLY,
                 Directory.PHOTO_SUPPORT_FULL_SIZE_ONLY);
 
-        mDirectoryManager.scanAllPackages();
+        mDirectoryManager.scanAllPackages(/* rescan=*/ false);
 
         accounts = new Account[]{new Account("account-name1", "account-type1")};
         mActor.setAccounts(accounts);
@@ -481,7 +523,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
                 Directory.PHOTO_SUPPORT_NONE);
 
-        mDirectoryManager.scanAllPackages();
+        mDirectoryManager.scanAllPackages(/* rescan=*/ false);
 
         // Pretend to replace the package with a different provider inside
         MatrixCursor response2 = provider1.createResponseCursor();
@@ -515,7 +557,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
                 Directory.PHOTO_SUPPORT_NONE);
 
-        mDirectoryManager.scanAllPackages();
+        mDirectoryManager.scanAllPackages(/* rescan=*/ false);
 
         Cursor cursor = mResolver.query(
                 Directory.CONTENT_URI, new String[] { Directory._ID }, null, null, null);
@@ -555,7 +597,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
                 Directory.PHOTO_SUPPORT_NONE);
 
-        mDirectoryManager.scanAllPackages();
+        mDirectoryManager.scanAllPackages(/* rescan=*/ false);
 
         Cursor cursor = mResolver.query(
                 Directory.CONTENT_URI, new String[] { Directory._ID }, null, null, null);

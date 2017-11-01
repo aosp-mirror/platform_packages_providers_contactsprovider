@@ -42,18 +42,20 @@ public class ProfileDatabaseHelper extends ContactsDatabaseHelper {
      * Returns a new instance for unit tests.
      */
     @NeededForTesting
-    public static ProfileDatabaseHelper getNewInstanceForTest(Context context) {
-        return new ProfileDatabaseHelper(context, null, false);
+    public static ProfileDatabaseHelper getNewInstanceForTest(Context context, String filename) {
+        return new ProfileDatabaseHelper(context, filename, false, /* isTestInstance=*/ true);
     }
 
     private ProfileDatabaseHelper(
-            Context context, String databaseName, boolean optimizationEnabled) {
-        super(context, databaseName, optimizationEnabled);
+            Context context, String databaseName, boolean optimizationEnabled,
+            boolean isTestInstance) {
+        super(context, databaseName, optimizationEnabled, isTestInstance);
     }
 
     public static synchronized ProfileDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
-            sSingleton = new ProfileDatabaseHelper(context, DATABASE_NAME, true);
+            sSingleton = new ProfileDatabaseHelper(context, DATABASE_NAME, true,
+                    /* isTestInstance=*/ false);
         }
         return sSingleton;
     }
@@ -71,5 +73,19 @@ public class ProfileDatabaseHelper extends ContactsDatabaseHelper {
             values.put(SEQUENCE_SEQ, Profile.MIN_ID);
             db.insert(SEQUENCE_TABLE, null, values);
         }
+    }
+
+    @Override
+    protected void postOnCreate() {
+    }
+
+    @Override
+    protected void setDatabaseCreationTime(SQLiteDatabase db) {
+        // We don't need the creation time for the profile DB.
+    }
+
+    @Override
+    protected void loadDatabaseCreationTime(SQLiteDatabase db) {
+        // We don't need the creation time for the profile DB.
     }
 }

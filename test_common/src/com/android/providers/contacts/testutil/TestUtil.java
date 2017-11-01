@@ -20,7 +20,6 @@ import android.accounts.Account;
 import android.net.Uri;
 import android.provider.ContactsContract.RawContacts;
 import android.util.Log;
-import com.android.providers.contacts.AccountWithDataSet;
 
 /**
  * Common methods used for testing.
@@ -53,14 +52,14 @@ public class TestUtil {
     }
 
     public static Uri maybeAddAccountWithDataSetQueryParameters(Uri uri,
-            AccountWithDataSet account) {
-        if (account == null) {
+            String accountName, String accountType, String dataSet) {
+        if (accountName == null && accountType == null) {
             return uri;
         }
         return uri.buildUpon()
-                .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.getAccountName())
-                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.getAccountType())
-                .appendQueryParameter(RawContacts.DATA_SET, account.getDataSet())
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, accountName)
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, accountType)
+                .appendQueryParameter(RawContacts.DATA_SET, dataSet)
                 .build();
     }
 }

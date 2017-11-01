@@ -31,11 +31,15 @@ import android.os.ParcelFileDescriptor;
 import android.provider.CallLog.Calls;
 import android.provider.OpenableColumns;
 import android.provider.VoicemailContract.Voicemails;
+import android.util.ArraySet;
 import android.util.Log;
+
 import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.VoicemailContentProvider.UriData;
 import com.android.providers.contacts.util.CloseUtils;
+
 import com.google.common.collect.ImmutableSet;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -60,6 +64,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
             .add(Voicemails.DURATION)
             .add(Voicemails.IS_READ)
             .add(Voicemails.TRANSCRIPTION)
+            .add(Voicemails.TRANSCRIPTION_STATE)
             .add(Voicemails.STATE)
             .add(Voicemails.SOURCE_DATA)
             .add(Voicemails.SOURCE_PACKAGE)
@@ -70,6 +75,10 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
             .add(Voicemails.DIRTY)
             .add(Voicemails.DELETED)
             .add(Voicemails.LAST_MODIFIED)
+            .add(Voicemails.BACKED_UP)
+            .add(Voicemails.RESTORED)
+            .add(Voicemails.ARCHIVED)
+            .add(Voicemails.IS_OMTP_VOICEMAIL)
             .add(OpenableColumns.DISPLAY_NAME)
             .add(OpenableColumns.SIZE)
             .build();
@@ -94,6 +103,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
                 .add(Voicemails.DURATION)
                 .add(Voicemails.IS_READ)
                 .add(Voicemails.TRANSCRIPTION)
+                .add(Voicemails.TRANSCRIPTION_STATE)
                 .add(Voicemails.STATE)
                 .add(Voicemails.SOURCE_DATA)
                 .add(Voicemails.SOURCE_PACKAGE)
@@ -105,6 +115,10 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
                 .add(Voicemails.DIRTY)
                 .add(Voicemails.DELETED)
                 .add(Voicemails.LAST_MODIFIED)
+                .add(Voicemails.BACKED_UP)
+                .add(Voicemails.RESTORED)
+                .add(Voicemails.ARCHIVED)
+                .add(Voicemails.IS_OMTP_VOICEMAIL)
                 .add(OpenableColumns.DISPLAY_NAME, createDisplayName(context))
                 .add(OpenableColumns.SIZE, "NULL")
                 .build();
@@ -272,6 +286,11 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     public ParcelFileDescriptor openFile(UriData uriData, String mode)
             throws FileNotFoundException {
         return mDelegateHelper.openDataFile(uriData, mode);
+    }
+
+    @Override
+    public ArraySet<String> getSourcePackages() {
+        return mDbHelper.selectDistinctColumn(mTableName, Voicemails.SOURCE_PACKAGE);
     }
 
     /** Creates a clause to restrict the selection to only voicemail call type.*/

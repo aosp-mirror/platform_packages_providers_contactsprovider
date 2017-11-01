@@ -43,7 +43,6 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        addProvider(TestVoicemailProvider.class, VoicemailContract.AUTHORITY);
         TestVoicemailProvider.setVvmProviderCallDelegate(createMockProviderCalls());
 
         mPackageManager = (ContactsMockPackageManager) getProvider()
@@ -165,6 +164,12 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
             mDelegate = delegate;
         }
 
+        // Run the tasks synchronously.
+        @Override
+        void scheduleTask(int taskId, Object arg) {
+            performBackgroundTask(taskId, arg);
+        }
+
         @Override
         protected CallLogDatabaseHelper getDatabaseHelper(Context context) {
             return new CallLogDatabaseHelperTestable(context, /* contactsDbForMigration = */ null);
@@ -189,7 +194,7 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
         }
 
         @Override
-        protected String getCallingPackage_() {
+        protected String getInjectedCallingPackage() {
             return getContext().getPackageName();
         }
 
