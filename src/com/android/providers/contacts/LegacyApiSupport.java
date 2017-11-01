@@ -107,10 +107,6 @@ public class LegacyApiSupport {
     private static final int SEARCH_SUGGESTIONS = 32;
     private static final int SEARCH_SHORTCUT = 33;
     private static final int PHONES_FILTER = 34;
-    private static final int LIVE_FOLDERS_PEOPLE = 35;
-    private static final int LIVE_FOLDERS_PEOPLE_GROUP_NAME = 36;
-    private static final int LIVE_FOLDERS_PEOPLE_WITH_PHONES = 37;
-    private static final int LIVE_FOLDERS_PEOPLE_FAVORITES = 38;
     private static final int CONTACTMETHODS_EMAIL = 39;
     private static final int GROUP_NAME_MEMBERS = 40;
     private static final int GROUP_SYSTEM_ID_MEMBERS = 41;
@@ -184,24 +180,6 @@ public class LegacyApiSupport {
                     + " END)"
                 + " ELSE " + Tables.DATA + "." + Email.DATA
                 + " END)";
-
-    private static final Uri LIVE_FOLDERS_CONTACTS_URI = Uri.withAppendedPath(
-            ContactsContract.AUTHORITY_URI, "live_folders/contacts");
-
-    private static final Uri LIVE_FOLDERS_CONTACTS_WITH_PHONES_URI = Uri.withAppendedPath(
-            ContactsContract.AUTHORITY_URI, "live_folders/contacts_with_phones");
-
-    private static final Uri LIVE_FOLDERS_CONTACTS_FAVORITES_URI = Uri.withAppendedPath(
-            ContactsContract.AUTHORITY_URI, "live_folders/favorites");
-
-    private static final String CONTACTS_UPDATE_LASTTIMECONTACTED =
-            "UPDATE " + Tables.CONTACTS +
-            " SET " + Contacts.LAST_TIME_CONTACTED + "=? " +
-            "WHERE " + Contacts._ID + "=?";
-    private static final String RAWCONTACTS_UPDATE_LASTTIMECONTACTED =
-            "UPDATE " + Tables.RAW_CONTACTS + " SET "
-            + RawContacts.LAST_TIME_CONTACTED + "=? WHERE "
-            + RawContacts._ID + "=?";
 
     private String[] mSelectionArgs1 = new String[1];
     private String[] mSelectionArgs2 = new String[2];
@@ -356,15 +334,6 @@ public class LegacyApiSupport {
         matcher.addURI(authority, SearchManager.SUGGEST_URI_PATH_SHORTCUT + "/*",
                 SEARCH_SHORTCUT);
         matcher.addURI(authority, "settings", SETTINGS);
-
-        matcher.addURI(authority, "live_folders/people", LIVE_FOLDERS_PEOPLE);
-        matcher.addURI(authority, "live_folders/people/*",
-                LIVE_FOLDERS_PEOPLE_GROUP_NAME);
-        matcher.addURI(authority, "live_folders/people_with_phones",
-                LIVE_FOLDERS_PEOPLE_WITH_PHONES);
-        matcher.addURI(authority, "live_folders/favorites",
-                LIVE_FOLDERS_PEOPLE_FAVORITES);
-
 
         HashMap<String, String> peopleProjectionMap = new HashMap<String, String>();
         peopleProjectionMap.put(People.NAME, People.NAME);
@@ -568,10 +537,12 @@ public class LegacyApiSupport {
                         + " AS " + People.NOTES + ", " +
                 AccountsColumns.CONCRETE_ACCOUNT_NAME + ", " +
                 AccountsColumns.CONCRETE_ACCOUNT_TYPE + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.TIMES_CONTACTED
-                        + " AS " + People.TIMES_CONTACTED + ", " +
-                Tables.RAW_CONTACTS + "." + RawContacts.LAST_TIME_CONTACTED
-                        + " AS " + People.LAST_TIME_CONTACTED + ", " +
+
+                // We no longer return even low-res values from CP1.
+                // Note if we just use the value 0 below, certain seletion wouldn't work.
+                "cast(0 as int) AS " + People.TIMES_CONTACTED + ", " +
+                "cast(0 as int) AS " + People.LAST_TIME_CONTACTED + ", " +
+
                 Tables.RAW_CONTACTS + "." + RawContacts.CUSTOM_RINGTONE
                         + " AS " + People.CUSTOM_RINGTONE + ", " +
                 Tables.RAW_CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL
@@ -948,7 +919,7 @@ public class LegacyApiSupport {
         int count = 0;
         switch(match) {
             case PEOPLE_UPDATE_CONTACT_TIME: {
-                count = updateContactTime(uri, values);
+                count = 0; // No longer supported.
                 break;
             }
 
@@ -1077,11 +1048,6 @@ public class LegacyApiSupport {
             }
         }
 
-        if (values.containsKey(People.LAST_TIME_CONTACTED) &&
-                !values.containsKey(People.TIMES_CONTACTED)) {
-            updateContactTime(rawContactId, values);
-        }
-
         return count;
     }
 
@@ -1141,35 +1107,6 @@ public class LegacyApiSupport {
 
         return mContactsProvider.updateInTransaction(Groups.CONTENT_URI, mValues,
                 Groups._ID + "=" + groupId, null);
-    }
-
-    private int updateContactTime(Uri uri, ContentValues values) {
-        long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
-        updateContactTime(rawContactId, values);
-        return 1;
-    }
-
-    private void updateContactTime(long rawContactId, ContentValues values) {
-        final Long storedTimeContacted = values.getAsLong(People.LAST_TIME_CONTACTED);
-        final long lastTimeContacted = storedTimeContacted != null ?
-            storedTimeContacted : System.currentTimeMillis();
-
-        // TODO check sanctions
-        long contactId = mDbHelper.getContactId(rawContactId);
-        SQLiteDatabase mDb = mDbHelper.getWritableDatabase();
-        mSelectionArgs2[0] = String.valueOf(lastTimeContacted);
-        if (contactId != 0) {
-            mSelectionArgs2[1] = String.valueOf(contactId);
-            mDb.execSQL(CONTACTS_UPDATE_LASTTIMECONTACTED, mSelectionArgs2);
-            // increment times_contacted column
-            mSelectionArgs1[0] = String.valueOf(contactId);
-            mDb.execSQL(ContactsProvider2.UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
-        }
-        mSelectionArgs2[1] = String.valueOf(rawContactId);
-        mDb.execSQL(RAWCONTACTS_UPDATE_LASTTIMECONTACTED, mSelectionArgs2);
-        // increment times_contacted column
-        mSelectionArgs1[0] = String.valueOf(contactId);
-        mDb.execSQL(ContactsProvider2.UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
     }
 
     private int updatePhoto(long rawContactId, ContentValues values) {
@@ -1359,10 +1296,12 @@ public class LegacyApiSupport {
                 values, People.CUSTOM_RINGTONE);
         ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.SEND_TO_VOICEMAIL,
                 values, People.SEND_TO_VOICEMAIL);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.LAST_TIME_CONTACTED,
-                values, People.LAST_TIME_CONTACTED);
-        ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.TIMES_CONTACTED,
-                values, People.TIMES_CONTACTED);
+
+        // We no longer support the following fields in CP1.
+        // ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.LAST_TIME_CONTACTED,
+        //         values, People.LAST_TIME_CONTACTED);
+        // ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.TIMES_CONTACTED,
+        //        values, People.TIMES_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(mValues, RawContacts.STARRED,
                 values, People.STARRED);
         if (mAccount != null) {
@@ -1884,23 +1823,6 @@ public class LegacyApiSupport {
                         db, projection, lookupKey, filter, null);
             }
 
-            case LIVE_FOLDERS_PEOPLE:
-                return mContactsProvider.query(LIVE_FOLDERS_CONTACTS_URI,
-                        projection, selection, selectionArgs, sortOrder);
-
-            case LIVE_FOLDERS_PEOPLE_WITH_PHONES:
-                return mContactsProvider.query(LIVE_FOLDERS_CONTACTS_WITH_PHONES_URI,
-                        projection, selection, selectionArgs, sortOrder);
-
-            case LIVE_FOLDERS_PEOPLE_FAVORITES:
-                return mContactsProvider.query(LIVE_FOLDERS_CONTACTS_FAVORITES_URI,
-                        projection, selection, selectionArgs, sortOrder);
-
-            case LIVE_FOLDERS_PEOPLE_GROUP_NAME:
-                return mContactsProvider.query(Uri.withAppendedPath(LIVE_FOLDERS_CONTACTS_URI,
-                        Uri.encode(uri.getLastPathSegment())),
-                        projection, selection, selectionArgs, sortOrder);
-
             case DELETED_PEOPLE:
             case DELETED_GROUPS:
                 throw new UnsupportedOperationException(mDbHelper.exceptionMessage(uri));
@@ -1985,7 +1907,6 @@ public class LegacyApiSupport {
      * a group with a particular system id. The projection map of the query must include
      * {@link People#_ID}.
      *
-     * @param groupName The name of the group
      * @return The where clause.
      */
     private String buildGroupSystemIdMatchWhereClause(String systemId) {

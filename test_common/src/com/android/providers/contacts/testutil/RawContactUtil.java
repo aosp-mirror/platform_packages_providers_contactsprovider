@@ -23,8 +23,6 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.ContactsContract;
-import android.test.mock.MockContentResolver;
-import com.android.providers.contacts.AccountWithDataSet;
 
 import java.util.List;
 
@@ -47,18 +45,6 @@ public class RawContactUtil {
                 rawContactId);
         Cursor cursor = resolver.query(uri, projection, null, null, null);
         return CommonDatabaseUtils.singleRecordToArray(cursor);
-    }
-
-    /**
-     * Returns a list of raw contact records.
-     *
-     * @return A list of records.  Where each record is represented as an array of strings.
-     */
-    public static List<String[]> queryByContactId(ContentResolver resolver, long contactId,
-            String[] projection) {
-        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, contactId);
-        Cursor cursor = resolver.query(uri, projection, null, null, null);
-        return CommonDatabaseUtils.multiRecordToArray(cursor);
     }
 
     public static void delete(ContentResolver resolver, long rawContactId,
@@ -98,11 +84,11 @@ public class RawContactUtil {
     }
 
     public static long createRawContactWithAccountDataSet(ContentResolver resolver,
-            AccountWithDataSet accountWithDataSet, String... extras) {
+            String accountName, String accountType, String dataSet, String... extras) {
         ContentValues values = new ContentValues();
         CommonDatabaseUtils.extrasVarArgsToValues(values, extras);
         final Uri uri = TestUtil.maybeAddAccountWithDataSetQueryParameters(
-                ContactsContract.RawContacts.CONTENT_URI, accountWithDataSet);
+                ContactsContract.RawContacts.CONTENT_URI, accountName, accountType, dataSet);
         Uri contactUri = resolver.insert(uri, values);
         return ContentUris.parseId(contactUri);
     }

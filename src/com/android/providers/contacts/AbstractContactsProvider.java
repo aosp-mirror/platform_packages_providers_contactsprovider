@@ -17,7 +17,6 @@
 package com.android.providers.contacts;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
@@ -84,7 +83,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
     /**
      * The DB helper to use for this content provider.
      */
-    private SQLiteOpenHelper mDbHelper;
+    private ContactsDatabaseHelper mDbHelper;
 
     /**
      * The database helper to serialize all transactions on.  If non-null, any new transaction
@@ -130,15 +129,20 @@ public abstract class AbstractContactsProvider extends ContentProvider
     protected final SparseLongArray mUpdateInBatchStats = new SparseLongArray();
     protected final SparseLongArray mDeleteInBatchStats = new SparseLongArray();
 
+    private final SparseLongArray mOperationDurationMicroStats = new SparseLongArray();
+
+    private final ThreadLocal<Integer> mOperationNest = ThreadLocal.withInitial(() -> 0);
+    private final ThreadLocal<Long> mOperationStartNs = ThreadLocal.withInitial(() -> 0L);
+
     @Override
     public boolean onCreate() {
         Context context = getContext();
-        mDbHelper = getDatabaseHelper(context);
+        mDbHelper = newDatabaseHelper(context);
         mTransactionHolder = getTransactionHolder();
         return true;
     }
 
-    public SQLiteOpenHelper getDatabaseHelper() {
+    public ContactsDatabaseHelper getDatabaseHelper() {
         return mDbHelper;
     }
 
@@ -159,6 +163,12 @@ public abstract class AbstractContactsProvider extends ContentProvider
         synchronized (mStatsLock) {
             stats.put(callingUid, stats.get(callingUid) + 1);
             mAllCallingUids.put(callingUid, true);
+
+            final int nest = mOperationNest.get();
+            mOperationNest.set(nest + 1);
+            if (nest == 0) {
+                mOperationStartNs.set(SystemClock.elapsedRealtimeNanos());
+            }
         }
     }
 
@@ -169,6 +179,19 @@ public abstract class AbstractContactsProvider extends ContentProvider
         incrementStats(inBatch ? statsInBatch : statsNonBatch);
     }
 
+    protected void finishOperation() {
+        final int callingUid = Binder.getCallingUid();
+        synchronized (mStatsLock) {
+            final int nest = mOperationNest.get();
+            mOperationNest.set(nest - 1);
+            if (nest == 1) {
+                final long duration = SystemClock.elapsedRealtimeNanos() - mOperationStartNs.get();
+                mOperationDurationMicroStats.put(callingUid,
+                        mOperationDurationMicroStats.get(callingUid) + duration / 1000L);
+            }
+        }
+    }
+
     public ContactsTransaction getCurrentTransaction() {
         return mTransactionHolder.get();
     }
@@ -176,119 +199,139 @@ public abstract class AbstractContactsProvider extends ContentProvider
     @Override
     public Uri insert(Uri uri, ContentValues values) {
         incrementStats(mInsertStats, mInsertInBatchStats);
-        ContactsTransaction transaction = startTransaction(false);
         try {
-            Uri result = insertInTransaction(uri, values);
-            if (result != null) {
-                transaction.markDirty();
+            ContactsTransaction transaction = startTransaction(false);
+            try {
+                Uri result = insertInTransaction(uri, values);
+                if (result != null) {
+                    transaction.markDirty();
+                }
+                transaction.markSuccessful(false);
+                return result;
+            } finally {
+                endTransaction(false);
             }
-            transaction.markSuccessful(false);
-            return result;
         } finally {
-            endTransaction(false);
+            finishOperation();
         }
     }
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         incrementStats(mDeleteStats, mDeleteInBatchStats);
-        ContactsTransaction transaction = startTransaction(false);
         try {
-            int deleted = deleteInTransaction(uri, selection, selectionArgs);
-            if (deleted > 0) {
-                transaction.markDirty();
+            ContactsTransaction transaction = startTransaction(false);
+            try {
+                int deleted = deleteInTransaction(uri, selection, selectionArgs);
+                if (deleted > 0) {
+                    transaction.markDirty();
+                }
+                transaction.markSuccessful(false);
+                return deleted;
+            } finally {
+                endTransaction(false);
             }
-            transaction.markSuccessful(false);
-            return deleted;
         } finally {
-            endTransaction(false);
+            finishOperation();
         }
     }
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         incrementStats(mUpdateStats, mUpdateInBatchStats);
-        ContactsTransaction transaction = startTransaction(false);
         try {
-            int updated = updateInTransaction(uri, values, selection, selectionArgs);
-            if (updated > 0) {
-                transaction.markDirty();
+            ContactsTransaction transaction = startTransaction(false);
+            try {
+                int updated = updateInTransaction(uri, values, selection, selectionArgs);
+                if (updated > 0) {
+                    transaction.markDirty();
+                }
+                transaction.markSuccessful(false);
+                return updated;
+            } finally {
+                endTransaction(false);
             }
-            transaction.markSuccessful(false);
-            return updated;
         } finally {
-            endTransaction(false);
+            finishOperation();
         }
     }
 
     @Override
     public int bulkInsert(Uri uri, ContentValues[] values) {
         incrementStats(mBatchStats);
-        ContactsTransaction transaction = startTransaction(true);
-        int numValues = values.length;
-        int opCount = 0;
         try {
-            for (int i = 0; i < numValues; i++) {
-                insert(uri, values[i]);
-                if (++opCount >= BULK_INSERTS_PER_YIELD_POINT) {
-                    opCount = 0;
-                    try {
-                        yield(transaction);
-                    } catch (RuntimeException re) {
-                        transaction.markYieldFailed();
-                        throw re;
+            ContactsTransaction transaction = startTransaction(true);
+            int numValues = values.length;
+            int opCount = 0;
+            try {
+                for (int i = 0; i < numValues; i++) {
+                    insert(uri, values[i]);
+                    if (++opCount >= BULK_INSERTS_PER_YIELD_POINT) {
+                        opCount = 0;
+                        try {
+                            yield(transaction);
+                        } catch (RuntimeException re) {
+                            transaction.markYieldFailed();
+                            throw re;
+                        }
                     }
                 }
+                transaction.markSuccessful(true);
+            } finally {
+                endTransaction(true);
             }
-            transaction.markSuccessful(true);
+            return numValues;
         } finally {
-            endTransaction(true);
+            finishOperation();
         }
-        return numValues;
     }
 
     @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
         incrementStats(mBatchStats);
-        if (VERBOSE_LOGGING) {
-            Log.v(TAG, "applyBatch: " + operations.size() + " ops");
-        }
-        int ypCount = 0;
-        int opCount = 0;
-        ContactsTransaction transaction = startTransaction(true);
         try {
-            final int numOperations = operations.size();
-            final ContentProviderResult[] results = new ContentProviderResult[numOperations];
-            for (int i = 0; i < numOperations; i++) {
-                if (++opCount >= MAX_OPERATIONS_PER_YIELD_POINT) {
-                    throw new OperationApplicationException(
-                            "Too many content provider operations between yield points. "
-                                    + "The maximum number of operations per yield point is "
-                                    + MAX_OPERATIONS_PER_YIELD_POINT, ypCount);
-                }
-                final ContentProviderOperation operation = operations.get(i);
-                if (i > 0 && operation.isYieldAllowed()) {
-                    if (VERBOSE_LOGGING) {
-                        Log.v(TAG, "applyBatch: " + opCount + " ops finished; about to yield...");
-                    }
-                    opCount = 0;
-                    try {
-                        if (yield(transaction)) {
-                            ypCount++;
-                        }
-                    } catch (RuntimeException re) {
-                        transaction.markYieldFailed();
-                        throw re;
-                    }
-                }
-
-                results[i] = operation.apply(this, results, i);
+            if (VERBOSE_LOGGING) {
+                Log.v(TAG, "applyBatch: " + operations.size() + " ops");
             }
-            transaction.markSuccessful(true);
-            return results;
+            int ypCount = 0;
+            int opCount = 0;
+            ContactsTransaction transaction = startTransaction(true);
+            try {
+                final int numOperations = operations.size();
+                final ContentProviderResult[] results = new ContentProviderResult[numOperations];
+                for (int i = 0; i < numOperations; i++) {
+                    if (++opCount >= MAX_OPERATIONS_PER_YIELD_POINT) {
+                        throw new OperationApplicationException(
+                                "Too many content provider operations between yield points. "
+                                        + "The maximum number of operations per yield point is "
+                                        + MAX_OPERATIONS_PER_YIELD_POINT, ypCount);
+                    }
+                    final ContentProviderOperation operation = operations.get(i);
+                    if (i > 0 && operation.isYieldAllowed()) {
+                        if (VERBOSE_LOGGING) {
+                            Log.v(TAG, "applyBatch: " + opCount + " ops finished; about to yield...");
+                        }
+                        opCount = 0;
+                        try {
+                            if (yield(transaction)) {
+                                ypCount++;
+                            }
+                        } catch (RuntimeException re) {
+                            transaction.markYieldFailed();
+                            throw re;
+                        }
+                    }
+
+                    results[i] = operation.apply(this, results, i);
+                }
+                transaction.markSuccessful(true);
+                return results;
+            } finally {
+                endTransaction(true);
+            }
         } finally {
-            endTransaction(true);
+            finishOperation();
         }
     }
 
@@ -345,8 +388,9 @@ public abstract class AbstractContactsProvider extends ContentProvider
 
     /**
      * Gets the database helper for this contacts provider.  This is called once, during onCreate().
+     * Do not call in other places.
      */
-    protected abstract SQLiteOpenHelper getDatabaseHelper(Context context);
+    protected abstract ContactsDatabaseHelper newDatabaseHelper(Context context);
 
     /**
      * Gets the thread-local transaction holder to use for keeping track of the transaction.  This
@@ -425,20 +469,22 @@ public abstract class AbstractContactsProvider extends ContentProvider
         synchronized (mStatsLock) {
             pw.println();
             pw.println("  Client activities:");
-            pw.println("    UID        Query  Insert Update Delete   Batch Insert Update Delete:");
+            pw.println("    UID        Query  Insert Update Delete   Batch Insert Update Delete"
+                + "          Sec");
             for (int i = 0; i < mAllCallingUids.size(); i++) {
-                final int pid = mAllCallingUids.keyAt(i);
+                final int uid = mAllCallingUids.keyAt(i);
                 pw.println(String.format(
-                        "    %-9d %6d  %6d %6d %6d  %6d %6d %6d %6d",
-                        pid,
-                        mQueryStats.get(pid),
-                        mInsertStats.get(pid),
-                        mUpdateStats.get(pid),
-                        mDeleteStats.get(pid),
-                        mBatchStats.get(pid),
-                        mInsertInBatchStats.get(pid),
-                        mUpdateInBatchStats.get(pid),
-                        mDeleteInBatchStats.get(pid)
+                        "    %-9d %6d  %6d %6d %6d  %6d %6d %6d %6d %12.3f",
+                        uid,
+                        mQueryStats.get(uid),
+                        mInsertStats.get(uid),
+                        mUpdateStats.get(uid),
+                        mDeleteStats.get(uid),
+                        mBatchStats.get(uid),
+                        mInsertInBatchStats.get(uid),
+                        mUpdateInBatchStats.get(uid),
+                        mDeleteInBatchStats.get(uid),
+                        (mOperationDurationMicroStats.get(uid) / 1000000.0)
                 ));
             }
         }

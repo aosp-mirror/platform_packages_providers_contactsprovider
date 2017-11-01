@@ -232,7 +232,7 @@ public class GlobalSearchSupport {
                         + Contacts.PHOTO_THUMBNAIL_URI + ", "
                         + Contacts.DISPLAY_NAME + ", "
                         + PRESENCE_SQL + " AS " + Contacts.CONTACT_PRESENCE + ", "
-                        + Contacts.LAST_TIME_CONTACTED);
+                        + Contacts.LR_LAST_TIME_CONTACTED);
         if (haveFilter) {
             sb.append(", " + SearchSnippets.SNIPPET);
         }

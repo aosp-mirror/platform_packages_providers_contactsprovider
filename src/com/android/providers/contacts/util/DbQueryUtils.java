@@ -125,7 +125,7 @@ public class DbQueryUtils {
     public static void escapeLikeValue(StringBuilder sb, String value, char escapeChar) {
         for (int i = 0; i < value.length(); i++) {
             char ch = value.charAt(i);
-            if (ch == '%' || ch == '_') {
+            if (ch == '%' || ch == '_' || ch == escapeChar) {
                 sb.append(escapeChar);
             }
             sb.append(ch);

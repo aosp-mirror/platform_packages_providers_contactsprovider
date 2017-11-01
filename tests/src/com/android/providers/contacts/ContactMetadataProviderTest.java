@@ -93,7 +93,6 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
             "' AND " + MetadataSync.DATA_SET + "='" + TEST_DATA_SET2 + "'";
 
     private ContactMetadataProvider mContactMetadataProvider;
-    private AccountWithDataSet mTestAccount;
     private ContentValues defaultValues;
 
     @Override
@@ -104,7 +103,7 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         // Reset the dbHelper to be the one ContactsProvider2 is using. Before this, two providers
         // are using different dbHelpers.
         mContactMetadataProvider.setDatabaseHelper(((SynchronousContactsProvider2)
-                mActor.provider).getDatabaseHelper(getContext()));
+                mActor.provider).getDatabaseHelper());
         setupData();
     }
 
@@ -175,7 +174,7 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
         // Create a raw contact with backupId.
         String backupId = "backupId10001";
         long rawContactId = RawContactUtil.createRawContactWithAccountDataSet(
-                mResolver, mTestAccount);
+                mResolver, TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1, TEST_DATA_SET1);
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
         ContentValues values = new ContentValues();
         values.put(RawContacts.BACKUP_ID, backupId);
@@ -521,10 +520,8 @@ public class ContactMetadataProviderTest extends BaseContactsProvider2Test {
     }
 
     private void setupData() {
-        mTestAccount = new AccountWithDataSet(TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1,
-                TEST_DATA_SET1);
         long rawContactId1 = RawContactUtil.createRawContactWithAccountDataSet(
-                mResolver, mTestAccount);
+                mResolver, TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1, TEST_DATA_SET1);
         createAccount(TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1, TEST_DATA_SET1);
         insertMetadata(getDefaultValues());
         insertMetadataSyncState(TEST_ACCOUNT_NAME1, TEST_ACCOUNT_TYPE1, TEST_DATA_SET1,

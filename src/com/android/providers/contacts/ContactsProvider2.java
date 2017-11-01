@@ -20,6 +20,7 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
 import android.annotation.Nullable;
+import android.annotation.WorkerThread;
 import android.app.AppOpsManager;
 import android.app.SearchManager;
 import android.content.ContentProviderOperation;
@@ -56,16 +57,13 @@ import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.CancellationSignal;
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Message;
 import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor.AutoCloseInputStream;
-import android.os.Process;
 import android.os.RemoteException;
 import android.os.StrictMode;
 import android.os.SystemClock;
 import android.os.SystemProperties;
+import android.os.UserHandle;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
@@ -220,13 +218,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final String INTERACT_ACROSS_USERS = "android.permission.INTERACT_ACROSS_USERS";
 
     /* package */ static final String UPDATE_TIMES_CONTACTED_CONTACTS_TABLE =
-          "UPDATE " + Tables.CONTACTS + " SET " + Contacts.TIMES_CONTACTED + "=" +
-          " ifnull(" + Contacts.TIMES_CONTACTED + ",0)+1" +
+          "UPDATE " + Tables.CONTACTS + " SET " + Contacts.RAW_TIMES_CONTACTED + "=" +
+          " ifnull(" + Contacts.RAW_TIMES_CONTACTED + ",0)+1" +
           " WHERE " + Contacts._ID + "=?";
 
     /* package */ static final String UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE =
-          "UPDATE " + Tables.RAW_CONTACTS + " SET " + RawContacts.TIMES_CONTACTED + "=" +
-          " ifnull(" + RawContacts.TIMES_CONTACTED + ",0)+1 " +
+          "UPDATE " + Tables.RAW_CONTACTS + " SET " + RawContacts.RAW_TIMES_CONTACTED + "=" +
+          " ifnull(" + RawContacts.RAW_TIMES_CONTACTED + ",0)+1 " +
           " WHERE " + RawContacts.CONTACT_ID + "=?";
 
     /* package */ static final String PHONEBOOK_COLLATOR_NAME = "PHONEBOOK";
@@ -251,10 +249,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM = 5;
     private static final int BACKGROUND_TASK_UPDATE_SEARCH_INDEX = 6;
     private static final int BACKGROUND_TASK_UPDATE_PROVIDER_STATUS = 7;
-    private static final int BACKGROUND_TASK_UPDATE_DIRECTORIES = 8;
     private static final int BACKGROUND_TASK_CHANGE_LOCALE = 9;
     private static final int BACKGROUND_TASK_CLEANUP_PHOTOS = 10;
     private static final int BACKGROUND_TASK_CLEAN_DELETE_LOG = 11;
+    private static final int BACKGROUND_TASK_RESCAN_DIRECTORY = 12;
 
     protected static final int STATUS_NORMAL = 0;
     protected static final int STATUS_UPGRADING = 1;
@@ -313,7 +311,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public static final ProfileAwareUriMatcher sUriMatcher =
             new ProfileAwareUriMatcher(UriMatcher.NO_MATCH);
 
-    private static final String FREQUENT_ORDER_BY = DataUsageStatColumns.TIMES_USED + " DESC,"
+    private static final String FREQUENT_ORDER_BY = DataUsageStatColumns.RAW_TIMES_USED + " DESC,"
             + Contacts.DISPLAY_NAME + " COLLATE LOCALIZED ASC";
 
     public static final int CONTACTS = 1000;
@@ -610,20 +608,23 @@ public class ContactsProvider2 extends AbstractContactsProvider
     // Contacts contacted within the last 30 days (in seconds)
     private static final long LAST_TIME_USED_30_DAYS_SEC = 30L * 24 * 60 * 60;
 
-    private static final String TIME_SINCE_LAST_USED_SEC =
-            "(strftime('%s', 'now') - " + DataUsageStatColumns.LAST_TIME_USED + "/1000)";
+    private static final String RAW_TIME_SINCE_LAST_USED_SEC =
+            "(strftime('%s', 'now') - " + DataUsageStatColumns.RAW_LAST_TIME_USED + "/1000)";
+
+    private static final String LR_TIME_SINCE_LAST_USED_SEC =
+            "(strftime('%s', 'now') - " + DataUsageStatColumns.LR_LAST_TIME_USED + "/1000)";
 
     private static final String SORT_BY_DATA_USAGE =
-            "(CASE WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_3_DAYS_SEC +
+            "(CASE WHEN " + RAW_TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_3_DAYS_SEC +
             " THEN 0 " +
-                    " WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_7_DAYS_SEC +
+                    " WHEN " + RAW_TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_7_DAYS_SEC +
             " THEN 1 " +
-                    " WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_14_DAYS_SEC +
+                    " WHEN " + RAW_TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_14_DAYS_SEC +
             " THEN 2 " +
-                    " WHEN " + TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_30_DAYS_SEC +
+                    " WHEN " + RAW_TIME_SINCE_LAST_USED_SEC + " < " + LAST_TIME_USED_30_DAYS_SEC +
             " THEN 3 " +
             " ELSE 4 END), " +
-            DataUsageStatColumns.TIMES_USED + " DESC";
+            DataUsageStatColumns.RAW_TIMES_USED + " DESC";
 
     /*
      * Sorting order for email address suggestions: first starred, then the rest.
@@ -676,7 +677,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Contacts.DISPLAY_NAME_SOURCE)
             .add(Contacts.IN_DEFAULT_DIRECTORY)
             .add(Contacts.IN_VISIBLE_GROUP)
-            .add(Contacts.LAST_TIME_CONTACTED)
+            .add(Contacts.LR_LAST_TIME_CONTACTED)
             .add(Contacts.LOOKUP_KEY)
             .add(Contacts.PHONETIC_NAME)
             .add(Contacts.PHONETIC_NAME_STYLE)
@@ -693,7 +694,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(ContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE)
             .add(Contacts.STARRED)
             .add(Contacts.PINNED)
-            .add(Contacts.TIMES_CONTACTED)
+            .add(Contacts.LR_TIMES_CONTACTED)
             .add(Contacts.HAS_PHONE_NUMBER)
             .add(Contacts.CONTACT_LAST_UPDATED_TIMESTAMP)
             .build();
@@ -794,8 +795,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .build();
 
     private static final ProjectionMap sDataUsageColumns = ProjectionMap.builder()
-            .add(Data.TIMES_USED, Tables.DATA_USAGE_STAT + "." + Data.TIMES_USED)
-            .add(Data.LAST_TIME_USED, Tables.DATA_USAGE_STAT + "." + Data.LAST_TIME_USED)
+            .add(Data.LR_TIMES_USED, Tables.DATA_USAGE_STAT + "." + Data.LR_TIMES_USED)
+            .add(Data.LR_LAST_TIME_USED, Tables.DATA_USAGE_STAT + "." + Data.LR_LAST_TIME_USED)
             .build();
 
     /** Contains just BaseColumns._COUNT */
@@ -822,16 +823,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /** Used for pushing starred contacts to the top of a times contacted list **/
     private static final ProjectionMap sStrequentStarredProjectionMap = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(DataUsageStatColumns.TIMES_USED, String.valueOf(Long.MAX_VALUE))
-            .add(DataUsageStatColumns.LAST_TIME_USED, String.valueOf(Long.MAX_VALUE))
+            .add(DataUsageStatColumns.LR_TIMES_USED, String.valueOf(Long.MAX_VALUE))
+            .add(DataUsageStatColumns.LR_LAST_TIME_USED, String.valueOf(Long.MAX_VALUE))
             .build();
 
     private static final ProjectionMap sStrequentFrequentProjectionMap = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(DataUsageStatColumns.TIMES_USED,
-                    "SUM(" + DataUsageStatColumns.CONCRETE_TIMES_USED + ")")
-            .add(DataUsageStatColumns.LAST_TIME_USED,
-                    "MAX(" + DataUsageStatColumns.CONCRETE_LAST_TIME_USED + ")")
+            // Note this should ideally be "lowres(SUM)" rather than "SUM(lowres)", but we do it
+            // this way for performance reasons.
+            .add(DataUsageStatColumns.LR_TIMES_USED,
+                    "SUM(" + DataUsageStatColumns.CONCRETE_LR_TIMES_USED + ")")
+            .add(DataUsageStatColumns.LR_LAST_TIME_USED,
+                    "MAX(" + DataUsageStatColumns.CONCRETE_LR_LAST_TIME_USED + ")")
             .build();
 
     /**
@@ -843,8 +846,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final ProjectionMap sStrequentPhoneOnlyProjectionMap
             = ProjectionMap.builder()
             .addAll(sContactsProjectionMap)
-            .add(DataUsageStatColumns.TIMES_USED, DataUsageStatColumns.CONCRETE_TIMES_USED)
-            .add(DataUsageStatColumns.LAST_TIME_USED, DataUsageStatColumns.CONCRETE_LAST_TIME_USED)
+            .add(DataUsageStatColumns.LR_TIMES_USED)
+            .add(DataUsageStatColumns.LR_LAST_TIME_USED)
             .add(Phone.NUMBER)
             .add(Phone.TYPE)
             .add(Phone.LABEL)
@@ -876,8 +879,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(RawContactsColumns.PHONEBOOK_BUCKET_PRIMARY)
             .add(RawContactsColumns.PHONEBOOK_LABEL_ALTERNATIVE)
             .add(RawContactsColumns.PHONEBOOK_BUCKET_ALTERNATIVE)
-            .add(RawContacts.TIMES_CONTACTED)
-            .add(RawContacts.LAST_TIME_CONTACTED)
+            .add(RawContacts.LR_TIMES_CONTACTED)
+            .add(RawContacts.LR_LAST_TIME_CONTACTED)
             .add(RawContacts.CUSTOM_RINGTONE)
             .add(RawContacts.SEND_TO_VOICEMAIL)
             .add(RawContacts.STARRED)
@@ -976,9 +979,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(PhoneLookup.CONTACT_ID, "contacts_view." + Contacts._ID)
             .add(PhoneLookup.DATA_ID, PhoneLookup.DATA_ID)
             .add(PhoneLookup.LOOKUP_KEY, "contacts_view." + Contacts.LOOKUP_KEY)
+            .add(PhoneLookup.DISPLAY_NAME_SOURCE, "contacts_view." + Contacts.DISPLAY_NAME_SOURCE)
             .add(PhoneLookup.DISPLAY_NAME, "contacts_view." + Contacts.DISPLAY_NAME)
-            .add(PhoneLookup.LAST_TIME_CONTACTED, "contacts_view." + Contacts.LAST_TIME_CONTACTED)
-            .add(PhoneLookup.TIMES_CONTACTED, "contacts_view." + Contacts.TIMES_CONTACTED)
+            .add(PhoneLookup.DISPLAY_NAME_ALTERNATIVE,
+                    "contacts_view." + Contacts.DISPLAY_NAME_ALTERNATIVE)
+            .add(PhoneLookup.PHONETIC_NAME, "contacts_view." + Contacts.PHONETIC_NAME)
+            .add(PhoneLookup.PHONETIC_NAME_STYLE, "contacts_view." + Contacts.PHONETIC_NAME_STYLE)
+            .add(PhoneLookup.SORT_KEY_PRIMARY, "contacts_view." + Contacts.SORT_KEY_PRIMARY)
+            .add(PhoneLookup.SORT_KEY_ALTERNATIVE, "contacts_view." + Contacts.SORT_KEY_ALTERNATIVE)
+            .add(PhoneLookup.LR_LAST_TIME_CONTACTED, "contacts_view." + Contacts.LR_LAST_TIME_CONTACTED)
+            .add(PhoneLookup.LR_TIMES_CONTACTED, "contacts_view." + Contacts.LR_TIMES_CONTACTED)
             .add(PhoneLookup.STARRED, "contacts_view." + Contacts.STARRED)
             .add(PhoneLookup.IN_DEFAULT_DIRECTORY, "contacts_view." + Contacts.IN_DEFAULT_DIRECTORY)
             .add(PhoneLookup.IN_VISIBLE_GROUP, "contacts_view." + Contacts.IN_VISIBLE_GROUP)
@@ -1519,8 +1529,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private LocaleSet mCurrentLocales;
     private int mContactsAccountCount;
 
-    private HandlerThread mBackgroundThread;
-    private Handler mBackgroundHandler;
+    private ContactsTaskScheduler mTaskScheduler;
 
     private long mLastPhotoCleanup = 0;
 
@@ -1539,6 +1548,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     public boolean onCreate() {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "onCreate user="
+                    + android.os.Process.myUserHandle().getIdentifier());
+        }
+
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
             Log.d(Constants.PERFORMANCE_TAG, "ContactsProvider2.onCreate start");
         }
@@ -1575,7 +1589,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mMetadataSyncEnabled = android.provider.Settings.Global.getInt(
                 getContext().getContentResolver(), Global.CONTACT_METADATA_SYNC_ENABLED, 0) == 1;
 
-        mContactsHelper = getDatabaseHelper(getContext());
+        mContactsHelper = getDatabaseHelper();
         mDbHelper.set(mContactsHelper);
 
         // Set up the DB helper for keeping transactions serialized.
@@ -1588,13 +1602,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mReadAccessLatch = new CountDownLatch(1);
         mWriteAccessLatch = new CountDownLatch(1);
 
-        mBackgroundThread = new HandlerThread("ContactsProviderWorker",
-                Process.THREAD_PRIORITY_BACKGROUND);
-        mBackgroundThread.start();
-        mBackgroundHandler = new Handler(mBackgroundThread.getLooper()) {
+        mTaskScheduler = new ContactsTaskScheduler(getClass().getSimpleName()) {
             @Override
-            public void handleMessage(Message msg) {
-                performBackgroundTask(msg.what, msg.obj);
+            public void onPerformTask(int taskId, Object arg) {
+                performBackgroundTask(taskId, arg);
             }
         };
 
@@ -1604,7 +1615,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         ProviderInfo profileInfo = new ProviderInfo();
         profileInfo.authority = ContactsContract.AUTHORITY;
         mProfileProvider.attachInfo(getContext(), profileInfo);
-        mProfileHelper = mProfileProvider.getDatabaseHelper(getContext());
+        mProfileHelper = mProfileProvider.getDatabaseHelper();
         mEnterprisePolicyGuard = new EnterprisePolicyGuard(getContext());
 
         // Initialize the pre-authorized URI duration.
@@ -1619,6 +1630,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         scheduleBackgroundTask(BACKGROUND_TASK_OPEN_WRITE_ACCESS);
         scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_PHOTOS);
         scheduleBackgroundTask(BACKGROUND_TASK_CLEAN_DELETE_LOG);
+
+        ContactsPackageMonitor.start(getContext());
 
         return true;
     }
@@ -1720,11 +1733,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     protected void scheduleBackgroundTask(int task) {
-        mBackgroundHandler.sendEmptyMessage(task);
+        scheduleBackgroundTask(task, null);
     }
 
     protected void scheduleBackgroundTask(int task, Object arg) {
-        mBackgroundHandler.sendMessage(mBackgroundHandler.obtainMessage(task, arg));
+        mTaskScheduler.scheduleTask(task, arg);
     }
 
     protected void performBackgroundTask(int task, Object arg) {
@@ -1767,6 +1780,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 break;
             }
 
+            case BACKGROUND_TASK_RESCAN_DIRECTORY: {
+                updateDirectoriesInBackground(true);
+                break;
+            }
+
             case BACKGROUND_TASK_UPDATE_LOCALE: {
                 updateLocaleInBackground();
                 break;
@@ -1792,13 +1810,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case BACKGROUND_TASK_UPDATE_PROVIDER_STATUS: {
                 updateProviderStatus();
-                break;
-            }
-
-            case BACKGROUND_TASK_UPDATE_DIRECTORIES: {
-                if (arg != null) {
-                    mContactDirectoryManager.onPackageChanged((String) arg);
-                }
                 break;
             }
 
@@ -2053,7 +2064,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     @Override
-    public ContactsDatabaseHelper getDatabaseHelper(final Context context) {
+    public ContactsDatabaseHelper newDatabaseHelper(final Context context) {
         return ContactsDatabaseHelper.getInstance(context);
     }
 
@@ -2233,6 +2244,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public Uri insert(Uri uri, ContentValues values) {
         waitForAccess(mWriteAccessLatch);
 
+        mContactsHelper.validateContentValues(getCallingPackage(), values);
+
         if (mapsToProfileDbWithInsertedValues(uri, values)) {
             switchToProfileMode();
             return mProfileProvider.insert(uri, values);
@@ -2245,6 +2258,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
 
+        mContactsHelper.validateContentValues(getCallingPackage(), values);
+        mContactsHelper.validateSql(getCallingPackage(), selection);
+
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
             return mProfileProvider.update(uri, values, selection, selectionArgs);
@@ -2256,6 +2272,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         waitForAccess(mWriteAccessLatch);
+
+        mContactsHelper.validateSql(getCallingPackage(), selection);
 
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
@@ -2327,7 +2345,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (uri.getQueryParameter(PREAUTHORIZED_URI_TOKEN) != null) {
             final long now = Clock.getInstance().currentTimeMillis();
             final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-            db.beginTransaction();
+            db.beginTransactionNonExclusive();
             try {
                 // First delete any pre-authorization URIs that are no longer valid. Unfortunately,
                 // this operation will grab a write lock for readonly queries. Since this only
@@ -2453,8 +2471,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         } else {
             switchToContactMode();
         }
-
-        mDbHelper.get().invalidateAllCache();
     }
 
     private void updateSearchIndexInTransaction() {
@@ -2608,7 +2624,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     protected void notifyChange(boolean syncToNetwork, boolean syncToMetadataNetwork) {
         getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null,
-                syncToNetwork);
+                syncToNetwork || syncToMetadataNetwork);
 
         getContext().getContentResolver().notifyChange(MetadataSync.METADATA_AUTHORITY_URI,
                 null, syncToMetadataNetwork);
@@ -2617,7 +2633,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     protected void setProviderStatus(int status) {
         if (mProviderStatus != status) {
             mProviderStatus = status;
-            getContext().getContentResolver().notifyChange(ProviderStatus.CONTENT_URI, null, false);
+            ContactsDatabaseHelper.notifyProviderStatusChange(getContext());
         }
     }
 
@@ -2866,6 +2882,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private long insertRawContact(
             Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter) {
 
+        inputValues = fixUpUsageColumnsForEdit(inputValues);
+
         // Create a shallow copy and initialize the contact ID to null.
         final ContentValues values = new ContentValues(inputValues);
         values.putNull(RawContacts.CONTACT_ID);
@@ -2891,8 +2909,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (needToUpdateMetadata) {
             mTransactionContext.get().markRawContactMetadataDirty(rawContactId,
                     /* isMetadataSyncAdapter =*/false);
-            mTransactionContext.get().markRawContactDirtyAndChanged(
-                    rawContactId, callerIsSyncAdapter);
         }
         // If the new raw contact is inserted by a sync adapter, mark mSyncToMetadataNetWork as true
         // so that it can trigger the metadata syncing from the server.
@@ -3988,12 +4004,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private int deleteDataUsage() {
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         db.execSQL("UPDATE " + Tables.RAW_CONTACTS + " SET " +
-                Contacts.TIMES_CONTACTED + "=0," +
-                Contacts.LAST_TIME_CONTACTED + "=NULL");
+                Contacts.RAW_TIMES_CONTACTED + "=0," +
+                Contacts.RAW_LAST_TIME_CONTACTED + "=NULL");
 
         db.execSQL("UPDATE " + Tables.CONTACTS + " SET " +
-                Contacts.TIMES_CONTACTED + "=0," +
-                Contacts.LAST_TIME_CONTACTED + "=NULL");
+                Contacts.RAW_TIMES_CONTACTED + "=0," +
+                Contacts.RAW_LAST_TIME_CONTACTED + "=NULL");
 
         db.delete(Tables.DATA_USAGE_STAT, null, null);
         return 1;
@@ -4051,9 +4067,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PROFILE: {
                 invalidateFastScrollingIndexCache();
                 count = updateContactOptions(values, selection, selectionArgs, callerIsSyncAdapter);
-                if (count > 0) {
-                    mSyncToNetwork |= !callerIsSyncAdapter;
-                }
                 break;
             }
 
@@ -4061,9 +4074,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 invalidateFastScrollingIndexCache();
                 count = updateContactOptions(db, ContentUris.parseId(uri), values,
                         callerIsSyncAdapter);
-                if (count > 0) {
-                    mSyncToNetwork |= !callerIsSyncAdapter;
-                }
                 break;
             }
 
@@ -4126,9 +4136,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 invalidateFastScrollingIndexCache();
                 selection = appendAccountIdToSelection(uri, selection);
                 count = updateRawContacts(values, selection, selectionArgs, callerIsSyncAdapter);
-                if (count > 0) {
-                    mSyncToNetwork |= !callerIsSyncAdapter;
-                }
                 break;
             }
 
@@ -4144,9 +4151,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     mSelectionArgs1[0] = String.valueOf(rawContactId);
                     count = updateRawContacts(values, RawContacts._ID + "=?", mSelectionArgs1,
                             callerIsSyncAdapter);
-                }
-                if (count > 0) {
-                    mSyncToNetwork |= !callerIsSyncAdapter;
                 }
                 break;
             }
@@ -4173,12 +4177,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case AGGREGATION_EXCEPTIONS: {
-                count = updateAggregationException(db, values, callerIsSyncAdapter,
+                count = updateAggregationException(db, values,
                         /* callerIsMetadataSyncAdapter =*/false);
                 invalidateFastScrollingIndexCache();
-                if (count > 0) {
-                    mSyncToNetwork |= !callerIsSyncAdapter;
-                }
                 break;
             }
 
@@ -4238,16 +4239,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case DIRECTORIES: {
+                mContactDirectoryManager.setDirectoriesForceUpdated(true);
                 scanPackagesByUid(Binder.getCallingUid());
                 count = 1;
                 break;
             }
 
             case DATA_USAGE_FEEDBACK_ID: {
-                count = handleDataUsageFeedback(uri, callerIsSyncAdapter) ? 1 : 0;
-                if (count > 0) {
-                    mSyncToNetwork |= !callerIsSyncAdapter;
-                }
+                count = handleDataUsageFeedback(uri) ? 1 : 0;
                 break;
             }
 
@@ -4516,10 +4515,39 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return count;
     }
 
+    /**
+     * Used for insert/update raw_contacts/contacts to adjust TIMES_CONTACTED and
+     * LAST_TIME_CONTACTED.
+     */
+    private ContentValues fixUpUsageColumnsForEdit(ContentValues cv) {
+        if (!cv.containsKey(Contacts.LR_LAST_TIME_CONTACTED)
+                && !cv.containsKey(Contacts.LR_TIMES_CONTACTED)) {
+            return cv;
+        }
+        final ContentValues ret = new ContentValues(cv);
+
+        ContactsDatabaseHelper.copyLongValue(
+                ret, Contacts.RAW_LAST_TIME_CONTACTED,
+                ret, Contacts.LR_LAST_TIME_CONTACTED);
+        ContactsDatabaseHelper.copyLongValue(
+                ret, Contacts.RAW_TIMES_CONTACTED,
+                ret, Contacts.LR_TIMES_CONTACTED);
+
+        ret.remove(Contacts.LR_LAST_TIME_CONTACTED);
+        ret.remove(Contacts.LR_TIMES_CONTACTED);
+        return ret;
+    }
+
     private int updateRawContact(SQLiteDatabase db, long rawContactId, ContentValues values,
             boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
         final String selection = RawContactsColumns.CONCRETE_ID + " = ?";
         mSelectionArgs1[0] = Long.toString(rawContactId);
+
+        values = fixUpUsageColumnsForEdit(values);
+
+        if (values.size() == 0) {
+            return 0; // Nothing to update; bail out.
+        }
 
         final ContactsDatabaseHelper dbHelper = mDbHelper.get();
 
@@ -4596,8 +4624,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (shouldMarkMetadataDirtyForRawContact(values)) {
                 mTransactionContext.get().markRawContactMetadataDirty(
                         rawContactId, callerIsMetadataSyncAdapter);
-                mTransactionContext.get().markRawContactDirtyAndChanged(
-                        rawContactId, callerIsSyncAdapter);
             }
             if (isBackupIdChanging) {
                 Cursor cursor = db.query(Tables.RAW_CONTACTS,
@@ -4755,6 +4781,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private int updateContactOptions(
             SQLiteDatabase db, long contactId, ContentValues inputValues, boolean callerIsSyncAdapter) {
 
+        inputValues = fixUpUsageColumnsForEdit(inputValues);
+
         final ContentValues values = new ContentValues();
         ContactsDatabaseHelper.copyStringValue(
                 values, RawContacts.CUSTOM_RINGTONE,
@@ -4763,11 +4791,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 values, RawContacts.SEND_TO_VOICEMAIL,
                 inputValues, Contacts.SEND_TO_VOICEMAIL);
         ContactsDatabaseHelper.copyLongValue(
-                values, RawContacts.LAST_TIME_CONTACTED,
-                inputValues, Contacts.LAST_TIME_CONTACTED);
+                values, RawContacts.RAW_LAST_TIME_CONTACTED,
+                inputValues, Contacts.RAW_LAST_TIME_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(
-                values, RawContacts.TIMES_CONTACTED,
-                inputValues, Contacts.TIMES_CONTACTED);
+                values, RawContacts.RAW_TIMES_CONTACTED,
+                inputValues, Contacts.RAW_TIMES_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(
                 values, RawContacts.STARRED,
                 inputValues, Contacts.STARRED);
@@ -4782,9 +4810,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final boolean hasStarredValue = flagExists(values, RawContacts.STARRED);
         final boolean hasPinnedValue = flagExists(values, RawContacts.PINNED);
         final boolean hasVoiceMailValue = flagExists(values, RawContacts.SEND_TO_VOICEMAIL);
-        if (hasStarredValue || hasPinnedValue || hasVoiceMailValue) {
+        if (hasStarredValue) {
             // Mark dirty when changing starred to trigger sync.
             values.put(RawContacts.DIRTY, 1);
+        }
+        if (mMetadataSyncEnabled && (hasStarredValue || hasPinnedValue || hasVoiceMailValue)) {
             // Mark dirty to trigger metadata syncing.
             values.put(RawContacts.METADATA_DIRTY, 1);
         }
@@ -4825,11 +4855,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 values, RawContacts.SEND_TO_VOICEMAIL,
                 inputValues, Contacts.SEND_TO_VOICEMAIL);
         ContactsDatabaseHelper.copyLongValue(
-                values, RawContacts.LAST_TIME_CONTACTED,
-                inputValues, Contacts.LAST_TIME_CONTACTED);
+                values, RawContacts.RAW_LAST_TIME_CONTACTED,
+                inputValues, Contacts.RAW_LAST_TIME_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(
-                values, RawContacts.TIMES_CONTACTED,
-                inputValues, Contacts.TIMES_CONTACTED);
+                values, RawContacts.RAW_TIMES_CONTACTED,
+                inputValues, Contacts.RAW_TIMES_CONTACTED);
         ContactsDatabaseHelper.copyLongValue(
                 values, RawContacts.STARRED,
                 inputValues, Contacts.STARRED);
@@ -4843,8 +4873,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         int rslt = db.update(Tables.CONTACTS, values, Contacts._ID + "=?",
                 mSelectionArgs1);
 
-        if (inputValues.containsKey(Contacts.LAST_TIME_CONTACTED) &&
-                !inputValues.containsKey(Contacts.TIMES_CONTACTED)) {
+        if (inputValues.containsKey(Contacts.RAW_LAST_TIME_CONTACTED) &&
+                !inputValues.containsKey(Contacts.RAW_TIMES_CONTACTED)) {
             db.execSQL(UPDATE_TIMES_CONTACTED_CONTACTS_TABLE, mSelectionArgs1);
             db.execSQL(UPDATE_TIMES_CONTACTED_RAWCONTACTS_TABLE, mSelectionArgs1);
         }
@@ -4852,7 +4882,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int updateAggregationException(SQLiteDatabase db, ContentValues values,
-            boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
+            boolean callerIsMetadataSyncAdapter) {
         Integer exceptionType = values.getAsInteger(AggregationExceptions.TYPE);
         Long rcId1 = values.getAsLong(AggregationExceptions.RAW_CONTACT_ID1);
         Long rcId2 = values.getAsLong(AggregationExceptions.RAW_CONTACT_ID2);
@@ -4896,11 +4926,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mTransactionContext.get().markRawContactMetadataDirty(rawContactId2,
                 callerIsMetadataSyncAdapter);
 
-        mTransactionContext.get().markRawContactDirtyAndChanged(rawContactId1,
-                callerIsSyncAdapter);
-        mTransactionContext.get().markRawContactDirtyAndChanged(rawContactId2,
-                callerIsSyncAdapter);
-
         // The return value is fake - we just confirm that we made a change, not count actual
         // rows changed.
         return 1;
@@ -4914,6 +4939,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public void onAccountsUpdated(Account[] accounts) {
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
+    }
+
+    public void scheduleRescanDirectories() {
+        scheduleBackgroundTask(BACKGROUND_TASK_RESCAN_DIRECTORY);
     }
 
     interface RawContactsBackupQuery {
@@ -5085,8 +5114,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     ContentValues usageStatsValues = new ContentValues();
                     usageStatsValues.put(DataUsageStatColumns.DATA_ID, dataId);
                     usageStatsValues.put(DataUsageStatColumns.USAGE_TYPE_INT, typeInt);
-                    usageStatsValues.put(DataUsageStatColumns.LAST_TIME_USED, lastTimeUsed);
-                    usageStatsValues.put(DataUsageStatColumns.TIMES_USED, timesUsed);
+                    usageStatsValues.put(DataUsageStatColumns.RAW_LAST_TIME_USED, lastTimeUsed);
+                    usageStatsValues.put(DataUsageStatColumns.RAW_TIMES_USED, timesUsed);
                     updateDataUsageStats(db, usageStatsValues);
                 }
             }
@@ -5108,8 +5137,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
             values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
             values.put(AggregationExceptions.TYPE, typeInt);
-            updateAggregationException(db, values, /*callerIsSyncAdapter=*/true,
-                    /* callerIsMetadataSyncAdapter =*/true);
+            updateAggregationException(db, values, /* callerIsMetadataSyncAdapter =*/true);
             if (rawContactId1 != rawContactId) {
                 aggregationRawContactIdsInServer.add(rawContactId1);
             }
@@ -5127,8 +5155,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId);
             values.put(AggregationExceptions.RAW_CONTACT_ID2, deleteRawContactId);
             values.put(AggregationExceptions.TYPE, AggregationExceptions.TYPE_AUTOMATIC);
-            updateAggregationException(db, values, /*callerIsSyncAdapter=*/true,
-                    /* callerIsMetadataSyncAdapter =*/true);
+            updateAggregationException(db, values, /* callerIsMetadataSyncAdapter =*/true);
         }
     }
 
@@ -5440,8 +5467,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
+    @WorkerThread
     public void onPackageChanged(String packageName) {
-        scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_DIRECTORIES, packageName);
+        mContactDirectoryManager.onPackageChanged(packageName);
     }
 
     private void removeStaleAccountRows(String table, String accountNameColumn,
@@ -5488,6 +5516,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
+
+        mContactsHelper.validateProjection(getCallingPackage(), projection);
+        mContactsHelper.validateSql(getCallingPackage(), selection);
+        mContactsHelper.validateSql(getCallingPackage(), sortOrder);
+
         waitForAccess(mReadAccessLatch);
 
         if (!isDirectoryParamValid(uri)) {
@@ -5505,12 +5538,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     cancellationSignal);
         }
         incrementStats(mQueryStats);
+        try {
+            // Otherwise proceed with a normal query against the contacts DB.
+            switchToContactMode();
 
-        // Otherwise proceed with a normal query against the contacts DB.
-        switchToContactMode();
-
-        return queryDirectoryIfNecessary(uri, projection, selection, selectionArgs, sortOrder,
-                cancellationSignal);
+            return queryDirectoryIfNecessary(uri, projection, selection, selectionArgs, sortOrder,
+                    cancellationSignal);
+        } finally {
+            finishOperation();
+        }
     }
 
     private boolean isCallerFromSameUser() {
@@ -5560,12 +5596,41 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return new MatrixCursor(projection);
     }
 
+    private String getRealCallerPackageName(Uri queryUri) {
+        // If called by another CP2, then the URI should contain the original package name.
+        if (calledByAnotherSelf()) {
+            final String passedPackage = queryUri.getQueryParameter(
+                    Directory.CALLER_PACKAGE_PARAM_KEY);
+            if (TextUtils.isEmpty(passedPackage)) {
+                Log.wtfStack(TAG,
+                        "Cross-profile query with no " + Directory.CALLER_PACKAGE_PARAM_KEY);
+                return "UNKNOWN";
+            }
+            return passedPackage;
+        } else {
+            // Otherwise, just return the real calling package name.
+            return getCallingPackage();
+        }
+    }
+
+    /**
+     * Returns true if called by a different user's CP2.
+     */
+    private boolean calledByAnotherSelf() {
+        // Note normally myUid is always different from the callerUid in the code path where
+        // this method is used, except during unit tests, where the caller is always the same
+        // process.
+        final int myUid = android.os.Process.myUid();
+        final int callerUid = Binder.getCallingUid();
+        return (myUid != callerUid) && UserHandle.isSameApp(myUid, callerUid);
+    }
+
     private Cursor queryDirectoryAuthority(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, String directory,
             final CancellationSignal cancellationSignal) {
         DirectoryInfo directoryInfo = getDirectoryAuthority(directory);
         if (directoryInfo == null) {
-            Log.e(TAG, "Invalid directory ID: " + uri);
+            Log.e(TAG, "Invalid directory ID");
             return null;
         }
 
@@ -5579,6 +5644,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (directoryInfo.accountType != null) {
             builder.appendQueryParameter(RawContacts.ACCOUNT_TYPE, directoryInfo.accountType);
         }
+        // Pass the caller package name.
+        // Note the request may come from the CP2 on the primary profile.  In that case, the
+        // real caller package is passed via the query paramter.  See getRealCallerPackageName().
+        builder.appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY,
+                getRealCallerPackageName(uri));
 
         String limit = getLimit(uri);
         if (limit != null) {
@@ -5593,13 +5663,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         Cursor cursor;
         try {
+            if (VERBOSE_LOGGING) {
+                Log.v(TAG, "Making directory query: uri=" + directoryUri +
+                        "  projection=" + Arrays.toString(projection) +
+                        "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
+                        "  order=[" + sortOrder + "]" +
+                        "  Caller=" + getCallingPackage() +
+                        "  User=" + UserUtils.getCurrentUserHandle(getContext()));
+            }
             cursor = getContext().getContentResolver().query(
                     directoryUri, projection, selection, selectionArgs, sortOrder);
             if (cursor == null) {
                 return null;
             }
         } catch (RuntimeException e) {
-            Log.w(TAG, "Directory query failed: uri=" + uri, e);
+            Log.w(TAG, "Directory query failed", e);
             return null;
         }
 
@@ -5631,7 +5709,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             throw new IllegalArgumentException(
                     "Authority " + localUri.getAuthority() + " is not a valid CP2 authority.");
         }
-        final Uri remoteUri = maybeAddUserId(localUri, corpUserId);
+        // Add the "user-id @" to the URI, and also pass the caller package name.
+        final Uri remoteUri = maybeAddUserId(localUri, corpUserId).buildUpon()
+                .appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY, getCallingPackage())
+                .build();
         Cursor cursor = getContext().getContentResolver().query(remoteUri, projection, selection,
                 selectionArgs, sortOrder, cancellationSignal);
         if (cursor == null) {
@@ -5930,8 +6011,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 if (projection != null) {
                     subProjection = new String[projection.length + 2];
                     System.arraycopy(projection, 0, subProjection, 0, projection.length);
-                    subProjection[projection.length + 0] = DataUsageStatColumns.TIMES_USED;
-                    subProjection[projection.length + 1] = DataUsageStatColumns.LAST_TIME_USED;
+                    subProjection[projection.length + 0] = DataUsageStatColumns.LR_TIMES_USED;
+                    subProjection[projection.length + 1] = DataUsageStatColumns.LR_LAST_TIME_USED;
                 }
 
                 // String that will store the query for starred contacts. For phone only queries,
@@ -5954,7 +6035,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     // it is included in the list of strequent numbers.
                     tableBuilder.append("(SELECT * FROM " + Views.DATA + " WHERE "
                             + Contacts.STARRED + "=1)" + " AS " + Tables.DATA
-                        + " LEFT OUTER JOIN " + Tables.DATA_USAGE_STAT
+                        + " LEFT OUTER JOIN " + Views.DATA_USAGE_LR
+                            + " AS " + Tables.DATA_USAGE_STAT
                             + " ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "="
                                 + DataColumns.CONCRETE_ID + " AND "
                             + DataUsageStatColumns.CONCRETE_USAGE_TYPE + "="
@@ -5987,7 +6069,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     // data rows (almost always it should be), and we don't want any phone
                     // numbers not used by the user. This way sqlite is able to drop a number of
                     // rows in view_data in the early stage of data lookup.
-                    tableBuilder.append(Tables.DATA_USAGE_STAT
+                    tableBuilder.append(Views.DATA_USAGE_LR + " AS " + Tables.DATA_USAGE_STAT
                             + " INNER JOIN " + Views.DATA + " " + Tables.DATA
                             + " ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "="
                                 + DataColumns.CONCRETE_ID + " AND "
@@ -6040,7 +6122,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                 // Phone numbers that were used more than 30 days ago are dropped from frequents
                 final String frequentQuery = "SELECT * FROM (" + frequentInnerQuery + ") WHERE " +
-                        TIME_SINCE_LAST_USED_SEC + "<" + LAST_TIME_USED_30_DAYS_SEC;
+                        LR_TIME_SINCE_LAST_USED_SEC + "<" + LAST_TIME_USED_30_DAYS_SEC;
                 final String starredQuery = "SELECT * FROM (" + starredInnerQuery + ")";
 
                 // Put them together
@@ -6992,8 +7074,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     providerStatus = ProviderStatus.STATUS_EMPTY;
                 }
                 return buildSingleRowResult(projection,
-                        new String[] {ProviderStatus.STATUS},
-                        new Object[] {providerStatus});
+                        new String[] {ProviderStatus.STATUS,
+                                ProviderStatus.DATABASE_CREATION_TIMESTAMP},
+                        new Object[] {providerStatus, mDbHelper.get().getDatabaseCreationTime()});
             }
 
             case DIRECTORIES : {
@@ -7960,7 +8043,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (includeDataUsageStat) {
             sb.append(" ON (" +
                     DbQueryUtils.concatenateClauses(
-                            DataUsageStatColumns.CONCRETE_TIMES_USED + " > 0",
+                            DataUsageStatColumns.CONCRETE_RAW_TIMES_USED + " > 0",
                             RawContacts.CONTACT_ID + "=" + Views.CONTACTS + "." + Contacts._ID) +
                     ")");
         }
@@ -8347,7 +8430,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private void appendDataUsageStatJoin(StringBuilder sb, int usageType, String dataIdColumn) {
         if (usageType != USAGE_TYPE_ALL) {
-            sb.append(" LEFT OUTER JOIN " + Tables.DATA_USAGE_STAT +
+            sb.append(" LEFT OUTER JOIN " + Views.DATA_USAGE_LR +
+                    " as " + Tables.DATA_USAGE_STAT +
                     " ON (" + DataUsageStatColumns.CONCRETE_DATA_ID + "=");
             sb.append(dataIdColumn);
             sb.append(" AND " + DataUsageStatColumns.CONCRETE_USAGE_TYPE + "=");
@@ -8357,13 +8441,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
             sb.append(
                     " LEFT OUTER JOIN " +
                         "(SELECT " +
-                            DataUsageStatColumns.CONCRETE_DATA_ID + " as STAT_DATA_ID, " +
-                            "SUM(" + DataUsageStatColumns.CONCRETE_TIMES_USED +
-                                ") as " + DataUsageStatColumns.TIMES_USED + ", " +
-                            "MAX(" + DataUsageStatColumns.CONCRETE_LAST_TIME_USED +
-                                ") as " + DataUsageStatColumns.LAST_TIME_USED +
-                        " FROM " + Tables.DATA_USAGE_STAT + " GROUP BY " +
-                            DataUsageStatColumns.CONCRETE_DATA_ID + ") as " + Tables.DATA_USAGE_STAT
+                            DataUsageStatColumns.DATA_ID + " as STAT_DATA_ID," +
+                            " SUM(ifnull(" + DataUsageStatColumns.RAW_TIMES_USED +
+                                ",0)) as " + DataUsageStatColumns.RAW_TIMES_USED + ", " +
+                            " MAX(ifnull(" + DataUsageStatColumns.RAW_LAST_TIME_USED +
+                                ",0)) as " + DataUsageStatColumns.RAW_LAST_TIME_USED + "," +
+
+                            // Note this is not ideal -- we should use "lowres(sum(LR_TIMES_USED))"
+                            // here, but for performance reasons we just do it simple.
+                            " SUM(ifnull(" + DataUsageStatColumns.LR_TIMES_USED +
+                                ",0)) as " + DataUsageStatColumns.LR_TIMES_USED + ", " +
+
+                            " MAX(ifnull(" + DataUsageStatColumns.LR_LAST_TIME_USED +
+                                ",0)) as " + DataUsageStatColumns.LR_LAST_TIME_USED +
+                        " FROM " + Views.DATA_USAGE_LR + " GROUP BY " +
+                            DataUsageStatColumns.DATA_ID + ") as " + Tables.DATA_USAGE_STAT
                     );
             sb.append(" ON (STAT_DATA_ID=");
             sb.append(dataIdColumn);
@@ -8793,6 +8885,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case PROFILE_AS_VCARD: {
+                if (!mode.equals("r")) {
+                    throw new IllegalArgumentException("Write is not supported.");
+                }
                 // When opening a contact as file, we pass back contents as a
                 // vCard-encoded stream. We build into a local buffer first,
                 // then pipe into MemoryFile once the exact size is known.
@@ -8802,6 +8897,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case CONTACTS_AS_VCARD: {
+                if (!mode.equals("r")) {
+                    throw new IllegalArgumentException("Write is not supported.");
+                }
                 // When opening a contact as file, we pass back contents as a
                 // vCard-encoded stream. We build into a local buffer first,
                 // then pipe into MemoryFile once the exact size is known.
@@ -8811,6 +8909,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case CONTACTS_AS_MULTI_VCARD: {
+                if (!mode.equals("r")) {
+                    throw new IllegalArgumentException("Write is not supported.");
+                }
                 final String lookupKeys = uri.getPathSegments().get(2);
                 final String[] lookupKeyList = lookupKeys.split(":");
                 final StringBuilder inBuilder = new StringBuilder();
@@ -8856,7 +8957,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             default:
                 throw new FileNotFoundException(
-                        mDbHelper.get().exceptionMessage("File does not exist", uri));
+                        mDbHelper.get().exceptionMessage(
+                                "Stream I/O not supported on this URI.", uri));
         }
     }
 
@@ -9274,6 +9376,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 return StreamItems.StreamItemPhotos.CONTENT_ITEM_TYPE;
             case STREAM_ITEMS_PHOTOS:
                 throw new UnsupportedOperationException("Not supported for write-only URI " + uri);
+            case PROVIDER_STATUS:
+                return ProviderStatus.CONTENT_TYPE;
             default:
                 waitForAccess(mReadAccessLatch);
                 return mLegacyApiSupport.getType(uri);
@@ -9678,7 +9782,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // just bump the aggregation algorithm version and let the provider start normally.
             try {
                 final SQLiteDatabase db =  mContactsHelper.getWritableDatabase();
-                db.beginTransaction();
+                db.beginTransactionNonExclusive();
                 try {
                     updateAggregationAlgorithmVersion();
                     db.setTransactionSuccessful();
@@ -9731,7 +9835,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         db.execSQL(UNDEMOTE_RAW_CONTACT, arg);
     }
 
-    private boolean handleDataUsageFeedback(Uri uri, boolean callerIsSyncAdapter) {
+    private boolean handleDataUsageFeedback(Uri uri) {
         final long currentTimeMillis = Clock.getInstance().currentTimeMillis();
         final String usageType = uri.getQueryParameter(DataUsageFeedback.USAGE_TYPE);
         final String[] ids = uri.getLastPathSegment().trim().split(",");
@@ -9770,7 +9874,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 final long rid =   cursor.getLong(0);
                 mTransactionContext.get().markRawContactMetadataDirty(rid,
                         /* isMetadataSyncAdapter =*/false);
-                mTransactionContext.get().markRawContactDirtyAndChanged(rid, callerIsSyncAdapter);
                 rawContactIds.add(rid);
             }
         } finally {
@@ -9781,15 +9884,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final String rids = TextUtils.join(",", rawContactIds);
 
         db.execSQL("UPDATE " + Tables.RAW_CONTACTS +
-                " SET " + RawContacts.LAST_TIME_CONTACTED + "=?" +
-                "," + RawContacts.TIMES_CONTACTED + "=" +
-                    "ifnull(" + RawContacts.TIMES_CONTACTED + ",0) + 1" +
+                " SET " + RawContacts.RAW_LAST_TIME_CONTACTED + "=?" +
+                "," + RawContacts.RAW_TIMES_CONTACTED + "=" +
+                    "ifnull(" + RawContacts.RAW_TIMES_CONTACTED + ",0) + 1" +
                 " WHERE " + RawContacts._ID + " IN (" + rids + ")"
                 , mSelectionArgs1);
         db.execSQL("UPDATE " + Tables.CONTACTS +
-                " SET " + Contacts.LAST_TIME_CONTACTED + "=?1" +
-                "," + Contacts.TIMES_CONTACTED + "=" +
-                    "ifnull(" + Contacts.TIMES_CONTACTED + ",0) + 1" +
+                " SET " + Contacts.RAW_LAST_TIME_CONTACTED + "=?1" +
+                "," + Contacts.RAW_TIMES_CONTACTED + "=" +
+                    "ifnull(" + Contacts.RAW_TIMES_CONTACTED + ",0) + 1" +
                 "," + Contacts.CONTACT_LAST_UPDATED_TIMESTAMP + "=?1" +
                 " WHERE " + Contacts._ID + " IN (SELECT " + RawContacts.CONTACT_ID +
                     " FROM " + Tables.RAW_CONTACTS +
@@ -9836,9 +9939,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     mSelectionArgs2[1] = String.valueOf(id);
 
                     db.execSQL("UPDATE " + Tables.DATA_USAGE_STAT +
-                            " SET " + DataUsageStatColumns.TIMES_USED + "=" +
-                                "ifnull(" + DataUsageStatColumns.TIMES_USED +",0)+1" +
-                            "," + DataUsageStatColumns.LAST_TIME_USED + "=?" +
+                            " SET " + DataUsageStatColumns.RAW_TIMES_USED + "=" +
+                                "ifnull(" + DataUsageStatColumns.RAW_TIMES_USED +",0)+1" +
+                            "," + DataUsageStatColumns.RAW_LAST_TIME_USED + "=?" +
                             " WHERE " + DataUsageStatColumns._ID + "=?",
                             mSelectionArgs2);
                 } else {
@@ -9849,8 +9952,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     db.execSQL("INSERT INTO " + Tables.DATA_USAGE_STAT +
                             "(" + DataUsageStatColumns.DATA_ID +
                             "," + DataUsageStatColumns.USAGE_TYPE_INT +
-                            "," + DataUsageStatColumns.TIMES_USED +
-                            "," + DataUsageStatColumns.LAST_TIME_USED +
+                            "," + DataUsageStatColumns.RAW_TIMES_USED +
+                            "," + DataUsageStatColumns.RAW_LAST_TIME_USED +
                             ") VALUES (?,?,?,?)",
                             mSelectionArgs4);
                 }
@@ -9863,14 +9966,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Update {@link Tables#DATA_USAGE_STAT}.
+     * Directly update {@link Tables#DATA_USAGE_STAT}; used for metadata sync.
      * Update or insert usageType, lastTimeUsed, and timesUsed for specific dataId.
      */
     private void updateDataUsageStats(SQLiteDatabase db, ContentValues values) {
         final String dataId = values.getAsString(DataUsageStatColumns.DATA_ID);
         final String type = values.getAsString(DataUsageStatColumns.USAGE_TYPE_INT);
-        final String lastTimeUsed = values.getAsString(DataUsageStatColumns.LAST_TIME_USED);
-        final String timesUsed = values.getAsString(DataUsageStatColumns.TIMES_USED);
+        final String lastTimeUsed = values.getAsString(DataUsageStatColumns.RAW_LAST_TIME_USED);
+        final String timesUsed = values.getAsString(DataUsageStatColumns.RAW_TIMES_USED);
 
         mSelectionArgs2[0] = dataId;
         mSelectionArgs2[1] = type;
@@ -9886,8 +9989,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 mSelectionArgs3[1] = timesUsed;
                 mSelectionArgs3[2] = String.valueOf(id);
                 db.execSQL("UPDATE " + Tables.DATA_USAGE_STAT +
-                        " SET " + DataUsageStatColumns.LAST_TIME_USED + "=?" +
-                        "," + DataUsageStatColumns.TIMES_USED + "=?" +
+                        " SET " + DataUsageStatColumns.RAW_LAST_TIME_USED + "=?" +
+                        "," + DataUsageStatColumns.RAW_TIMES_USED + "=?" +
                         " WHERE " + DataUsageStatColumns._ID + "=?",
                         mSelectionArgs3);
             } else {
@@ -9898,8 +10001,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 db.execSQL("INSERT INTO " + Tables.DATA_USAGE_STAT +
                         "(" + DataUsageStatColumns.DATA_ID +
                         "," + DataUsageStatColumns.USAGE_TYPE_INT +
-                        "," + DataUsageStatColumns.TIMES_USED +
-                        "," + DataUsageStatColumns.LAST_TIME_USED +
+                        "," + DataUsageStatColumns.RAW_TIMES_USED +
+                        "," + DataUsageStatColumns.RAW_LAST_TIME_USED +
                         ") VALUES (?,?,?,?)",
                         mSelectionArgs4);
             }
@@ -10119,5 +10222,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @NeededForTesting
     public void switchToProfileModeForTest() {
         switchToProfileMode();
+    }
+
+    @Override
+    public void shutdown() {
+        mTaskScheduler.shutdownForTest();
+    }
+
+    @VisibleForTesting
+    public ContactsDatabaseHelper getContactsDatabaseHelperForTest() {
+        return mContactsHelper;
+    }
+
+    @VisibleForTesting
+    public ProfileProvider getProfileProviderForTest() {
+        return mProfileProvider;
     }
 }

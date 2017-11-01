@@ -123,6 +123,9 @@ public class ProfileAwareUriMatcher extends UriMatcher {
             }
         } else if (PROFILE_URI_LOOKUP_KEY_MAP.containsKey(match)) {
             int lookupKeySegment = PROFILE_URI_LOOKUP_KEY_MAP.get(match);
+            if (lookupKeySegment >= uri.getPathSegments().size()) {
+                return false;
+            }
             String lookupKey = uri.getPathSegments().get(lookupKeySegment);
             if (ContactLookupKey.PROFILE_LOOKUP_KEY.equals(lookupKey)) {
                 return true;

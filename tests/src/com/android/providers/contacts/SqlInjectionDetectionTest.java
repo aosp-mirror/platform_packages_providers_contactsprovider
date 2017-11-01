@@ -17,14 +17,15 @@
 package com.android.providers.contacts;
 
 import static com.android.providers.contacts.EvenMoreAsserts.assertThrows;
+import static com.android.providers.contacts.TestUtils.cv;
 
 import android.database.Cursor;
-import android.database.sqlite.SQLiteException;
 import android.net.Uri;
 import android.net.Uri.Builder;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.Contacts;
+import android.provider.ContactsContract.Data;
 import android.test.suitebuilder.annotation.MediumTest;
 
 import com.android.providers.contacts.testutil.RawContactUtil;
@@ -42,36 +43,54 @@ import com.android.providers.contacts.testutil.RawContactUtil;
 public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
     private static final String[] PHONE_ID_PROJECTION = new String[] { Phone._ID };
 
-    public void testPhoneQueryValid() {
-        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot", "Tamale");
-        insertPhoneNumber(rawContactId, "555-123-4567");
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+    }
 
+    public void testQueryValid() {
         assertQueryValid(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
                 Phone.NUMBER + "='555-123-4567'", null);
+
+        // The following tables are whitelisted.
+        assertQueryValid(Data.CONTENT_URI, null,
+                "data._id in default_directory", null);
     }
 
     public void testPhoneQueryBadProjection() {
-        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot", "Tamale");
-        insertPhoneNumber(rawContactId, "555-123-4567");
-
-        assertQueryThrows(IllegalArgumentException.class, Phone.CONTENT_URI,
+        assertQueryThrows(Phone.CONTENT_URI,
                 new String[] { "0 UNION SELECT _id FROM view_data--" }, null, null);
+
+        // Invalid column names should be detected too.
+        assertQueryThrows(Phone.CONTENT_URI, new String[] { "a" }, null, null);
+        assertQueryThrows(Phone.CONTENT_URI, new String[] { " _id" }, null, null);
+
+        // This is still invalid because we only allow exact column names in projections.
+        assertQueryThrows(Phone.CONTENT_URI, new String[] { "[_id]" }, null, null);
     }
 
     public void testPhoneQueryBadSelection() {
-        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot", "Tamale");
-        insertPhoneNumber(rawContactId, "555-123-4567");
-
-        assertQueryThrows(SQLiteException.class, Phone.CONTENT_URI, PHONE_ID_PROJECTION,
+        assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
                 "0=1) UNION SELECT _id FROM view_data--", null);
+        assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION, ";delete from contacts", null);
+        if (ContactsDatabaseHelper.DISALLOW_SUB_QUERIES) {
+            assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
+                    "_id in data_usage_stat", null);
+            assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
+                    "_id in (select _id from default_directory)", null);
+        }
     }
 
     public void testPhoneQueryBadSortOrder() {
-        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot", "Tamale");
-        insertPhoneNumber(rawContactId, "555-123-4567");
-
-        assertQueryThrows(SQLiteException.class, Phone.CONTENT_URI,
+        assertQueryThrows(Phone.CONTENT_URI,
                 PHONE_ID_PROJECTION, null, "_id UNION SELECT _id FROM view_data--");
+        assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION, null, ";delete from contacts");
+        if (ContactsDatabaseHelper.DISALLOW_SUB_QUERIES) {
+            assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION, null,
+                    "_id in data_usage_stat");
+            assertQueryThrows(Phone.CONTENT_URI, PHONE_ID_PROJECTION,
+                    null, "exists (select _id from default_directory)");
+        }
     }
 
     public void testPhoneQueryBadLimit() {
@@ -100,14 +119,46 @@ public class SqlInjectionDetectionTest extends BaseContactsProvider2Test {
         c.close();
     }
 
-    private <T extends Exception> void assertQueryThrows(Class<T> exception, final Uri uri,
+    private <T extends Exception> void assertQueryThrows(final Uri uri,
             final String[] projection, final String selection, final String sortOrder) {
-        assertThrows(exception, new Runnable() {
-            @Override
-            public void run() {
+        assertThrows(IllegalArgumentException.class, () -> {
                 final Cursor c = mResolver.query(uri, projection, selection, null, sortOrder);
                 c.close();
-            }
         });
+    }
+
+    public void testBadDelete() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            mResolver.delete(Contacts.CONTENT_URI, ";delete from contacts;--", null);
+        });
+        if (ContactsDatabaseHelper.DISALLOW_SUB_QUERIES) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                mResolver.delete(Contacts.CONTENT_URI, "_id in data_usage_stat", null);
+            });
+        }
+    }
+
+    public void testBadUpdate() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            mResolver.update(Data.CONTENT_URI, cv(), ";delete from contacts;--", null);
+        });
+        if (ContactsDatabaseHelper.DISALLOW_SUB_QUERIES) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                mResolver.update(Data.CONTENT_URI, cv(), "_id in data_usage_stat", null);
+            });
+            assertThrows(IllegalArgumentException.class, () -> {
+                mResolver.update(Data.CONTENT_URI, cv("_id/**/", 1), null, null);
+            });
+
+            mResolver.update(Data.CONTENT_URI, cv("[data1]", 1), null, null);
+        }
+    }
+
+    public void testBadInsert() {
+        if (ContactsDatabaseHelper.DISALLOW_SUB_QUERIES) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                mResolver.insert(Data.CONTENT_URI, cv("_id/**/", 1));
+            });
+        }
     }
 }

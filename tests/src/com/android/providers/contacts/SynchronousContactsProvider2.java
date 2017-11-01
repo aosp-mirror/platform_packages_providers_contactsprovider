@@ -34,7 +34,6 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
 
     private static Boolean sDataWiped = false;
     private static ContactsDatabaseHelper sDbHelper;
-    private boolean mDataWipeEnabled = true;
     private Account mAccount;
     private boolean mNetworkNotified;
     private boolean mMetadataNetworkNotified;
@@ -42,9 +41,10 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     private boolean mIsVoiceCapable = true;
 
     @Override
-    public ContactsDatabaseHelper getDatabaseHelper(final Context context) {
+    public ContactsDatabaseHelper newDatabaseHelper(final Context context) {
         if (sDbHelper == null) {
-            sDbHelper = ContactsDatabaseHelper.getNewInstanceForTest(context);
+            sDbHelper = ContactsDatabaseHelper.getNewInstanceForTest(context,
+                    TestUtils.getContactsDatabaseFilename(getContext()));
         }
         return sDbHelper;
     }
@@ -54,8 +54,8 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
         return new SynchronousProfileProvider(this);
     }
 
-    public void setDataWipeEnabled(boolean flag) {
-        mDataWipeEnabled = flag;
+    public ProfileDatabaseHelper getProfileDatabaseHelper() {
+        return getProfileProviderForTest().getDatabaseHelper();
     }
 
     @Override
@@ -100,12 +100,10 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     @Override
     public boolean onCreate() {
         boolean created = super.onCreate();
-        if (mDataWipeEnabled) {
-            synchronized (sDataWiped) {
-                if (!sDataWiped) {
-                    sDataWiped = true;
-                    wipeData();
-                }
+        synchronized (sDataWiped) {
+            if (!sDataWiped) {
+                sDataWiped = true;
+                wipeData();
             }
         }
         return created;
@@ -192,7 +190,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     public void prepareForFullAggregation(int maxContact) {
-        SQLiteDatabase db = getDatabaseHelper(getContext()).getWritableDatabase();
+        SQLiteDatabase db = getDatabaseHelper().getWritableDatabase();
         db.execSQL("UPDATE raw_contacts SET aggregation_mode=0,aggregation_needed=1;");
         long rowId =
             db.compileStatement("SELECT _id FROM raw_contacts LIMIT 1 OFFSET " + maxContact)
@@ -201,12 +199,12 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     public long getRawContactCount() {
-        SQLiteDatabase db = getDatabaseHelper(getContext()).getReadableDatabase();
+        SQLiteDatabase db = getDatabaseHelper().getReadableDatabase();
         return db.compileStatement("SELECT COUNT(*) FROM raw_contacts").simpleQueryForLong();
     }
 
     public long getContactCount() {
-        SQLiteDatabase db = getDatabaseHelper(getContext()).getReadableDatabase();
+        SQLiteDatabase db = getDatabaseHelper().getReadableDatabase();
         return db.compileStatement("SELECT COUNT(*) FROM contacts").simpleQueryForLong();
     }
 
@@ -214,12 +212,12 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     public void wipeData() {
         Log.i(TAG, "wipeData");
         super.wipeData();
-        SQLiteDatabase db = getDatabaseHelper(getContext()).getWritableDatabase();
+        SQLiteDatabase db = getDatabaseHelper().getWritableDatabase();
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('raw_contacts', 42)");
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('contacts', 2009)");
         db.execSQL("replace into SQLITE_SEQUENCE (name,seq) values('data', 777)");
 
-        getContactDirectoryManagerForTest().scanAllPackages();
+        getContactDirectoryManagerForTest().scanAllPackages(/* rescan= */ true);
     }
 
     // Flags to remember which transaction callback has been called for which mode.

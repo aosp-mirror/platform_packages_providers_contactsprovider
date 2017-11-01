@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 import static com.android.providers.contacts.TestUtils.cv;
+import static com.android.providers.contacts.TestUtils.dumpCursor;
 
 import android.accounts.Account;
 import android.content.ContentProvider;
@@ -31,6 +32,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.provider.BaseColumns;
 import android.provider.CallLog;
+import android.provider.CallLog.Calls;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Email;
@@ -126,7 +128,8 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     protected void setUp() throws Exception {
         super.setUp();
 
-        mActor = new ContactsActor(getContext(), PACKAGE_GREY, getProviderClass(), getAuthority());
+        mActor = new ContactsActor(
+                getContext(), getContextPackageName(), getProviderClass(), getAuthority());
         mResolver = mActor.resolver;
         if (mActor.provider instanceof SynchronousContactsProvider2) {
             getContactsProvider().wipeData();
@@ -141,8 +144,13 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
                 "android.permission.WRITE_SOCIAL_STREAM");
     }
 
+    protected String getContextPackageName() {
+        return PACKAGE_GREY;
+    }
+
     @Override
     protected void tearDown() throws Exception {
+        mActor.shutdown();
         sMockClock.uninstall();
         super.tearDown();
     }
@@ -1094,6 +1102,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
             assertCursorValues(c, values);
         } catch (Error e) {
             TestUtils.dumpCursor(c);
+
+            // Dump with no selection.
+            TestUtils.dumpUri(mResolver, uri);
             throw e;
         } finally {
             c.close();
@@ -1157,7 +1168,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         }
     }
 
-    private void assertCursorValuesOrderly(Cursor cursor, ContentValues... expectedValues) {
+    public static void assertCursorValuesOrderly(Cursor cursor, ContentValues... expectedValues) {
         StringBuilder message = new StringBuilder();
         cursor.moveToPosition(-1);
         for (ContentValues v : expectedValues) {
@@ -1187,7 +1198,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         return true;
     }
 
-    private boolean equalsWithExpectedValues(Cursor cursor, ContentValues expectedValues,
+    private static boolean equalsWithExpectedValues(Cursor cursor, ContentValues expectedValues,
             StringBuilder msgBuffer) {
         for (String column : expectedValues.keySet()) {
             int index = cursor.getColumnIndex(column);
@@ -1228,6 +1239,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         final Cursor cursor = mResolver.query(uri, DATA_USAGE_PROJECTION, null, null,
                 null);
         try {
+            dumpCursor(cursor);
             assertCursorHasAnyRecordMatch(cursor, cv(Data.DATA1, data1, Data.TIMES_USED, timesUsed,
                     Data.LAST_TIME_USED, lastTimeUsed));
         } finally {
@@ -1355,17 +1367,33 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         }
     }
 
-    protected void assertLastModified(Uri uri) {
-        assertLastModified(uri, System.currentTimeMillis(), 1000);
-    }
-
-    protected void assertLastModified(Uri uri, long time, long tolerance) {
+    protected void assertLastModified(Uri uri, long time) {
         Cursor c = mResolver.query(uri, null, null, null, null);
         c.moveToFirst();
         int index = c.getColumnIndex(CallLog.Calls.LAST_MODIFIED);
         long timeStamp = c.getLong(index);
-        assertTrue(Math.abs(time - timeStamp) < tolerance);
+        assertEquals(timeStamp, time);
     }
+
+    protected void setTimeForTest(Long time) {
+        Uri uri = Calls.CONTENT_URI.buildUpon()
+                .appendQueryParameter(CallLogProvider.PARAM_KEY_QUERY_FOR_TESTING, "1")
+                .appendQueryParameter(CallLogProvider.PARAM_KEY_SET_TIME_FOR_TESTING,
+                        time == null ? "null" : time.toString())
+                .build();
+        mResolver.query(uri, null, null, null, null);
+    }
+
+    protected Uri insertRawContact(ContentValues values) {
+        return TestUtils.insertRawContact(mResolver,
+                getContactsProvider().getDatabaseHelper(), values);
+    }
+
+    protected Uri insertProfileRawContact(ContentValues values) {
+        return TestUtils.insertProfileRawContact(mResolver,
+                getContactsProvider().getProfileProviderForTest().getDatabaseHelper(), values);
+    }
+
     /**
      * A contact in the database, and the attributes used to create it.  Construct using
      * {@link GoldenContactBuilder#build()}.

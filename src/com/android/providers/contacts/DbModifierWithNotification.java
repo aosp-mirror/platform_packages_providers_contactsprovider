@@ -37,9 +37,11 @@ import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
 import android.util.Log;
+
 import com.android.common.io.MoreCloseables;
 import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
 import com.android.providers.contacts.util.DbQueryUtils;
+
 import com.google.android.collect.Lists;
 import com.google.common.collect.Iterables;
 import java.util.ArrayList;
@@ -63,7 +65,8 @@ public class DbModifierWithNotification implements DatabaseModifier {
     private static final int SOURCE_PACKAGE_COLUMN_INDEX = 0;
     private static final String NON_NULL_SOURCE_PACKAGE_SELECTION =
             VoicemailContract.SOURCE_PACKAGE_FIELD + " IS NOT NULL";
-
+    private static final String NOT_DELETED_SELECTION =
+            Voicemails.DELETED + " == 0";
     private final String mTableName;
     private final SQLiteDatabase mDb;
     private final InsertHelper mInsertHelper;
@@ -98,7 +101,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
     public long insert(String table, String nullColumnHack, ContentValues values) {
         Set<String> packagesModified = getModifiedPackages(values);
         if (mIsCallsTable) {
-            values.put(Calls.LAST_MODIFIED, System.currentTimeMillis());
+            values.put(Calls.LAST_MODIFIED, getTimeMillis());
         }
         long rowId = mDb.insert(table, nullColumnHack, values);
         if (rowId > 0 && packagesModified.size() != 0) {
@@ -115,7 +118,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
     public long insert(ContentValues values) {
         Set<String> packagesModified = getModifiedPackages(values);
         if (mIsCallsTable) {
-            values.put(Calls.LAST_MODIFIED, System.currentTimeMillis());
+            values.put(Calls.LAST_MODIFIED, getTimeMillis());
         }
         long rowId = mInsertHelper.insert(values);
         if (rowId > 0 && packagesModified.size() != 0) {
@@ -131,7 +134,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
     private void notifyCallLogChange() {
         mContext.getContentResolver().notifyChange(Calls.CONTENT_URI, null, false);
 
-        Intent intent = new Intent("android.intent.action.CALL_LOG_CHANGE");
+        Intent intent = new Intent("com.android.internal.action.CALL_LOG_CHANGE");
         intent.setComponent(new ComponentName("com.android.calllogbackup",
                 "com.android.calllogbackup.CallLogChangeReceiver"));
 
@@ -160,14 +163,25 @@ public class DbModifierWithNotification implements DatabaseModifier {
 
         boolean hasMarkedRead = false;
         if (mIsCallsTable) {
-            values.put(Calls.LAST_MODIFIED, System.currentTimeMillis());
-
+            if (values.containsKey(Voicemails.DELETED)
+                    && !values.getAsBoolean(Voicemails.DELETED)) {
+                values.put(Calls.LAST_MODIFIED, getTimeMillis());
+            } else {
+                updateLastModified(table, whereClause, whereArgs);
+            }
             if (isVoicemail) {
                 // If a calling package is modifying its own entries, it means that the change came
                 // from the server and thus is synced or "clean". Otherwise, it means that a local
                 // change is being made to the database, so the entries should be marked as "dirty"
                 // so that the corresponding sync adapter knows they need to be synced.
-                final int isDirty = isSelfModifyingOrInternal(packagesModified) ? 0 : 1;
+                int isDirty;
+                Integer callerSetDirty = values.getAsInteger(Voicemails.DIRTY);
+                if (callerSetDirty != null) {
+                    // Respect the calling package if it sets the dirty flag
+                    isDirty = callerSetDirty == 0 ? 0 : 1;
+                } else {
+                    isDirty = isSelfModifyingOrInternal(packagesModified) ? 0 : 1;
+                }
                 values.put(VoicemailContract.Voicemails.DIRTY, isDirty);
 
                 if (isDirty == 0 && values.containsKey(Calls.IS_READ) && getAsBoolean(values,
@@ -199,6 +213,15 @@ public class DbModifierWithNotification implements DatabaseModifier {
         return count;
     }
 
+    private void updateLastModified(String table, String whereClause, String[] whereArgs) {
+        ContentValues values = new ContentValues();
+        values.put(Calls.LAST_MODIFIED, getTimeMillis());
+
+        mDb.update(table, values,
+                DbQueryUtils.concatenateClauses(NOT_DELETED_SELECTION, whereClause),
+                whereArgs);
+    }
+
     @Override
     public int delete(String table, String whereClause, String[] whereArgs) {
         Set<String> packagesModified = getModifiedPackages(whereClause, whereArgs);
@@ -217,7 +240,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
             ContentValues values = new ContentValues();
             values.put(VoicemailContract.Voicemails.DIRTY, 1);
             values.put(VoicemailContract.Voicemails.DELETED, 1);
-            values.put(VoicemailContract.Voicemails.LAST_MODIFIED, System.currentTimeMillis());
+            values.put(VoicemailContract.Voicemails.LAST_MODIFIED, getTimeMillis());
             count = mDb.update(table, values, whereClause, whereArgs);
         } else {
             count = mDb.delete(table, whereClause, whereArgs);
@@ -362,5 +385,12 @@ public class DbModifierWithNotification implements DatabaseModifier {
             }
         }
         return values.getAsBoolean(key);
+    }
+
+    private long getTimeMillis() {
+        if (CallLogProvider.getTimeForTestMillis() == null) {
+            return System.currentTimeMillis();
+        }
+        return CallLogProvider.getTimeForTestMillis();
     }
 }

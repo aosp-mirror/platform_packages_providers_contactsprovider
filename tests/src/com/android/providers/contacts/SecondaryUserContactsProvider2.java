@@ -18,27 +18,22 @@ package com.android.providers.contacts;
 import android.content.Context;
 
 /**
- * A subclass of {@link SynchronousContactsProvider2} that doesn't reuse the database helper.
+ * A subclass of {@link SynchronousContactsProvider2} that uses a different DB for secondary users.
  */
-public class StandaloneContactsProvider2 extends SynchronousContactsProvider2 {
-    private static ContactsDatabaseHelper mDbHelper;
+public class SecondaryUserContactsProvider2 extends SynchronousContactsProvider2 {
+    private final String mDbSuffix;
+    private ContactsDatabaseHelper mDbHelper;
 
-    public StandaloneContactsProvider2() {
-        // No need to wipe data for this instance since it doesn't reuse the db helper.
-        setDataWipeEnabled(false);
+    public SecondaryUserContactsProvider2(int userId) {
+        mDbSuffix = "-u" + userId;
     }
 
     @Override
-    public ContactsDatabaseHelper getDatabaseHelper(final Context context) {
+    public ContactsDatabaseHelper newDatabaseHelper(final Context context) {
         if (mDbHelper == null) {
-            mDbHelper = ContactsDatabaseHelper.getNewInstanceForTest(context);
+            mDbHelper = ContactsDatabaseHelper.getNewInstanceForTest(context,
+                    TestUtils.getContactsDatabaseFilename(context, mDbSuffix));
         }
         return mDbHelper;
-    }
-
-    @Override
-    public void setDataWipeEnabled(boolean flag) {
-        // No need to wipe data for this instance since it doesn't reuse the db helper.
-        super.setDataWipeEnabled(false);
     }
 }

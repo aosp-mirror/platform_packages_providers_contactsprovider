@@ -94,6 +94,16 @@ public class DBQueryUtilsTest extends TestCase {
         assertEquals("\\%test\\%", sb.toString());
     }
 
+    public void testEscapeLikeValuesEscapesEscapes() {
+        StringBuilder sb = new StringBuilder();
+        escapeLikeValue(sb, "my\\test\\string", '\\');
+        assertEquals("my\\\\test\\\\string", sb.toString());
+
+        sb = new StringBuilder();
+        escapeLikeValue(sb, "\\test\\", '\\');
+        assertEquals("\\\\test\\\\", sb.toString());
+    }
+
     public void testEscapeLikeValuesNoChanges() {
         StringBuilder sb = new StringBuilder();
         escapeLikeValue(sb, "my test string", '\\');
