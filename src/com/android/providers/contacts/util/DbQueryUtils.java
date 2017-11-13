@@ -19,7 +19,7 @@ import android.content.ContentValues;
 import android.database.DatabaseUtils;
 import android.text.TextUtils;
 
-import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -88,13 +88,13 @@ public class DbQueryUtils {
      * @throws IllegalArgumentException if any value in values is not found in
      * the projection map.
      */
-    public static void checkForSupportedColumns(HashMap<String, String> projectionMap,
+    public static void checkForSupportedColumns(Map<String, String> projectionMap,
             ContentValues values) {
         checkForSupportedColumns(projectionMap.keySet(), values, "Is invalid.");
     }
 
     /**
-     * @see #checkForSupportedColumns(HashMap, ContentValues)
+     * @see #checkForSupportedColumns(Map, ContentValues)
      */
     public static void checkForSupportedColumns(Set<String> allowedColumns, ContentValues values,
             String msgSuffix) {

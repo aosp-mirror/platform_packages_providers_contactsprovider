@@ -17,6 +17,7 @@
 package com.android.providers.contacts.aggregation;
 
 import android.accounts.Account;
+import android.app.ActivityManager;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentUris;
@@ -396,7 +397,13 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         DataUtil.insertStructuredName(mResolver, rawContactId2, "William", "Gore");
 
-        assertAggregated(rawContactId1, rawContactId2, "William Gore");
+
+        if (ActivityManager.isLowRamDeviceStatic()) {
+            // No common nickname DB on lowram devices.
+            assertNotAggregated(rawContactId1, rawContactId2);
+        } else {
+            assertAggregated(rawContactId1, rawContactId2, "William Gore");
+        }
     }
 
     public void testAggregationByCommonNicknameOnly() {
@@ -406,7 +413,12 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         DataUtil.insertStructuredName(mResolver, rawContactId2, "Larry", null);
 
-        assertAggregated(rawContactId1, rawContactId2, "Lawrence");
+        if (ActivityManager.isLowRamDeviceStatic()) {
+            // No common nickname DB on lowram devices.
+            assertNotAggregated(rawContactId1, rawContactId2);
+        } else {
+            assertAggregated(rawContactId1, rawContactId2, "Lawrence");
+        }
     }
 
     public void testAggregationByNicknameNoStructuredName() {
