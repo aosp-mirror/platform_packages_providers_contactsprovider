@@ -16,7 +16,6 @@
 
 package com.android.providers.contacts;
 
-import static com.android.providers.contacts.TestUtils.createDatabaseSnapshot;
 import static com.android.providers.contacts.TestUtils.cv;
 import static com.android.providers.contacts.TestUtils.executeSqlFromAssetFile;
 
@@ -66,14 +65,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumn
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.testutil.TestUtil;
 import com.android.providers.contacts.util.PropertyUtils;
-
-import junit.framework.AssertionFailedError;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.HashMap;
 
 /**
  * Unit tests for database create/upgrade operations in  {@link ContactsDatabaseHelper}.
@@ -376,6 +367,8 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableColumn(Data.SYNC3, TEXT, false, null),
             new TableColumn(Data.SYNC4, TEXT, false, null),
             new TableColumn(Data.CARRIER_PRESENCE, INTEGER, true, "0"),
+            new TableColumn(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME, TEXT, false, null),
+            new TableColumn(Data.PREFERRED_PHONE_ACCOUNT_ID, TEXT, false, null),
     };
 
     private static final TableColumn[] PHONE_LOOKUP_COLUMNS = new TableColumn[] {
