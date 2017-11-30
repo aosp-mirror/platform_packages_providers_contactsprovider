@@ -178,27 +178,20 @@ public class DbModifierWithNotification implements DatabaseModifier {
                 updateLastModified(table, whereClause, whereArgs);
             }
             if (isVoicemail) {
-                // If a calling package is modifying its own entries, it means that the change came
-                // from the server and thus is synced or "clean". Otherwise, it means that a local
-                // change is being made to the database, so the entries should be marked as "dirty"
-                // so that the corresponding sync adapter knows they need to be synced.
-                int isDirty;
-                Integer callerSetDirty = values.getAsInteger(Voicemails.DIRTY);
-                if (callerSetDirty != null) {
-                    // Respect the calling package if it sets the dirty flag
-                    isDirty = callerSetDirty == 0 ? 0 : 1;
-                } else {
-                    isDirty = isSelfModifyingOrInternal(packagesModified) ? 0 : 1;
-                }
-                values.put(VoicemailContract.Voicemails.DIRTY, isDirty);
-
-                if (isDirty == 0 && values.containsKey(Calls.IS_READ) && getAsBoolean(values,
-                        Calls.IS_READ)) {
-                    // If the server has set the IS_READ, it should also unset the new flag
-                    if (!values.containsKey(Calls.NEW)) {
-                        values.put(Calls.NEW, 0);
-                        hasMarkedRead = true;
+                if (updateDirtyFlag(values, packagesModified)) {
+                    if (values.containsKey(Calls.IS_READ)
+                            && getAsBoolean(values,
+                            Calls.IS_READ)) {
+                        // If the server has set the IS_READ, it should also unset the new flag
+                        if (!values.containsKey(Calls.NEW)) {
+                            values.put(Calls.NEW, 0);
+                            hasMarkedRead = true;
+                        }
                     }
+                }
+                // updateDirtyFlag might remove the value and leave values empty.
+                if(values.isEmpty()){
+                    return 0;
                 }
             }
         }
@@ -219,6 +212,29 @@ public class DbModifierWithNotification implements DatabaseModifier {
                     READ_VOICEMAIL);
         }
         return count;
+    }
+
+    private boolean updateDirtyFlag(ContentValues values, Set<String> packagesModified) {
+        // If a calling package is modifying its own entries, it means that the change came
+        // from the server and thus is synced or "clean". Otherwise, it means that a local
+        // change is being made to the database, so the entries should be marked as "dirty"
+        // so that the corresponding sync adapter knows they need to be synced.
+        int isDirty;
+        Integer callerSetDirty = values.getAsInteger(Voicemails.DIRTY);
+        if (callerSetDirty != null) {
+            // Respect the calling package if it sets the dirty flag
+            if (callerSetDirty == Voicemails.DIRTY_RETAIN) {
+                values.remove(Voicemails.DIRTY);
+                return false;
+            } else {
+                isDirty = callerSetDirty == 0 ? 0 : 1;
+            }
+        } else {
+            isDirty = isSelfModifyingOrInternal(packagesModified) ? 0 : 1;
+        }
+
+        values.put(Voicemails.DIRTY, isDirty);
+        return isDirty == 0;
     }
 
     private void updateLastModified(String table, String whereClause, String[] whereArgs) {
@@ -317,7 +333,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
     /**
      * @param packagesModified source packages that inserted the voicemail that is being modified
      * @return {@code true} if the caller is modifying its own voicemail, or this is an internal
-     *         transaction, {@code false} otherwise.
+     * transaction, {@code false} otherwise.
      */
     private boolean isSelfModifyingOrInternal(Set<String> packagesModified) {
         final Collection<String> callingPackages = getCallingPackages();
@@ -328,7 +344,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
         // but allows us to mock the results for testing.
         return packagesModified.size() == 1 && (callingPackages.contains(
                 Iterables.getOnlyElement(packagesModified))
-                        || callingPackages.contains(mContext.getPackageName()));
+                || callingPackages.contains(mContext.getPackageName()));
     }
 
     /**
@@ -370,7 +386,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
     }
 
     @VisibleForTesting
-    static void setVoicemailNotifierForTest(VoicemailNotifier notifier){
+    static void setVoicemailNotifierForTest(VoicemailNotifier notifier) {
         sVoicemailNotifierForTest = notifier;
     }
 }
