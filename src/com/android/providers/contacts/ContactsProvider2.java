@@ -754,6 +754,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Data.DATA14)
             .add(Data.DATA15)
             .add(Data.CARRIER_PRESENCE)
+            .add(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME)
+            .add(Data.PREFERRED_PHONE_ACCOUNT_ID)
             .add(Data.DATA_VERSION)
             .add(Data.IS_PRIMARY)
             .add(Data.IS_SUPER_PRIMARY)

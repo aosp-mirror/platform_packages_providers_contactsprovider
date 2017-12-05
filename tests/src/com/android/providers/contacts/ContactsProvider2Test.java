@@ -16,7 +16,6 @@
 
 package com.android.providers.contacts;
 
-import static com.android.providers.contacts.TestUtils.createDatabaseSnapshot;
 import static com.android.providers.contacts.TestUtils.cv;
 import static com.android.providers.contacts.TestUtils.dumpCursor;
 
@@ -420,6 +419,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA14,
                 Data.DATA15,
                 Data.CARRIER_PRESENCE,
+                Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                Data.PREFERRED_PHONE_ACCOUNT_ID,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -508,6 +509,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA14,
                 Data.DATA15,
                 Data.CARRIER_PRESENCE,
+                Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                Data.PREFERRED_PHONE_ACCOUNT_ID,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -590,6 +593,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA14,
                 Data.DATA15,
                 Data.CARRIER_PRESENCE,
+                Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                Data.PREFERRED_PHONE_ACCOUNT_ID,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -698,6 +703,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA14,
                 Data.DATA15,
                 Data.CARRIER_PRESENCE,
+                Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                Data.PREFERRED_PHONE_ACCOUNT_ID,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -6485,6 +6492,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA14, "old14");
         values.put(Data.DATA15, "old15");
         values.put(Data.CARRIER_PRESENCE, 0);
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME, "oldcomponentname");
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, "oldid");
         Uri uri = mResolver.insert(Data.CONTENT_URI, values);
         assertStoredValues(uri, values);
         assertNetworkNotified(true);
@@ -6509,6 +6518,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA14, "new14");
         values.put(Data.DATA15, "new15");
         values.put(Data.CARRIER_PRESENCE, Data.CARRIER_PRESENCE_VT_CAPABLE);
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME, "newcomponentname");
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, "newid");
         mResolver.update(Data.CONTENT_URI, values, Data.RAW_CONTACT_ID + "=" + rawContactId +
                 " AND " + Data.MIMETYPE + "='testmimetype'", null);
         assertNetworkNotified(true);
@@ -9909,6 +9920,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA14, "fourteen");
         values.put(Data.DATA15, "fifteen".getBytes());
         values.put(Data.CARRIER_PRESENCE, Data.CARRIER_PRESENCE_VT_CAPABLE);
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME, "preferredcomponentname");
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, "preferredid");
         values.put(Data.SYNC1, "sync1");
         values.put(Data.SYNC2, "sync2");
         values.put(Data.SYNC3, "sync3");
