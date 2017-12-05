@@ -16,6 +16,9 @@
 
 package com.android.providers.contacts;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -31,7 +34,6 @@ import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import com.android.common.io.MoreCloseables;
-import org.mockito.Mockito;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -39,9 +41,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.List;
-
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.mock;
+import org.mockito.Mockito;
 
 /**
  * Unit tests for {@link VoicemailContentProvider}.
@@ -202,12 +202,58 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
     public void testUpdateOwnPackageVoicemail_RemovesDirtyStatus() {
         ContentValues values = getTestVoicemailValues();
         values.put(Voicemails.DIRTY, "1");
-        final Uri uri = mResolver.insert(voicemailUri(), getTestVoicemailValues());
+        final Uri uri = mResolver.insert(voicemailUri(), values);
 
         mResolver.update(uri, new ContentValues(), null, null);
         // At this point, the voicemail should be set back to not dirty.
         ContentValues newValues = getTestVoicemailValues();
         newValues.put(Voicemails.DIRTY, "0");
+        assertStoredValues(uri, newValues);
+    }
+
+    public void testUpdateOwnPackageVoicemail_retainDirtyStatus_dirty() {
+        ContentValues values = getTestVoicemailValues();
+        values.put(Voicemails.DIRTY, "1");
+        final Uri uri = mResolver.insert(voicemailUri(), values);
+
+        ContentValues retainDirty = new ContentValues();
+        retainDirty.put(Voicemails.TRANSCRIPTION, "foo");
+        retainDirty.put(Voicemails.DIRTY, Voicemails.DIRTY_RETAIN);
+
+        mResolver.update(uri, retainDirty, null, null);
+        ContentValues newValues = getTestVoicemailValues();
+        newValues.put(Voicemails.DIRTY, "1");
+        newValues.put(Voicemails.TRANSCRIPTION, "foo");
+        assertStoredValues(uri, newValues);
+    }
+
+    public void testUpdateOwnPackageVoicemail_retainDirtyStatus_notDirty() {
+        ContentValues values = getTestVoicemailValues();
+        values.put(Voicemails.DIRTY, "0");
+        final Uri uri = mResolver.insert(voicemailUri(), values);
+
+        ContentValues retainDirty = new ContentValues();
+        retainDirty.put(Voicemails.TRANSCRIPTION, "foo");
+        retainDirty.put(Voicemails.DIRTY, Voicemails.DIRTY_RETAIN);
+
+        mResolver.update(uri, retainDirty, null, null);
+        ContentValues newValues = getTestVoicemailValues();
+        newValues.put(Voicemails.DIRTY, "0");
+        newValues.put(Voicemails.TRANSCRIPTION, "foo");
+        assertStoredValues(uri, newValues);
+    }
+
+    public void testUpdateOwnPackageVoicemail_retainDirtyStatus_noOtherValues() {
+        ContentValues values = getTestVoicemailValues();
+        values.put(Voicemails.DIRTY, "1");
+        final Uri uri = mResolver.insert(voicemailUri(), values);
+
+        ContentValues retainDirty = new ContentValues();
+        retainDirty.put(Voicemails.DIRTY, Voicemails.DIRTY_RETAIN);
+
+        mResolver.update(uri, retainDirty, null, null);
+        ContentValues newValues = getTestVoicemailValues();
+        newValues.put(Voicemails.DIRTY, "1");
         assertStoredValues(uri, newValues);
     }
 
