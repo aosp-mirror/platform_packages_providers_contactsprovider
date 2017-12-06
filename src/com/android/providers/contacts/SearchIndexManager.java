@@ -27,6 +27,7 @@ import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.text.TextUtils;
+import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
@@ -38,7 +39,6 @@ import com.google.android.collect.Lists;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -76,7 +76,7 @@ public class SearchIndexManager {
         private StringBuilder mSbName = new StringBuilder();
         private StringBuilder mSbTokens = new StringBuilder();
         private StringBuilder mSbElementContent = new StringBuilder();
-        private HashSet<String> mUniqueElements = new HashSet<String>();
+        private ArraySet<String> mUniqueElements = new ArraySet<>();
         private Cursor mCursor;
 
         void setCursor(Cursor cursor) {

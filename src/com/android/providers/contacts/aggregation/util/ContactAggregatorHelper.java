@@ -16,12 +16,13 @@
 
 package com.android.providers.contacts.aggregation.util;
 
+import android.util.ArrayMap;
+import android.util.ArraySet;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -40,9 +41,9 @@ public class ContactAggregatorHelper {
     public static void mergeComponentsWithDisjointAccounts(Set<Set<Long>> connectedRawContactSets,
             Map<Long, Long> rawContactsToAccounts) {
         // Index to rawContactIds mapping
-        final Map<Integer, Set<Long>> rawContactIds = new HashMap<>();
+        final Map<Integer, Set<Long>> rawContactIds = new ArrayMap<>();
         // AccountId to indices mapping
-        final Map<Long, Set<Integer>> accounts = new HashMap<>();
+        final Map<Long, Set<Integer>> accounts = new ArrayMap<>();
 
         int index = 0;
         for (Set<Long> rIds : connectedRawContactSets) {
@@ -51,7 +52,7 @@ public class ContactAggregatorHelper {
                 long acctId = rawContactsToAccounts.get(rId);
                 Set<Integer> s = accounts.get(acctId);
                 if (s == null) {
-                    s = new HashSet<Integer>();
+                    s = new ArraySet<Integer>();
                 }
                 s.add(index);
                 accounts.put(acctId, s);
@@ -73,7 +74,7 @@ public class ContactAggregatorHelper {
             }
         }
 
-        final Set<Long> mergedSet = new HashSet<>();
+        final Set<Long> mergedSet = new ArraySet<>();
         for (Long accountId : accounts.keySet()) {
             final Set<Integer> s = accounts.get(accountId);
             if (s.size() == 1) {
@@ -93,11 +94,11 @@ public class ContactAggregatorHelper {
     @VisibleForTesting
     public static Set<Set<Long>> findConnectedComponents(Set<Long> rawContactIdSet, Multimap<Long,
             Long> matchingRawIdPairs) {
-        Set<Set<Long>> connectedRawContactSets = new HashSet<>();
-        Set<Long> visited = new HashSet<>();
+        Set<Set<Long>> connectedRawContactSets = new ArraySet<>();
+        Set<Long> visited = new ArraySet<>();
         for (Long id : rawContactIdSet) {
             if (!visited.contains(id)) {
-                Set<Long> set = new HashSet<>();
+                Set<Long> set = new ArraySet<>();
                 findConnectedComponentForRawContact(matchingRawIdPairs, visited, id, set);
                 connectedRawContactSets.add(set);
             }

@@ -20,11 +20,11 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.text.TextUtils;
+import android.util.ArraySet;
 
 import com.android.providers.contacts.util.NeededForTesting;
 
 import java.lang.Character.UnicodeBlock;
-import java.util.HashSet;
 import java.util.Locale;
 import java.util.StringTokenizer;
 
@@ -53,11 +53,11 @@ public class NameSplitter {
     // This includes simplified and traditional Chinese
     private static final String CHINESE_LANGUAGE = Locale.CHINESE.getLanguage().toLowerCase();
 
-    private final HashSet<String> mPrefixesSet;
-    private final HashSet<String> mSuffixesSet;
+    private final ArraySet<String> mPrefixesSet;
+    private final ArraySet<String> mSuffixesSet;
     private final int mMaxSuffixLength;
-    private final HashSet<String> mLastNamePrefixesSet;
-    private final HashSet<String> mConjuctions;
+    private final ArraySet<String> mLastNamePrefixesSet;
+    private final ArraySet<String> mConjuctions;
     private final Locale mLocale;
     private final String mLanguage;
 
@@ -304,8 +304,8 @@ public class NameSplitter {
      * Converts a comma-separated list of Strings to a set of Strings. Trims strings
      * and converts them to upper case.
      */
-    private static HashSet<String> convertToSet(String strings) {
-        HashSet<String> set = new HashSet<String>();
+    private static ArraySet<String> convertToSet(String strings) {
+        ArraySet<String> set = new ArraySet<>();
         if (strings != null) {
             String[] split = strings.split(",");
             for (int i = 0; i < split.length; i++) {

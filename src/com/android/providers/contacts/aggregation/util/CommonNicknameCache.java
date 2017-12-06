@@ -16,16 +16,16 @@
 
 package com.android.providers.contacts.aggregation.util;
 
+import android.app.ActivityManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.util.ArrayMap;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.NicknameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.google.android.collect.Maps;
 
 import java.lang.ref.SoftReference;
 import java.util.BitSet;
-import java.util.HashMap;
 
 /**
  * Cache for common nicknames.
@@ -36,7 +36,8 @@ public class CommonNicknameCache  {
     private static final int NICKNAME_BLOOM_FILTER_SIZE = 0x1FFF;   // =long[128]
     private BitSet mNicknameBloomFilter;
 
-    private HashMap<String, SoftReference<String[]>> mNicknameClusterCache = Maps.newHashMap();
+    private final ArrayMap<String, SoftReference<String[]>> mNicknameClusterCache
+            = new ArrayMap<>();
 
     private final SQLiteDatabase mDb;
 
@@ -88,6 +89,9 @@ public class CommonNicknameCache  {
      * Returns nickname cluster IDs or null. Maintains cache.
      */
     public String[] getCommonNicknameClusters(String normalizedName) {
+        if (ActivityManager.isLowRamDeviceStatic()) {
+            return null; // Do not use common nickname cache on lowram devices.
+        }
         if (mNicknameBloomFilter == null) {
             preloadNicknameBloomFilter();
         }

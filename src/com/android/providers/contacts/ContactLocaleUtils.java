@@ -23,6 +23,7 @@ import android.os.LocaleList;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.text.TextUtils;
+import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.providers.contacts.HanziToPinyin.Token;
@@ -32,7 +33,6 @@ import com.google.common.annotations.VisibleForTesting;
 import java.lang.Character.UnicodeBlock;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -313,7 +313,7 @@ public class ContactLocaleUtils {
         // blocks are included but Korean Hangul and jamo are not).
         private static final Set<Character.UnicodeBlock> CJ_BLOCKS;
         static {
-            Set<UnicodeBlock> set = new HashSet<UnicodeBlock>();
+            Set<UnicodeBlock> set = new ArraySet<>();
             set.add(UnicodeBlock.HIRAGANA);
             set.add(UnicodeBlock.KATAKANA);
             set.add(UnicodeBlock.KATAKANA_PHONETIC_EXTENSIONS);
@@ -421,7 +421,7 @@ public class ContactLocaleUtils {
                     TextUtils.equals(name, romajiName)) {
                 return null;
             }
-            final HashSet<String> keys = new HashSet<String>();
+            final ArraySet<String> keys = new ArraySet<>();
             keys.add(romajiName);
             return keys.iterator();
         }
@@ -468,7 +468,7 @@ public class ContactLocaleUtils {
 
         public static Iterator<String> getPinyinNameLookupKeys(String name) {
             // TODO : Reduce the object allocation.
-            HashSet<String> keys = new HashSet<String>();
+            ArraySet<String> keys = new ArraySet<>();
             ArrayList<Token> tokens = HanziToPinyin.getInstance().getTokens(name);
             final int tokenCount = tokens.size();
             final StringBuilder keyPinyin = new StringBuilder();

@@ -67,14 +67,14 @@ import android.provider.ContactsContract.PinnedPositions;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
 import android.text.TextUtils;
+import android.util.ArrayMap;
+import android.util.ArraySet;
 import android.util.EventLog;
 import android.util.Log;
 import android.util.Slog;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -170,7 +170,7 @@ public abstract class AbstractContactAggregator {
     protected SQLiteStatement mContactInsert;
     protected SQLiteStatement mResetPinnedForRawContact;
 
-    protected HashMap<Long, Integer> mRawContactsMarkedForAggregation = Maps.newHashMap();
+    protected ArrayMap<Long, Integer> mRawContactsMarkedForAggregation = new ArrayMap<>();
 
     protected String[] mSelectionArgs1 = new String[1];
     protected String[] mSelectionArgs2 = new String[2];
@@ -532,7 +532,7 @@ public abstract class AbstractContactAggregator {
     public final void clearPendingAggregations() {
         // HashMap woulnd't shrink the internal table once expands it, so let's just re-create
         // a new one instead of clear()ing it.
-        mRawContactsMarkedForAggregation = Maps.newHashMap();
+        mRawContactsMarkedForAggregation = new ArrayMap<>();
     }
 
     public final void markNewForAggregation(long rawContactId, int aggregationMode) {
@@ -951,7 +951,7 @@ public abstract class AbstractContactAggregator {
     }
 
     // A set of raw contact IDs for which there are aggregation exceptions
-    protected final HashSet<Long> mAggregationExceptionIds = new HashSet<Long>();
+    protected final ArraySet<Long> mAggregationExceptionIds = new ArraySet<>();
     protected boolean mAggregationExceptionIdsValid;
 
     public final void invalidateAggregationExceptionCache() {
@@ -1958,7 +1958,7 @@ public abstract class AbstractContactAggregator {
         try {
             List<MatchScore> bestMatches = findMatchingContacts(db, contactId, parameters);
             List<MatchScore> bestMatchesWithoutDuplicateContactIds = new ArrayList<>();
-            Set<Long> contactIds = new HashSet<>();
+            Set<Long> contactIds = new ArraySet<>();
             for (MatchScore bestMatch : bestMatches) {
                 long cid = bestMatch.getContactId();
                 if (!contactIds.contains(cid) && cid != contactId) {
@@ -2005,7 +2005,7 @@ public abstract class AbstractContactAggregator {
         }
 
         // Run a query and find ids of best matching contacts satisfying the filter (if any)
-        HashSet<Long> foundIds = new HashSet<Long>();
+        ArraySet<Long> foundIds = new ArraySet<Long>();
         Cursor cursor = db.query(qb.getTables(), ContactIdQuery.COLUMNS, sb.toString(),
                 null, null, null, null);
         try {

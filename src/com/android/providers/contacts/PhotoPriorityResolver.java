@@ -21,20 +21,17 @@ import android.accounts.AuthenticatorDescription;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.content.res.XmlResourceParser;
-import android.util.Log;
+import android.util.ArrayMap;
 
 import com.android.internal.util.XmlUtils;
-import com.google.android.collect.Maps;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -76,7 +73,7 @@ public class PhotoPriorityResolver  {
     private static final String PRIORITY_ATTR = "priority";
 
     private Context mContext;
-    private HashMap<String, Integer> mPhotoPriorities = Maps.newHashMap();
+    private ArrayMap<String, Integer> mPhotoPriorities = new ArrayMap<>();
 
     public PhotoPriorityResolver(Context context) {
         mContext = context;
