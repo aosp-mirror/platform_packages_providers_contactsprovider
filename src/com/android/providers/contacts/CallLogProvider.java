@@ -41,6 +41,7 @@ import android.telecom.PhoneAccount;
 import android.telecom.PhoneAccountHandle;
 import android.telecom.TelecomManager;
 import android.text.TextUtils;
+import android.util.ArrayMap;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -50,7 +51,6 @@ import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.UserUtils;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
@@ -114,11 +114,11 @@ public class CallLogProvider extends ContentProvider {
         sURIMatcher.addURI(CallLog.SHADOW_AUTHORITY, "calls", CALLS);
     }
 
-    private static final HashMap<String, String> sCallsProjectionMap;
+    private static final ArrayMap<String, String> sCallsProjectionMap;
     static {
 
         // Calls projection map
-        sCallsProjectionMap = new HashMap<String, String>();
+        sCallsProjectionMap = new ArrayMap<>();
         sCallsProjectionMap.put(Calls._ID, Calls._ID);
         sCallsProjectionMap.put(Calls.NUMBER, Calls.NUMBER);
         sCallsProjectionMap.put(Calls.POST_DIAL_DIGITS, Calls.POST_DIAL_DIGITS);

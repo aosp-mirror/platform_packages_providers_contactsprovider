@@ -110,6 +110,7 @@ import android.provider.SyncStateContract;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
 
@@ -198,8 +199,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1459,7 +1458,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     // Random number generator.
     private final SecureRandom mRandom = new SecureRandom();
 
-    private final HashMap<String, Boolean> mAccountWritability = Maps.newHashMap();
+    private final ArrayMap<String, Boolean> mAccountWritability = new ArrayMap<>();
 
     private PhotoStore mContactsPhotoStore;
     private PhotoStore mProfilePhotoStore;
@@ -1468,13 +1467,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private ProfileDatabaseHelper mProfileHelper;
 
     // Separate data row handler instances for contact data and profile data.
-    private HashMap<String, DataRowHandler> mDataRowHandlers;
-    private HashMap<String, DataRowHandler> mProfileDataRowHandlers;
+    private ArrayMap<String, DataRowHandler> mDataRowHandlers;
+    private ArrayMap<String, DataRowHandler> mProfileDataRowHandlers;
 
     /**
      * Cached information about contact directories.
      */
-    private HashMap<String, DirectoryInfo> mDirectoryCache = new HashMap<String, DirectoryInfo>();
+    private ArrayMap<String, DirectoryInfo> mDirectoryCache = new ArrayMap<>();
     private boolean mDirectoryCacheValid = false;
 
     /**
@@ -1484,7 +1483,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * be a small number of contact groups. The cache is keyed off source ID.  The value
      * is a list of groups with this group ID.
      */
-    private HashMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache = Maps.newHashMap();
+    private ArrayMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache = new ArrayMap<>();
 
     /**
      * Sub-provider for handling profile requests against the profile database.
@@ -1684,10 +1683,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mProfilePhotoStore =
                 new PhotoStore(new File(getContext().getFilesDir(), "profile"), mProfileHelper);
 
-        mDataRowHandlers = new HashMap<String, DataRowHandler>();
+        mDataRowHandlers = new ArrayMap<>();
         initDataRowHandlers(mDataRowHandlers, mContactsHelper, mContactAggregator,
                 mContactsPhotoStore);
-        mProfileDataRowHandlers = new HashMap<String, DataRowHandler>();
+        mProfileDataRowHandlers = new ArrayMap<>();
         initDataRowHandlers(mProfileDataRowHandlers, mProfileHelper, mProfileAggregator,
                 mProfilePhotoStore);
 
@@ -5050,7 +5049,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private Set<Long> queryAggregationRawContactIds(SQLiteDatabase db, long rawContactId) {
         mSelectionArgs2[0] = String.valueOf(rawContactId);
         mSelectionArgs2[1] = String.valueOf(rawContactId);
-        Set<Long> aggregationRawContactIds = new HashSet<>();
+        Set<Long> aggregationRawContactIds = new ArraySet<>();
         final Cursor c = db.query(AggregationExceptionQuery.TABLE,
                 AggregationExceptionQuery.COLUMNS, AggregationExceptionQuery.SELECTION,
                 mSelectionArgs2, null, null, null);
@@ -5122,7 +5121,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         // Update AggregationException table.
-        final Set<Long> aggregationRawContactIdsInServer = new HashSet<>();
+        final Set<Long> aggregationRawContactIdsInServer = new ArraySet<>();
         for (int i = 0; i < metadataEntry.mAggregationDatas.size(); i++) {
             final AggregationData aggregationData = metadataEntry.mAggregationDatas.get(i);
             final int typeInt = getAggregationType(aggregationData.mType, null);
@@ -5385,7 +5384,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // Find all aggregated contacts that used to contain the raw contacts
                 // we have just deleted and see if they are still referencing the deleted
                 // names or photos.  If so, fix up those contacts.
-                HashSet<Long> orphanContactIds = Sets.newHashSet();
+                ArraySet<Long> orphanContactIds = new ArraySet<>();
                 Cursor cursor = db.rawQuery("SELECT " + Contacts._ID +
                         " FROM " + Tables.CONTACTS +
                         " WHERE (" + Contacts.NAME_RAW_CONTACT_ID + " NOT NULL AND " +
@@ -7715,7 +7714,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return null;
         }
 
-        HashMap<String, String> projectionMap = Maps.newHashMap();
+        ArrayMap<String, String> projectionMap = new ArrayMap<>();
         projectionMap.put(AddressBookIndexQuery.NAME,
                 sortKey + " AS " + AddressBookIndexQuery.NAME);
         projectionMap.put(AddressBookIndexQuery.BUCKET,
@@ -9866,7 +9865,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
 
-        final Set<Long> rawContactIds = new HashSet<>();
+        final Set<Long> rawContactIds = new ArraySet<>();
         final Cursor cursor = db.rawQuery(rawContactIdSelect.toString(), null);
         try {
             cursor.moveToPosition(-1);

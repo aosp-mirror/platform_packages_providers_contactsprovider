@@ -21,6 +21,7 @@ import com.android.providers.contacts.sqlite.SqlChecker;
 import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
 import com.android.providers.contacts.util.PropertyUtils;
 
+import android.app.ActivityManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -142,6 +143,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     @VisibleForTesting
     static final boolean DISALLOW_SUB_QUERIES = false;
+
+    private static final int IDLE_CONNECTION_TIMEOUT_MS = 30000;
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -1059,7 +1062,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         super(context, databaseName, null, DATABASE_VERSION, MINIMUM_SUPPORTED_VERSION, null);
         boolean enableWal = android.provider.Settings.Global.getInt(context.getContentResolver(),
                 android.provider.Settings.Global.CONTACTS_DATABASE_WAL_ENABLED, 1) == 1;
+        if (dbForProfile() != 0 || ActivityManager.isLowRamDeviceStatic()) {
+            enableWal = false;
+        }
         setWriteAheadLoggingEnabled(enableWal);
+        // Memory optimization - close idle connections after 30s of inactivity
+        setIdleConnectionTimeout(IDLE_CONNECTION_TIMEOUT_MS);
         mDatabaseOptimizationEnabled = optimizationEnabled;
         mIsTestInstance = isTestInstance;
         Resources resources = context.getResources();
