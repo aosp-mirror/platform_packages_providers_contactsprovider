@@ -17,13 +17,14 @@
 package com.android.providers.contacts.aggregation.util;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static com.android.internal.util.Preconditions.checkNotNull;
+
+import android.util.ArrayMap;
+import android.util.ArraySet;
 
 /**
  * Matching candidates for a raw contact, used in the contact aggregator.
@@ -89,7 +90,7 @@ public class RawContactMatchingCandidates {
     }
 
     private void createRawContactToContactMap() {
-        mRawContactToContact = new HashMap<Long, Long>();
+        mRawContactToContact = new ArrayMap<>();
         for (int i = 0; i < mBestMatches.size(); i++) {
             mRawContactToContact.put(mBestMatches.get(i).getRawContactId(),
                     mBestMatches.get(i).getContactId());
@@ -97,7 +98,7 @@ public class RawContactMatchingCandidates {
     }
 
     private void createRawContactToAccountMap() {
-        mRawContactToAccount = new HashMap<Long, Long>();
+        mRawContactToAccount = new ArrayMap<>();
         for (int i = 0; i <  mBestMatches.size(); i++) {
             mRawContactToAccount.put(mBestMatches.get(i).getRawContactId(),
                     mBestMatches.get(i).getAccountId());
@@ -105,7 +106,7 @@ public class RawContactMatchingCandidates {
     }
 
     private void createRawContactIdSet() {
-        mRawContactIds = new HashSet<Long>();
+        mRawContactIds = new ArraySet<>();
         for (int i = 0; i < mBestMatches.size(); i++) {
             mRawContactIds.add(mBestMatches.get(i).getRawContactId());
         }

@@ -31,6 +31,7 @@ import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.RawContacts;
 import android.text.TextUtils;
+import android.util.ArraySet;
 import android.util.Log;
 import com.android.providers.contacts.ContactsDatabaseHelper;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
@@ -54,7 +55,6 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -212,14 +212,14 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         updateMatchScores(db, rawContactId, candidates, matcher);
         final RawContactMatchingCandidates matchingCandidates = new RawContactMatchingCandidates(
                 matcher.pickBestMatches());
-        Set<Long> newIds = new HashSet<>();
+        Set<Long> newIds = new ArraySet<>();
         newIds.addAll(matchingCandidates.getRawContactIdSet());
         // Keep doing the following until no new raw contact candidate is found.
         while (!newIds.isEmpty()) {
             if (matchingCandidates.getCount() >= AGGREGATION_CONTACT_SIZE_LIMIT) {
                 return matchingCandidates;
             }
-            final Set<Long> tmpIdSet = new HashSet<>();
+            final Set<Long> tmpIdSet = new ArraySet<>();
             for (long rId : newIds) {
                 final RawContactMatcher rMatcher = new RawContactMatcher();
                 updateMatchScores(db, rId, new MatchCandidateList(),
@@ -315,7 +315,7 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         // Find the connected component based on the aggregation exceptions or
         // identity/email/phone matching for all the raw contacts of [contactId] and the give
         // raw contact.
-        final Set<Long> allIds = new HashSet<>();
+        final Set<Long> allIds = new ArraySet<>();
         allIds.add(rawContactId);
         allIds.addAll(matchingCandidates.getRawContactIdSet());
         final Set<Set<Long>> connectedRawContactSets = findConnectedRawContacts(db, allIds);
@@ -331,7 +331,7 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         // Update aggregate data for all the contactIds touched by this connected component,
         for (Set<Long> connectedRawContactIds : connectedRawContactSets) {
             Long contactId = null;
-            Set<Long> cidsNeedToBeUpdated = new HashSet<>();
+            Set<Long> cidsNeedToBeUpdated = new ArraySet<>();
             if (connectedRawContactIds.contains(rawContactId)) {
                 // If there is no other raw contacts aggregated with the given raw contact currently
                 // or all the raw contacts in [currentCidForRawContact] are still in the same
@@ -422,7 +422,7 @@ public class ContactAggregator2 extends AbstractContactAggregator {
      */
     private void breakComponentsByExceptions(SQLiteDatabase db,
             Set<Set<Long>> connectedRawContacts) {
-        final Set<Set<Long>> tmpSets = new HashSet<>(connectedRawContacts);
+        final Set<Set<Long>> tmpSets = new ArraySet<>(connectedRawContacts);
         for (Set<Long> component : tmpSets) {
             final String rawContacts = TextUtils.join(",", component);
             // If "SEPARATE" exception is found inside an connected component [component],
@@ -691,7 +691,7 @@ public class ContactAggregator2 extends AbstractContactAggregator {
      */
     private void lookupApproximateNameMatches(SQLiteDatabase db, MatchCandidateList candidates,
             RawContactMatcher matcher) {
-        HashSet<String> firstLetters = new HashSet<>();
+        ArraySet<String> firstLetters = new ArraySet<>();
         for (int i = 0; i < candidates.mCount; i++) {
             final NameMatchCandidate candidate = candidates.mList.get(i);
             if (candidate.mName.length() >= 2) {
