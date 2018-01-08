@@ -78,12 +78,13 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         super.setUp();
         setUpForOwnPermission();
         System.setProperty(SYSTEM_PROPERTY_DEXMAKER_DEXCACHE, getContext().getCacheDir().getPath());
-        Thread.currentThread().setContextClassLoader(VoicemailContentProvider.class.getClassLoader());
+        Thread.currentThread()
+                .setContextClassLoader(VoicemailContentProvider.class.getClassLoader());
         addProvider(CallLogProviderTestable.class, CallLog.AUTHORITY);
     }
 
     @Override
-    protected  void tearDown() throws Exception {
+    protected void tearDown() throws Exception {
         System.clearProperty(SYSTEM_PROPERTY_DEXMAKER_DEXCACHE);
         DbModifierWithNotification.setVoicemailNotifierForTest(null);
     }
@@ -191,22 +192,47 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
 
     public void testUpdateOwnPackageVoicemail_NotDirty() {
         final Uri uri = mResolver.insert(voicemailUri(), getTestVoicemailValues());
-        mResolver.update(uri, new ContentValues(), null, null);
+        ContentValues updateValues = new ContentValues();
+        updateValues.put(Voicemails.TRANSCRIPTION, "foo");
+        mResolver.update(uri, updateValues, null, null);
 
         // Updating a package's own voicemail should not make the voicemail dirty.
-        ContentValues values = getTestVoicemailValues();
-        values.put(Voicemails.DIRTY, "0");
-        assertStoredValues(uri, values);
+        try (Cursor cursor = mResolver
+                .query(uri, new String[] {Voicemails.DIRTY}, null, null, null)) {
+            cursor.moveToFirst();
+            assertEquals(cursor.getInt(0), 0);
+        }
+    }
+
+    public void testUpdateOtherPackageCallLog_NotDirty() {
+        setUpForFullPermission();
+        final Uri uri = insertVoicemailForSourcePackage("another-package");
+        // Clear the mapping for our own UID so that this doesn't look like an internal transaction.
+        mPackageManager.removePackage(Process.myUid());
+
+        ContentValues values = new ContentValues();
+        values.put(Calls.CACHED_NAME, "foo");
+        mResolver.update(ContentUris
+                        .withAppendedId(CallLog.Calls.CONTENT_URI, ContentUris.parseId(uri)),
+                values, null, null);
+
+        try (Cursor cursor = mResolver
+                .query(uri, new String[] {Voicemails.DIRTY}, null, null, null)) {
+            cursor.moveToFirst();
+            assertEquals(cursor.getInt(0), 0);
+        }
     }
 
     public void testUpdateOwnPackageVoicemail_RemovesDirtyStatus() {
         ContentValues values = getTestVoicemailValues();
         values.put(Voicemails.DIRTY, "1");
         final Uri uri = mResolver.insert(voicemailUri(), values);
-
-        mResolver.update(uri, new ContentValues(), null, null);
+        ContentValues updateValues = new ContentValues();
+        updateValues.put(Voicemails.IS_READ, 1);
+        mResolver.update(uri, updateValues, null, null);
         // At this point, the voicemail should be set back to not dirty.
         ContentValues newValues = getTestVoicemailValues();
+        newValues.put(Voicemails.IS_READ, 1);
         newValues.put(Voicemails.DIRTY, "0");
         assertStoredValues(uri, newValues);
     }
@@ -452,8 +478,9 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
 
     private Uri withSourcePackageParam(Uri uri) {
         return uri.buildUpon()
-            .appendQueryParameter(VoicemailContract.PARAM_KEY_SOURCE_PACKAGE, mActor.packageName)
-            .build();
+                .appendQueryParameter(VoicemailContract.PARAM_KEY_SOURCE_PACKAGE,
+                        mActor.packageName)
+                .build();
     }
 
     public void testUriPermissions() {
@@ -516,7 +543,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
     private void checkHasReadAccessToUri(final Uri uri) {
         Cursor cursor = null;
         try {
-            cursor = mResolver.query(uri, null, null ,null, null);
+            cursor = mResolver.query(uri, null, null, null, null);
             assertEquals(1, cursor.getCount());
             try {
                 ParcelFileDescriptor fd = mResolver.openFileDescriptor(uri, "r");
@@ -628,11 +655,11 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
             values.put(callLogColumn, "foo");
             EvenMoreAsserts.assertThrows("Column: " + callLogColumn,
                     IllegalArgumentException.class, new Runnable() {
-                    @Override
-                    public void run() {
-                        mResolver.insert(voicemailUri(), values);
-                    }
-                });
+                        @Override
+                        public void run() {
+                            mResolver.insert(voicemailUri(), values);
+                        }
+                    });
         }
     }
 
@@ -659,11 +686,11 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
             values.put(callLogColumn, "foo");
             EvenMoreAsserts.assertThrows("Column: " + callLogColumn,
                     IllegalArgumentException.class, new Runnable() {
-                    @Override
-                    public void run() {
-                        mResolver.update(insertedUri, values, null, null);
-                    }
-                });
+                        @Override
+                        public void run() {
+                            mResolver.update(insertedUri, values, null, null);
+                        }
+                    });
         }
     }
 
@@ -827,7 +854,9 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         return mResolver.insert(voicemailUri(), getTestVoicemailValues());
     }
 
-    /** Inserts a voicemail record for the specified source package. */
+    /**
+     * Inserts a voicemail record for the specified source package.
+     */
     private Uri insertVoicemailForSourcePackage(String sourcePackage) {
         ContentValues values = getTestVoicemailValues();
         values.put(Voicemails.SOURCE_PACKAGE, sourcePackage);

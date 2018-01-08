@@ -167,7 +167,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
         Set<String> packagesModified = getModifiedPackages(whereClause, whereArgs);
         packagesModified.addAll(getModifiedPackages(values));
 
-        boolean isVoicemail = packagesModified.size() != 0;
+        boolean isVoicemail = packagesModified.size() != 0 && isUpdatingVoicemailColumns(values);
 
         boolean hasMarkedRead = false;
         if (mIsCallsTable) {
@@ -189,13 +189,12 @@ public class DbModifierWithNotification implements DatabaseModifier {
                         }
                     }
                 }
-                // updateDirtyFlag might remove the value and leave values empty.
-                if(values.isEmpty()){
-                    return 0;
-                }
             }
         }
-
+        // updateDirtyFlag might remove the value and leave values empty.
+        if (values.isEmpty()) {
+            return 0;
+        }
         int count = mDb.update(table, values, whereClause, whereArgs);
         if (count > 0 && isVoicemail) {
             notifyVoicemailChange(mBaseUri, packagesModified);
@@ -235,6 +234,15 @@ public class DbModifierWithNotification implements DatabaseModifier {
 
         values.put(Voicemails.DIRTY, isDirty);
         return isDirty == 0;
+    }
+
+    private boolean isUpdatingVoicemailColumns(ContentValues values) {
+        for (String key : values.keySet()) {
+            if (VoicemailContentTable.ALLOWED_COLUMNS.contains(key)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void updateLastModified(String table, String whereClause, String[] whereArgs) {
