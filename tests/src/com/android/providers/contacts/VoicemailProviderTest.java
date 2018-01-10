@@ -71,19 +71,20 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
     /**
      * Total number of columns exposed by voicemail provider.
      */
-    private static final int NUM_VOICEMAIL_FIELDS = 24;
+    private static final int NUM_VOICEMAIL_FIELDS = 25;
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
         setUpForOwnPermission();
         System.setProperty(SYSTEM_PROPERTY_DEXMAKER_DEXCACHE, getContext().getCacheDir().getPath());
-        Thread.currentThread().setContextClassLoader(VoicemailContentProvider.class.getClassLoader());
+        Thread.currentThread()
+                .setContextClassLoader(VoicemailContentProvider.class.getClassLoader());
         addProvider(CallLogProviderTestable.class, CallLog.AUTHORITY);
     }
 
     @Override
-    protected  void tearDown() throws Exception {
+    protected void tearDown() throws Exception {
         System.clearProperty(SYSTEM_PROPERTY_DEXMAKER_DEXCACHE);
         DbModifierWithNotification.setVoicemailNotifierForTest(null);
     }
@@ -118,14 +119,16 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
 
     public void testInsertReadMessageIsNotNew() throws Exception {
         ContentValues values = getTestReadVoicemailValues();
+        values.remove(Voicemails.NEW);
         Uri uri = mResolver.insert(voicemailUri(), values);
         String[] projection = {Voicemails.NUMBER, Voicemails.DATE, Voicemails.DURATION,
-                Voicemails.TRANSCRIPTION, Voicemails.IS_READ, Voicemails.HAS_CONTENT,
+                Voicemails.TRANSCRIPTION, Voicemails.NEW, Voicemails.IS_READ,
+                Voicemails.HAS_CONTENT,
                 Voicemails.SOURCE_DATA, Voicemails.STATE,
                 Voicemails.BACKED_UP, Voicemails.RESTORED, Voicemails.ARCHIVED,
                 Voicemails.IS_OMTP_VOICEMAIL
         };
-        Cursor c = mResolver.query(uri, projection, Calls.NEW + "=0", null,
+        Cursor c = mResolver.query(uri, projection, Voicemails.NEW + "=0", null,
                 null);
         try {
             assertEquals("Record count", 1, c.getCount());
@@ -452,8 +455,9 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
 
     private Uri withSourcePackageParam(Uri uri) {
         return uri.buildUpon()
-            .appendQueryParameter(VoicemailContract.PARAM_KEY_SOURCE_PACKAGE, mActor.packageName)
-            .build();
+                .appendQueryParameter(VoicemailContract.PARAM_KEY_SOURCE_PACKAGE,
+                        mActor.packageName)
+                .build();
     }
 
     public void testUriPermissions() {
@@ -516,7 +520,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
     private void checkHasReadAccessToUri(final Uri uri) {
         Cursor cursor = null;
         try {
-            cursor = mResolver.query(uri, null, null ,null, null);
+            cursor = mResolver.query(uri, null, null, null, null);
             assertEquals(1, cursor.getCount());
             try {
                 ParcelFileDescriptor fd = mResolver.openFileDescriptor(uri, "r");
@@ -628,11 +632,11 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
             values.put(callLogColumn, "foo");
             EvenMoreAsserts.assertThrows("Column: " + callLogColumn,
                     IllegalArgumentException.class, new Runnable() {
-                    @Override
-                    public void run() {
-                        mResolver.insert(voicemailUri(), values);
-                    }
-                });
+                        @Override
+                        public void run() {
+                            mResolver.insert(voicemailUri(), values);
+                        }
+                    });
         }
     }
 
@@ -659,11 +663,11 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
             values.put(callLogColumn, "foo");
             EvenMoreAsserts.assertThrows("Column: " + callLogColumn,
                     IllegalArgumentException.class, new Runnable() {
-                    @Override
-                    public void run() {
-                        mResolver.update(insertedUri, values, null, null);
-                    }
-                });
+                        @Override
+                        public void run() {
+                            mResolver.update(insertedUri, values, null, null);
+                        }
+                    });
         }
     }
 
@@ -827,7 +831,9 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         return mResolver.insert(voicemailUri(), getTestVoicemailValues());
     }
 
-    /** Inserts a voicemail record for the specified source package. */
+    /**
+     * Inserts a voicemail record for the specified source package.
+     */
     private Uri insertVoicemailForSourcePackage(String sourcePackage) {
         ContentValues values = getTestVoicemailValues();
         values.put(Voicemails.SOURCE_PACKAGE, sourcePackage);
@@ -839,6 +845,7 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         values.put(Voicemails.NUMBER, "1-800-4664-411");
         values.put(Voicemails.DATE, 1000);
         values.put(Voicemails.DURATION, 30);
+        values.put(Voicemails.NEW, 0);
         values.put(Voicemails.TRANSCRIPTION, "Testing 123");
         values.put(Voicemails.IS_READ, 0);
         values.put(Voicemails.HAS_CONTENT, 0);
