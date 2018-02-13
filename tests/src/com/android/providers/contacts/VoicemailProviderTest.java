@@ -35,13 +35,14 @@ import android.test.suitebuilder.annotation.SmallTest;
 
 import com.android.common.io.MoreCloseables;
 
+import org.mockito.Mockito;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.List;
-import org.mockito.Mockito;
 
 /**
  * Unit tests for {@link VoicemailContentProvider}.
@@ -365,6 +366,12 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
     // no package URI specified).
     public void testMustUsePackageUriWithoutFullPermission() {
         setUpForOwnPermission();
+        assertBaseUriThrowsSecurityExceptions();
+        setUpForOwnPermissionViaCarrierPrivileges();
+        assertBaseUriThrowsSecurityExceptions();
+    }
+
+    private void assertBaseUriThrowsSecurityExceptions() {
         EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
             @Override
             public void run() {
@@ -403,16 +410,10 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
 
         // Now give away full permission and check that only 1 message is accessible.
         setUpForOwnPermission();
-        assertEquals(1, getCount(voicemailUri(), null, null));
-
-        // Once again try to insert message for another package. This time
-        // it should fail.
-        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
-            @Override
-            public void run() {
-                insertVoicemailForSourcePackage("another-package");
-            }
-        });
+        assertOnlyOwnVoicemailsCanBeQueriedAndInserted();
+        // Same as above, but with carrier privileges.
+        setUpForOwnPermissionViaCarrierPrivileges();
+        assertOnlyOwnVoicemailsCanBeQueriedAndInserted();
 
         setUpForNoPermission();
         mUseSourceUri = false;
@@ -421,6 +422,19 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         assertEquals(2, getCount(voicemailUri(), null, null));
 
         // An insert for another package should still fail
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                insertVoicemailForSourcePackage("another-package");
+            }
+        });
+    }
+
+    private void assertOnlyOwnVoicemailsCanBeQueriedAndInserted() {
+        assertEquals(1, getCount(voicemailUri(), null, null));
+
+        // Once again try to insert message for another package. This time
+        // it should fail.
         EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
             @Override
             public void run() {
@@ -439,23 +453,9 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         // Now give away full permission and check that we can update and delete only
         // the own voicemail.
         setUpForOwnPermission();
-        mResolver.update(withSourcePackageParam(ownVoicemail),
-                getTestVoicemailValues(), null, null);
-        mResolver.delete(withSourcePackageParam(ownVoicemail), null, null);
-
-        // However, attempting to update or delete another-package's voicemail should fail.
-        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
-            @Override
-            public void run() {
-                mResolver.update(anotherVoicemail, null, null, null);
-            }
-        });
-        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
-            @Override
-            public void run() {
-                mResolver.delete(anotherVoicemail, null, null);
-            }
-        });
+        assertOnlyOwnVoicemailsCanBeUpdatedAndDeleted(ownVoicemail, anotherVoicemail);
+        setUpForOwnPermissionViaCarrierPrivileges();
+        assertOnlyOwnVoicemailsCanBeUpdatedAndDeleted(ownVoicemail, anotherVoicemail);
 
         // If we have the manage voicemail permission, we should be able to both update voicemails
         // from all packages.
@@ -476,6 +476,27 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         mActor.addPermissions(READ_VOICEMAIL_PERMISSION);
 
         assertEquals(0, getCount(anotherVoicemail, null, null));
+    }
+
+    private void assertOnlyOwnVoicemailsCanBeUpdatedAndDeleted(
+            Uri ownVoicemail, Uri anotherVoicemail) {
+        mResolver.update(withSourcePackageParam(ownVoicemail),
+                getTestVoicemailValues(), null, null);
+        mResolver.delete(withSourcePackageParam(ownVoicemail), null, null);
+
+        // However, attempting to update or delete another-package's voicemail should fail.
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                mResolver.update(anotherVoicemail, null, null, null);
+            }
+        });
+        EvenMoreAsserts.assertThrows(SecurityException.class, new Runnable() {
+            @Override
+            public void run() {
+                mResolver.delete(anotherVoicemail, null, null);
+            }
+        });
     }
 
     private Uri withSourcePackageParam(Uri uri) {

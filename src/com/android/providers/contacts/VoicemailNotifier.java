@@ -1,8 +1,5 @@
 package com.android.providers.contacts;
 
-import static android.Manifest.permission.ADD_VOICEMAIL;
-import static android.Manifest.permission.READ_VOICEMAIL;
-
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -15,6 +12,7 @@ import android.util.ArraySet;
 import android.util.Log;
 
 import com.google.android.collect.Lists;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -68,11 +66,16 @@ public class VoicemailNotifier {
                     intentAction, uri));
             for (ComponentName component :
                     getBroadcastReceiverComponents(intentAction, uri)) {
-                // Ignore any package that is not affected by the change and don't have full access
-                // either.
-                if (!mModifiedPackages.contains(component.getPackageName()) &&
-                        !mVoicemailPermissions.packageHasReadAccess(
-                                component.getPackageName())) {
+                boolean hasFullReadAccess =
+                        mVoicemailPermissions.packageHasReadAccess(component.getPackageName());
+                boolean hasOwnAccess =
+                        mVoicemailPermissions.packageHasOwnVoicemailAccess(
+                                component.getPackageName());
+                // If we don't have full access, ignore the broadcast if the package isn't affected
+                // by the change or doesn't have access to its own messages.
+                if (!hasFullReadAccess
+                        && (!mModifiedPackages.contains(component.getPackageName())
+                                || !hasOwnAccess)) {
                     continue;
                 }
 
@@ -82,12 +85,10 @@ public class VoicemailNotifier {
                     intent.putExtra(VoicemailContract.EXTRA_SELF_CHANGE,
                             callingPackages.contains(component.getPackageName()));
                 }
-                String permissionNeeded = mModifiedPackages.contains(component.getPackageName()) ?
-                        ADD_VOICEMAIL : READ_VOICEMAIL;
-                mContext.sendBroadcast(intent, permissionNeeded);
-                Log.v(TAG, String.format("Sent intent. act:%s, url:%s, comp:%s, perm:%s," +
+                mContext.sendBroadcast(intent);
+                Log.v(TAG, String.format("Sent intent. act:%s, url:%s, comp:%s," +
                                 " self_change:%s", intent.getAction(), intent.getData(),
-                        component.getClassName(), permissionNeeded,
+                        component.getClassName(),
                         intent.hasExtra(VoicemailContract.EXTRA_SELF_CHANGE) ?
                                 intent.getBooleanExtra(VoicemailContract.EXTRA_SELF_CHANGE, false) :
                                 null));
