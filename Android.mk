@@ -20,6 +20,7 @@ LOCAL_STATIC_JAVA_LIBRARIES += android-common com.android.vcard guava
 LOCAL_JACK_COVERAGE_INCLUDE_FILTER := com.android.providers.contacts.*
 
 LOCAL_PACKAGE_NAME := ContactsProvider
+LOCAL_PRIVATE_PLATFORM_APIS := true
 LOCAL_CERTIFICATE := shared
 LOCAL_PRIVILEGED_MODULE := true
 
