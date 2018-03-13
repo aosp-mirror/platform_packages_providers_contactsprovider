@@ -15,6 +15,7 @@
  */
 package com.android.providers.contacts;
 
+import static android.app.AppOpsManager.MODE_ALLOWED;
 import static android.provider.VoicemailContract.SOURCE_PACKAGE_FIELD;
 
 import static com.android.providers.contacts.util.DbQueryUtils.concatenateClauses;
@@ -23,13 +24,13 @@ import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause
 import android.annotation.NonNull;
 import android.app.AppOpsManager;
 import android.content.ContentProvider;
-import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
 import android.provider.BaseColumns;
 import android.provider.VoicemailContract;
@@ -50,7 +51,6 @@ import com.google.common.annotations.VisibleForTesting;
 import java.io.FileNotFoundException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 
 /**
  * An implementation of the Voicemail content provider. This class in the entry point for both
@@ -83,8 +83,15 @@ public class VoicemailContentProvider extends ContentProvider
         }
         Context context = context();
 
-        // ADD_VOICEMAIL permission guards read and write. We do the same with app ops.
-        // The permission name doesn't reflect its function but we cannot rename it.
+        // Read and write permission requires ADD_VOICEMAIL or carrier privileges. We can't declare
+        // any permission entries in the manifest because carrier-privileged apps without
+        // ADD_VOICEMAIL would be blocked by the platform without even reaching our custom
+        // enforce{Read,Write}PermissionInner functions. These overrides are what allow carrier-
+        // privileged apps to bypass these runtime-configured permissions.
+        // TODO(b/74245334): See if these can be removed since individual operations perform their
+        // own checks.
+        setReadPermission(android.Manifest.permission.ADD_VOICEMAIL);
+        setWritePermission(android.Manifest.permission.ADD_VOICEMAIL);
         setAppOps(AppOpsManager.OP_ADD_VOICEMAIL, AppOpsManager.OP_ADD_VOICEMAIL);
 
         mVoicemailPermissions = new VoicemailPermissions(context);
@@ -108,6 +115,27 @@ public class VoicemailContentProvider extends ContentProvider
             Log.i(Constants.PERFORMANCE_TAG, "VoicemailContentProvider.onCreate finish");
         }
         return true;
+    }
+
+    @Override
+    protected int enforceReadPermissionInner(Uri uri, String callingPkg, IBinder callerToken)
+            throws SecurityException {
+        // Permit carrier-privileged apps regardless of ADD_VOICEMAIL permission state.
+        if (mVoicemailPermissions.callerHasCarrierPrivileges()) {
+            return MODE_ALLOWED;
+        }
+        return super.enforceReadPermissionInner(uri, callingPkg, callerToken);
+    }
+
+
+    @Override
+    protected int enforceWritePermissionInner(Uri uri, String callingPkg, IBinder callerToken)
+            throws SecurityException {
+        // Permit carrier-privileged apps regardless of ADD_VOICEMAIL permission state.
+        if (mVoicemailPermissions.callerHasCarrierPrivileges()) {
+            return MODE_ALLOWED;
+        }
+        return super.enforceWritePermissionInner(uri, callingPkg, callerToken);
     }
 
     @VisibleForTesting

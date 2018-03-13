@@ -66,11 +66,13 @@
                   android:writePermission="android.permission.MANAGE_USERS">
         </provider>
 
+        <!-- Note: While this provider does not declare a permission explicitly, it enforces that
+             the caller has either ADD_VOICEMAIL or carrier privileges at a minimum to access it.
+             Additional permission checks may be done depending on the operation. -->
         <provider android:name="VoicemailContentProvider"
             android:authorities="com.android.voicemail"
             android:syncable="false" android:multiprocess="false"
-            android:exported="true"
-            android:permission="com.android.voicemail.permission.ADD_VOICEMAIL">
+            android:exported="true">
         </provider>
 
         <provider android:name="ContactMetadataProvider"
