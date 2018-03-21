@@ -5545,7 +5545,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return mProfileProvider.query(uri, projection, selection, selectionArgs, sortOrder,
                     cancellationSignal);
         }
-        incrementStats(mQueryStats);
+        final int callingUid = Binder.getCallingUid();
+        mStats.incrementQueryStats(callingUid);
         try {
             // Otherwise proceed with a normal query against the contacts DB.
             switchToContactMode();
@@ -5553,7 +5554,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return queryDirectoryIfNecessary(uri, projection, selection, selectionArgs, sortOrder,
                     cancellationSignal);
         } finally {
-            finishOperation();
+            mStats.finishOperation(callingUid);
         }
     }
 
