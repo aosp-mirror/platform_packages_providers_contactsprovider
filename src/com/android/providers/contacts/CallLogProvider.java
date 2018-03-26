@@ -22,10 +22,13 @@ import static com.android.providers.contacts.util.DbQueryUtils.getInequalityClau
 
 import android.app.AppOpsManager;
 import android.content.ContentProvider;
+import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.OperationApplicationException;
 import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
@@ -45,11 +48,15 @@ import android.util.ArrayMap;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.util.ProviderAccessStats;
 import com.android.providers.contacts.CallLogDatabaseHelper.DbProperties;
 import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.UserUtils;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -175,6 +182,10 @@ public class CallLogProvider extends ContentProvider {
     private VoicemailPermissions mVoicemailPermissions;
     private CallLogInsertionHelper mCallLogInsertionHelper;
 
+    private final ThreadLocal<Boolean> mApplyingBatch = new ThreadLocal<>();
+    private final ThreadLocal<Integer> mCallingUid = new ThreadLocal<>();
+    private final ProviderAccessStats mStats = new ProviderAccessStats();
+
     protected boolean isShadow() {
         return false;
     }
@@ -228,9 +239,58 @@ public class CallLogProvider extends ContentProvider {
         return CallLogDatabaseHelper.getInstance(context);
     }
 
+    protected boolean applyingBatch() {
+        final Boolean applying =  mApplyingBatch.get();
+        return applying != null && applying;
+    }
+
+    @Override
+    public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
+            throws OperationApplicationException {
+        final int callingUid = Binder.getCallingUid();
+        mCallingUid.set(callingUid);
+
+        mStats.incrementBatchStats(callingUid);
+        mApplyingBatch.set(true);
+        try {
+            return super.applyBatch(operations);
+        } finally {
+            mApplyingBatch.set(false);
+            mStats.finishOperation(callingUid);
+        }
+    }
+
+    @Override
+    public int bulkInsert(Uri uri, ContentValues[] values) {
+        final int callingUid = Binder.getCallingUid();
+        mCallingUid.set(callingUid);
+
+        mStats.incrementBatchStats(callingUid);
+        mApplyingBatch.set(true);
+        try {
+            return super.bulkInsert(uri, values);
+        } finally {
+            mApplyingBatch.set(false);
+            mStats.finishOperation(callingUid);
+        }
+    }
+
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder) {
+        // Note don't use mCallingUid here. That's only used by mutation functions.
+        final int callingUid = Binder.getCallingUid();
+
+        mStats.incrementQueryStats(callingUid);
+        try {
+            return queryInternal(uri, projection, selection, selectionArgs, sortOrder);
+        } finally {
+            mStats.finishOperation(callingUid);
+        }
+    }
+
+    private Cursor queryInternal(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
@@ -361,6 +421,44 @@ public class CallLogProvider extends ContentProvider {
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
+        final int callingUid =
+                applyingBatch() ? mCallingUid.get() : Binder.getCallingUid();
+
+        mStats.incrementInsertStats(callingUid, applyingBatch());
+        try {
+            return insertInternal(uri, values);
+        } finally {
+            mStats.finishOperation(callingUid);
+        }
+    }
+
+    @Override
+    public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
+        final int callingUid =
+                applyingBatch() ? mCallingUid.get() : Binder.getCallingUid();
+
+        mStats.incrementInsertStats(callingUid, applyingBatch());
+        try {
+            return updateInternal(uri, values, selection, selectionArgs);
+        } finally {
+            mStats.finishOperation(callingUid);
+        }
+    }
+
+    @Override
+    public int delete(Uri uri, String selection, String[] selectionArgs) {
+        final int callingUid =
+                applyingBatch() ? mCallingUid.get() : Binder.getCallingUid();
+
+        mStats.incrementInsertStats(callingUid, applyingBatch());
+        try {
+            return deleteInternal(uri, selection, selectionArgs);
+        } finally {
+            mStats.finishOperation(callingUid);
+        }
+    }
+
+    private Uri insertInternal(Uri uri, ContentValues values) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "insert: uri=" + uri + "  values=[" + values + "]" +
                     " CPID=" + Binder.getCallingPid());
@@ -390,8 +488,8 @@ public class CallLogProvider extends ContentProvider {
         return null;
     }
 
-    @Override
-    public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
+    private int updateInternal(Uri uri, ContentValues values,
+            String selection, String[] selectionArgs) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "update: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
@@ -427,8 +525,7 @@ public class CallLogProvider extends ContentProvider {
                 selectionArgs);
     }
 
-    @Override
-    public int delete(Uri uri, String selection, String[] selectionArgs) {
+    private int deleteInternal(Uri uri, String selection, String[] selectionArgs) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "delete: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
@@ -752,5 +849,10 @@ public class CallLogProvider extends ContentProvider {
     @Override
     public void shutdown() {
         mTaskScheduler.shutdownForTest();
+    }
+
+    @Override
+    public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
+        mStats.dump(writer, "  ");
     }
 }
