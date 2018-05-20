@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--  Copyright (C) 2009 The Android Open Source Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+ -->
+
+<resources xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Android କୋର୍ ଆପ୍"</string>
+    <string name="app_label" msgid="3389954322874982620">"ଯୋଗାଯୋଗ ଷ୍ଟୋରେଜ୍"</string>
+    <string name="provider_label" msgid="6012150850819899907">"ଯୋଗାଯୋଗ"</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"ଯୋଗାଯୋଗ ଅପଗ୍ରେଡ୍ ପାଇଁ ଅଧିକ ମେମୋରୀ ଦରକାର।"</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"ଯୋଗାଯୋଗ ପାଇଁ ଷ୍ଟୋରେଜ୍ ଅପଗ୍ରେଡ୍ କରାଯାଉଛି"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"ଅପଗ୍ରେଡ୍ ସମ୍ପୂର୍ଣ୍ଣ କରିବା ପାଇଁ ଟାପ୍ କରନ୍ତୁ।"</string>
+    <string name="default_directory" msgid="93961630309570294">"ଯୋଗାଯୋଗ"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"ଅନ୍ୟାନ୍ୟ"</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"ଏହାଙ୍କଠାରୁ ଭଏସମେଲ୍‌ "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"ଯୋଗାଯୋଗ ଡାଟାବେସ୍ କପୀ କରନ୍ତୁ"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"ଆପଣ 1) ଇଣ୍ଟର୍ନଲ ଷ୍ଟୋରେଜରେ ନିଜ ଡାଟାବେସ୍‌ର ଏକ କପୀ ବନାନ୍ତୁ, ଯେଉଁଥିରେ ଯୋଗାଯୋଗ ସମ୍ବନ୍ଧିତ ସମସ୍ତ ତଥ୍ୟ ଏବଂ କଲ୍ ଲଗ୍ ସାମିଲ ରହିବ ଏବଂ 2) ଏହାକୁ ଇମେଲ୍ କରନ୍ତୁ। ମନେରଖନ୍ତୁ, ଡିଭାଇସ୍‌ରୁ ସଫଳତାପୂର୍ବକ ଏହାର କପୀ କରିସାରିବା ପରେ କିମ୍ୱା ଇମେଲ୍ ପ୍ରାପ୍ତ ହୋଇସାରିବା ପରେ, ଏହି କପୀକୁ ଡିଲିଟ୍ କରିଦେବେ।"</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"ବର୍ତ୍ତମାନ ଡିଲିଟ୍ କରନ୍ତୁ"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"ଆରମ୍ଭ କରନ୍ତୁ"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"ନିଜ ଫାଇଲ ପଠାଇବା ପାଇଁ ଗୋଟିଏ ପ୍ରୋଗ୍ରାମ୍ ବାଛନ୍ତୁ"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"ଯୋଗାଯୋଗ Db ଆଟାଚ୍ କରାଗଲା"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"ମୋର ସମସ୍ତ ଯୋଗାଯୋଗ ସୂଚନା ସହିତ ମୋର ଯୋଗାଯୋଗ ଡାଟାବେସ୍‌କୁ ଆଟାଚ୍ କରାଯାଇଛି। ସାବଧାନତାର ସହ କାମ କରନ୍ତୁ।"</string>
+</resources>
