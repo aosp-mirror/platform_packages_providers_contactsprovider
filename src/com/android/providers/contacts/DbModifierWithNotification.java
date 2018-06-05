@@ -167,7 +167,8 @@ public class DbModifierWithNotification implements DatabaseModifier {
         Set<String> packagesModified = getModifiedPackages(whereClause, whereArgs);
         packagesModified.addAll(getModifiedPackages(values));
 
-        boolean isVoicemail = packagesModified.size() != 0 && isUpdatingVoicemailColumns(values);
+        boolean isVoicemailContent =
+                packagesModified.size() != 0 && isUpdatingVoicemailColumns(values);
 
         boolean hasMarkedRead = false;
         if (mIsCallsTable) {
@@ -177,7 +178,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
             } else {
                 updateLastModified(table, whereClause, whereArgs);
             }
-            if (isVoicemail) {
+            if (isVoicemailContent) {
                 if (updateDirtyFlag(values, packagesModified)) {
                     if (values.containsKey(Calls.IS_READ)
                             && getAsBoolean(values,
@@ -196,7 +197,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
             return 0;
         }
         int count = mDb.update(table, values, whereClause, whereArgs);
-        if (count > 0 && isVoicemail) {
+        if (count > 0 && isVoicemailContent || Tables.VOICEMAIL_STATUS.equals(table)) {
             notifyVoicemailChange(mBaseUri, packagesModified);
         }
         if (count > 0 && mIsCallsTable) {
