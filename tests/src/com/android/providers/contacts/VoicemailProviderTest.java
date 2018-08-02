@@ -45,6 +45,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Unit tests for {@link VoicemailContentProvider}.
@@ -749,18 +751,18 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
             Status.NOTIFICATION_CHANNEL_STATE_MESSAGE_WAITING);
         values.put(Status.SOURCE_TYPE,
             "vvm_type_test2");
-        Boolean[] observerTriggered = new Boolean[]{false};
+        final CountDownLatch latch = new CountDownLatch(1);
         mResolver.registerContentObserver(Status.CONTENT_URI, true,
-            new ContentObserver(new Handler()) {
+            new ContentObserver(null) {
                 @Override
                 public void onChange(boolean selfChange, Uri uri) {
-                    observerTriggered[0] = true;
+                    latch.countDown();
                 }
             });
 
         mResolver.update(uri, values, null, null);
 
-        assertTrue(observerTriggered[0]);
+        assertTrue("Observer didn't get notified", latch.await(5, TimeUnit.SECONDS));
     }
 
     public void testStatusUpsert() throws Exception {

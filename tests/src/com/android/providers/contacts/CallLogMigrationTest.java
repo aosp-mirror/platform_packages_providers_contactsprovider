@@ -18,7 +18,6 @@ package com.android.providers.contacts;
 import android.content.Context;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
-import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.LargeTest;
 
 import java.io.File;
@@ -28,7 +27,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 @LargeTest
-public class CallLogMigrationTest extends AndroidTestCase {
+public class CallLogMigrationTest extends FixedAndroidTestCase {
 
     private void writeAssetFileToDisk(String assetName, File diskPath) throws IOException {
         final Context context = getTestContext();
