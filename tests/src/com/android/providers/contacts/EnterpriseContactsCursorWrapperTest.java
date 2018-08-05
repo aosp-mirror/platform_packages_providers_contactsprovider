@@ -19,7 +19,6 @@ package com.android.providers.contacts;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.provider.ContactsContract.PhoneLookup;
-import android.test.AndroidTestCase;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.SmallTest;
 
@@ -27,7 +26,7 @@ import com.android.providers.contacts.enterprise.EnterpriseContactsCursorWrapper
 
 
 @SmallTest
-public class EnterpriseContactsCursorWrapperTest extends AndroidTestCase {
+public class EnterpriseContactsCursorWrapperTest extends FixedAndroidTestCase {
 
     public void testWrappedResults() {
         final String[] projection = new String[] {

@@ -17,8 +17,9 @@
 package com.android.providers.contacts.util;
 
 import android.net.Uri;
-import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
+
+import com.android.providers.contacts.FixedAndroidTestCase;
 
 /**
  * Unit tests for {@link TypedUriMatcherImpl}.
@@ -28,7 +29,7 @@ import android.test.suitebuilder.annotation.SmallTest;
  * </code>
  */
 @SmallTest
-public class TypedUriMatcherImplTest extends AndroidTestCase {
+public class TypedUriMatcherImplTest extends FixedAndroidTestCase {
     /** URI type used for testing. */
     private static enum TestUriType implements UriType {
         NO_MATCH(null),

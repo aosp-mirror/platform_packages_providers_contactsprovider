@@ -15,9 +15,10 @@
  */
 package com.android.providers.contacts;
 
+import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.test.AndroidTestCase;
+import android.support.test.InstrumentationRegistry;
 
 import junit.framework.AssertionFailedError;
 
@@ -29,7 +30,7 @@ import java.util.HashMap;
  * Run the test like this: <code> runtest -c com.android.providers.contacts.BaseDatabaseHelperUpgradeTest
  * contactsprov </code>
  */
-public abstract class BaseDatabaseHelperUpgradeTest extends AndroidTestCase {
+public abstract class BaseDatabaseHelperUpgradeTest extends FixedAndroidTestCase {
 
     protected static final String INTEGER = "INTEGER";
     protected static final String TEXT = "TEXT";

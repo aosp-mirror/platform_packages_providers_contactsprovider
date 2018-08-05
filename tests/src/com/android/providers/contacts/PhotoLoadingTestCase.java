@@ -16,8 +16,9 @@
 
 package com.android.providers.contacts;
 
+import android.content.Context;
 import android.content.res.Resources;
-import android.test.AndroidTestCase;
+import android.support.test.InstrumentationRegistry;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import com.google.android.collect.Maps;
@@ -31,7 +32,7 @@ import java.util.Map;
  * Adds support for loading photo files easily from test resources.
  */
 @SmallTest
-public class PhotoLoadingTestCase extends AndroidTestCase {
+public class PhotoLoadingTestCase extends FixedAndroidTestCase {
 
     private Map<Integer, PhotoEntry> photoResourceCache = Maps.newHashMap();
     protected static enum PhotoSize {

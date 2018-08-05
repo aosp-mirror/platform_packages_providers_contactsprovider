@@ -36,14 +36,8 @@
         </service>
     </application>
 
-    <!--
-    The test declared in this instrumentation will be run along with tests declared by
-    all other applications via the command: "adb shell itr".
-    The "itr" command will find all tests declared by all applications. If you want to run just these
-    tests on their own then use the command:
-    "adb shell am instrument -w com.android.providers.contacts.tests/android.test.InstrumentationTestRunner"
-    -->
-    <instrumentation android:name="android.test.InstrumentationTestRunner"
+    <instrumentation
+        android:name="android.support.test.runner.AndroidJUnitRunner"
         android:targetPackage="com.android.providers.contacts"
         android:label="Contacts Provider Tests">
     </instrumentation>

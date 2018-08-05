@@ -15,16 +15,16 @@
  */
 package com.android.providers.contacts.sqlite;
 
-import android.test.AndroidTestCase;
 import android.test.MoreAsserts;
 
+import com.android.providers.contacts.FixedAndroidTestCase;
 import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class SqlCheckerTest extends AndroidTestCase {
+public class SqlCheckerTest extends FixedAndroidTestCase {
     private ArrayList<String> getTokens(String sql) {
         final ArrayList<String> tokens = new ArrayList<>();
 

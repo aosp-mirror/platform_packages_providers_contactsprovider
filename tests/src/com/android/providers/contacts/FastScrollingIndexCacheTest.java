@@ -20,14 +20,13 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.RawContacts;
-import android.test.AndroidTestCase;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import com.android.providers.contacts.util.MockSharedPreferences;
 
 @SmallTest
-public class FastScrollingIndexCacheTest extends AndroidTestCase {
+public class FastScrollingIndexCacheTest extends FixedAndroidTestCase {
     private MockSharedPreferences mPrefs;
     private FastScrollingIndexCache mCache;
 
