@@ -136,9 +136,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1000-1099 M
      *   1100-1199 N
      *   1200-1299 O
+     *   1300-1399 P
      * </pre>
      */
-    static final int DATABASE_VERSION = 1202;
+    static final int DATABASE_VERSION = 1300;
     private static final int MINIMUM_SUPPORTED_VERSION = 700;
 
     @VisibleForTesting
@@ -1440,7 +1441,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Data.SYNC2 + " TEXT, " +
                 Data.SYNC3 + " TEXT, " +
                 Data.SYNC4 + " TEXT, " +
-                Data.CARRIER_PRESENCE + " INTEGER NOT NULL DEFAULT 0 " +
+                Data.CARRIER_PRESENCE + " INTEGER NOT NULL DEFAULT 0, " +
+                Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME + " TEXT, " +
+                Data.PREFERRED_PHONE_ACCOUNT_ID + " TEXT " +
         ");");
 
         db.execSQL("CREATE INDEX data_raw_contact_id ON " + Tables.DATA + " (" +
@@ -1924,6 +1927,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + Data.DATA14 + ", "
                 + Data.DATA15 + ", "
                 + Data.CARRIER_PRESENCE + ", "
+                + Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME + ", "
+                + Data.PREFERRED_PHONE_ACCOUNT_ID + ", "
                 + Data.SYNC1 + ", "
                 + Data.SYNC2 + ", "
                 + Data.SYNC3 + ", "
@@ -2664,6 +2669,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (isUpgradeRequired(oldVersion, newVersion, 1202)) {
             upgradeViewsAndTriggers = true;
             oldVersion = 1202;
+        }
+
+        if (isUpgradeRequired(oldVersion,newVersion, 1300)) {
+            upgradeToVersion1300(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1300;
         }
 
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
@@ -3436,6 +3447,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + "x_last_time_used = ifnull(last_time_used,0),"
                 + "times_used = 0,"
                 + "last_time_used = 0");
+    }
+
+    public void upgradeToVersion1300(SQLiteDatabase db) {
+        try {
+            db.execSQL("ALTER TABLE data ADD preferred_phone_account_component_name "
+                    + "TEXT;");
+            db.execSQL("ALTER TABLE data ADD preferred_phone_account_id TEXT;");
+        } catch (SQLiteException ignore) {
+        }
     }
 
     /**

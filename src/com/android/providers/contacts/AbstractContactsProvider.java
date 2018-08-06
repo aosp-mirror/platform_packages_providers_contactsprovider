@@ -16,10 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -38,8 +34,11 @@ import android.provider.BaseColumns;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.util.Log;
-import android.util.SparseBooleanArray;
-import android.util.SparseLongArray;
+
+import com.android.internal.util.ProviderAccessStats;
+import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -116,23 +115,8 @@ public abstract class AbstractContactsProvider extends ContentProvider
      */
     private SQLiteTransactionListener mSerializedDbTransactionListener;
 
-    private final long mStartTime = SystemClock.elapsedRealtime();
 
-    private final Object mStatsLock = new Object();
-    protected final SparseBooleanArray mAllCallingUids = new SparseBooleanArray();
-    protected final SparseLongArray mQueryStats = new SparseLongArray();
-    protected final SparseLongArray mBatchStats = new SparseLongArray();
-    protected final SparseLongArray mInsertStats = new SparseLongArray();
-    protected final SparseLongArray mUpdateStats = new SparseLongArray();
-    protected final SparseLongArray mDeleteStats = new SparseLongArray();
-    protected final SparseLongArray mInsertInBatchStats = new SparseLongArray();
-    protected final SparseLongArray mUpdateInBatchStats = new SparseLongArray();
-    protected final SparseLongArray mDeleteInBatchStats = new SparseLongArray();
-
-    private final SparseLongArray mOperationDurationMicroStats = new SparseLongArray();
-
-    private final ThreadLocal<Integer> mOperationNest = ThreadLocal.withInitial(() -> 0);
-    private final ThreadLocal<Long> mOperationStartNs = ThreadLocal.withInitial(() -> 0L);
+    protected final ProviderAccessStats mStats = new ProviderAccessStats();
 
     @Override
     public boolean onCreate() {
@@ -158,47 +142,19 @@ public abstract class AbstractContactsProvider extends ContentProvider
         mSerializedDbTransactionListener = listener;
     }
 
-    protected final void incrementStats(SparseLongArray stats) {
-        final int callingUid = Binder.getCallingUid();
-        synchronized (mStatsLock) {
-            stats.put(callingUid, stats.get(callingUid) + 1);
-            mAllCallingUids.put(callingUid, true);
-
-            final int nest = mOperationNest.get();
-            mOperationNest.set(nest + 1);
-            if (nest == 0) {
-                mOperationStartNs.set(SystemClock.elapsedRealtimeNanos());
-            }
-        }
-    }
-
-    protected final void incrementStats(SparseLongArray statsNonBatch,
-            SparseLongArray statsInBatch) {
-        final ContactsTransaction t = mTransactionHolder.get();
-        final boolean inBatch = t != null && t.isBatch();
-        incrementStats(inBatch ? statsInBatch : statsNonBatch);
-    }
-
-    protected void finishOperation() {
-        final int callingUid = Binder.getCallingUid();
-        synchronized (mStatsLock) {
-            final int nest = mOperationNest.get();
-            mOperationNest.set(nest - 1);
-            if (nest == 1) {
-                final long duration = SystemClock.elapsedRealtimeNanos() - mOperationStartNs.get();
-                mOperationDurationMicroStats.put(callingUid,
-                        mOperationDurationMicroStats.get(callingUid) + duration / 1000L);
-            }
-        }
-    }
-
     public ContactsTransaction getCurrentTransaction() {
         return mTransactionHolder.get();
     }
 
+    private boolean isInBatch() {
+        final ContactsTransaction t = mTransactionHolder.get();
+        return t != null && t.isBatch();
+    }
+
     @Override
     public Uri insert(Uri uri, ContentValues values) {
-        incrementStats(mInsertStats, mInsertInBatchStats);
+        final int callingUid = Binder.getCallingUid();
+        mStats.incrementInsertStats(callingUid, isInBatch());
         try {
             ContactsTransaction transaction = startTransaction(false);
             try {
@@ -212,13 +168,14 @@ public abstract class AbstractContactsProvider extends ContentProvider
                 endTransaction(false);
             }
         } finally {
-            finishOperation();
+            mStats.finishOperation(callingUid);
         }
     }
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        incrementStats(mDeleteStats, mDeleteInBatchStats);
+        final int callingUid = Binder.getCallingUid();
+        mStats.incrementDeleteStats(callingUid, isInBatch());
         try {
             ContactsTransaction transaction = startTransaction(false);
             try {
@@ -232,13 +189,14 @@ public abstract class AbstractContactsProvider extends ContentProvider
                 endTransaction(false);
             }
         } finally {
-            finishOperation();
+            mStats.finishOperation(callingUid);
         }
     }
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        incrementStats(mUpdateStats, mUpdateInBatchStats);
+        final int callingUid = Binder.getCallingUid();
+        mStats.incrementUpdateStats(callingUid, isInBatch());
         try {
             ContactsTransaction transaction = startTransaction(false);
             try {
@@ -252,13 +210,14 @@ public abstract class AbstractContactsProvider extends ContentProvider
                 endTransaction(false);
             }
         } finally {
-            finishOperation();
+            mStats.finishOperation(callingUid);
         }
     }
 
     @Override
     public int bulkInsert(Uri uri, ContentValues[] values) {
-        incrementStats(mBatchStats);
+        final int callingUid = Binder.getCallingUid();
+        mStats.incrementBatchStats(callingUid);
         try {
             ContactsTransaction transaction = startTransaction(true);
             int numValues = values.length;
@@ -282,14 +241,15 @@ public abstract class AbstractContactsProvider extends ContentProvider
             }
             return numValues;
         } finally {
-            finishOperation();
+            mStats.finishOperation(callingUid);
         }
     }
 
     @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations)
             throws OperationApplicationException {
-        incrementStats(mBatchStats);
+        final int callingUid = Binder.getCallingUid();
+        mStats.incrementBatchStats(callingUid);
         try {
             if (VERBOSE_LOGGING) {
                 Log.v(TAG, "applyBatch: " + operations.size() + " ops");
@@ -331,7 +291,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
                 endTransaction(true);
             }
         } finally {
-            finishOperation();
+            mStats.finishOperation(callingUid);
         }
     }
 
@@ -462,32 +422,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
         pw.print("Database: ");
         pw.println(dbName);
 
-        pw.print("  Uptime: ");
-        pw.print((SystemClock.elapsedRealtime() - mStartTime) / (60 * 1000));
-        pw.println(" minutes");
-
-        synchronized (mStatsLock) {
-            pw.println();
-            pw.println("  Client activities:");
-            pw.println("    UID        Query  Insert Update Delete   Batch Insert Update Delete"
-                + "          Sec");
-            for (int i = 0; i < mAllCallingUids.size(); i++) {
-                final int uid = mAllCallingUids.keyAt(i);
-                pw.println(String.format(
-                        "    %-9d %6d  %6d %6d %6d  %6d %6d %6d %6d %12.3f",
-                        uid,
-                        mQueryStats.get(uid),
-                        mInsertStats.get(uid),
-                        mUpdateStats.get(uid),
-                        mDeleteStats.get(uid),
-                        mBatchStats.get(uid),
-                        mInsertInBatchStats.get(uid),
-                        mUpdateInBatchStats.get(uid),
-                        mDeleteInBatchStats.get(uid),
-                        (mOperationDurationMicroStats.get(uid) / 1000000.0)
-                ));
-            }
-        }
+        mStats.dump(pw, "  ");
 
         if (mDbHelper == null) {
             pw.println("mDbHelper is null");
