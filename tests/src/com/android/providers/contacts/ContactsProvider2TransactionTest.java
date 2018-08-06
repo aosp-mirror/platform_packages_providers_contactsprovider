@@ -197,7 +197,7 @@ public class ContactsProvider2TransactionTest extends BaseContactsProvider2Test 
     private void checkStoredContact() {
         assertStoredValues(Contacts.CONTENT_URI, cv(
                 Contacts.DISPLAY_NAME, "Regular Contact",
-                RawContacts.LAST_TIME_CONTACTED, 86400 * 21
+                RawContacts.LAST_TIME_CONTACTED, 0
                 ));
     }
 
@@ -227,7 +227,7 @@ public class ContactsProvider2TransactionTest extends BaseContactsProvider2Test 
     private void checkStoredProfile() {
         assertStoredValues(Profile.CONTENT_URI, cv(
                 Contacts.DISPLAY_NAME, "Profile Contact",
-                RawContacts.LAST_TIME_CONTACTED, 86400 * 11
+                RawContacts.LAST_TIME_CONTACTED, 0
                 ));
     }
 
