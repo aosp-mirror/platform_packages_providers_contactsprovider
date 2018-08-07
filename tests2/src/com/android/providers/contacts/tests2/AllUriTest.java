@@ -371,14 +371,18 @@ public class AllUriTest extends AndroidTestCase {
     public void testSelect() {
         for (String[] path : URIs) {
             if (!supportsQuery(path)) continue;
-            final Uri uri = getUri(path);
+            try {
+                final Uri uri = getUri(path);
 
-            checkQueryExecutable(uri, // uri
-                    null, // projection
-                    null, // selection
-                    null, // selection args
-                    null // sort order
-                    );
+                checkQueryExecutable(uri, // uri
+                        null, // projection
+                        null, // selection
+                        null, // selection args
+                        null // sort order
+                        );
+            } catch (Throwable th) {
+                addFailure("Failed: URI=" + path[0] + " Message=" + th.getMessage(), th);
+            }
         }
         failIfFailed();
     }
@@ -386,12 +390,16 @@ public class AllUriTest extends AndroidTestCase {
     public void testNoHiddenColumns() {
         for (String[] path : URIs) {
             if (!supportsQuery(path)) continue;
-            final Uri uri = getUri(path);
+            try {
+                final Uri uri = getUri(path);
 
-            for (String column : getColumns(uri)) {
-                if (column.toLowerCase().startsWith(ContactsContract.HIDDEN_COLUMN_PREFIX)) {
-                    addFailure("Uri " + uri + " returned hidden column " + column, null);
+                for (String column : getColumns(uri)) {
+                    if (column.toLowerCase().startsWith(ContactsContract.HIDDEN_COLUMN_PREFIX)) {
+                        addFailure("Uri " + uri + " returned hidden column " + column, null);
+                    }
                 }
+            } catch (Throwable th) {
+                addFailure("Failed: URI=" + path[0] + " Message=" + th.getMessage(), th);
             }
         }
         failIfFailed();
@@ -649,41 +657,45 @@ public class AllUriTest extends AndroidTestCase {
         for (String[] path : URIs) {
             final Uri uri = getUri(path);
 
-            cv.clear();
-            if (supportsQuery(path)) {
-                cv.put(getColumns(uri)[0], 1);
-            } else {
-                cv.put("_id", 1);
-            }
-            if (uri.toString().contains("syncstate")) {
-                cv.put(SyncState.ACCOUNT_NAME, "abc");
-                cv.put(SyncState.ACCOUNT_TYPE, "def");
-            }
-
-            checkExecutable("insert", uri, supportsInsert(path), () -> {
-                final Uri newUri = mResolver.insert(uri, cv);
-                if (newUri == null) {
-                    addFailure("Insert for '" + uri + "' returned null.", null);
+            try {
+                cv.clear();
+                if (supportsQuery(path)) {
+                    cv.put(getColumns(uri)[0], 1);
                 } else {
-                    // "profile/raw_contacts/#" is missing update support.  too late to add, so
-                    // just skip.
-                    if (!newUri.toString().startsWith(
-                            "content://com.android.contacts/profile/raw_contacts/")) {
-                        checkExecutable("insert -> update", newUri, true, () -> {
-                            mResolver.update(newUri, cv, null, null);
+                    cv.put("_id", 1);
+                }
+                if (uri.toString().contains("syncstate")) {
+                    cv.put(SyncState.ACCOUNT_NAME, "abc");
+                    cv.put(SyncState.ACCOUNT_TYPE, "def");
+                }
+
+                checkExecutable("insert", uri, supportsInsert(path), () -> {
+                    final Uri newUri = mResolver.insert(uri, cv);
+                    if (newUri == null) {
+                        addFailure("Insert for '" + uri + "' returned null.", null);
+                    } else {
+                        // "profile/raw_contacts/#" is missing update support.  too late to add, so
+                        // just skip.
+                        if (!newUri.toString().startsWith(
+                                "content://com.android.contacts/profile/raw_contacts/")) {
+                            checkExecutable("insert -> update", newUri, true, () -> {
+                                mResolver.update(newUri, cv, null, null);
+                            });
+                        }
+                        checkExecutable("insert -> delete", newUri, true, () -> {
+                            mResolver.delete(newUri, null, null);
                         });
                     }
-                    checkExecutable("insert -> delete", newUri, true, () -> {
-                        mResolver.delete(newUri, null, null);
-                    });
-                }
-            });
-            checkExecutable("update", uri, supportsUpdate(path), () -> {
-                mResolver.update(uri, cv, "1=2", null);
-            });
-            checkExecutable("delete", uri, supportsDelete(path), () -> {
-                mResolver.delete(uri, "1=2", null);
-            });
+                });
+                checkExecutable("update", uri, supportsUpdate(path), () -> {
+                    mResolver.update(uri, cv, "1=2", null);
+                });
+                checkExecutable("delete", uri, supportsDelete(path), () -> {
+                    mResolver.delete(uri, "1=2", null);
+                });
+            } catch (Throwable th) {
+                addFailure("Failed: URI=" + uri + " Message=" + th.getMessage(), th);
+            }
         }
         failIfFailed();
     }

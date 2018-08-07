@@ -29,12 +29,11 @@ import android.provider.ContactsContract.RawContacts;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.test.suitebuilder.annotation.SmallTest;
-import android.util.Log;
 
-import com.android.providers.contacts.ContactsDatabaseHelper.LowRes;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+
 import com.google.android.collect.Sets;
 
 import java.util.HashSet;
@@ -452,48 +451,6 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
                 return null;
             }
             return c.getInt(0);
-        }
-    }
-
-    private Integer checkGetTimesUsedExpression(Integer value) {
-        return getIntegerFromExpression(LowRes.getTimesUsedExpression(
-                value == null ? "NULL" : String.valueOf(value)));
-    }
-
-    public void testGetTimesUsedExpression() {
-        assertEquals((Object) 0, checkGetTimesUsedExpression(null));
-        assertEquals((Object) 0, checkGetTimesUsedExpression(-1));
-        assertEquals((Object) 0, checkGetTimesUsedExpression(-10));
-        assertEquals((Object) 0, checkGetTimesUsedExpression(0));
-        for (int i = 1; i < 10; i++) {
-            assertEquals("value=" + i, (Object) i, checkGetTimesUsedExpression(i));
-        }
-        for (int i = 10; i < 20; i++) {
-            assertEquals("value=" + i, (Object) 10, checkGetTimesUsedExpression(i));
-        }
-        for (int i = 20; i < 30; i++) {
-            assertEquals("value=" + i, (Object) 20, checkGetTimesUsedExpression(i));
-        }
-
-        assertEquals((Object) 123450, checkGetTimesUsedExpression(123456));
-    }
-
-    private Integer checkGetLastTimeUsedExpression(Integer value) {
-        return getIntegerFromExpression(LowRes.getLastTimeUsedExpression(
-                value == null ? "NULL" : String.valueOf(value)));
-    }
-
-    public void testGetLastTimeUsedExpression() {
-        assertEquals((Object) null, checkGetLastTimeUsedExpression(null));
-        assertEquals((Object) 0, checkGetLastTimeUsedExpression(0));
-        assertEquals((Object) 0, checkGetLastTimeUsedExpression(1));
-        assertEquals((Object) 0, checkGetLastTimeUsedExpression(86399));
-        assertEquals((Object) 86400, checkGetLastTimeUsedExpression(86400));
-
-        for (int i = 1; i < 3; i++) {
-            assertEquals((Object) (86400 * i), checkGetLastTimeUsedExpression(86400 * i));
-            assertEquals((Object) (86400 * i), checkGetLastTimeUsedExpression(86400 * i + 1));
-            assertEquals((Object) (86400 * i), checkGetLastTimeUsedExpression(86400 * i + 86399));
         }
     }
 
