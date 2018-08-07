@@ -754,6 +754,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(Data.DATA14)
             .add(Data.DATA15)
             .add(Data.CARRIER_PRESENCE)
+            .add(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME)
+            .add(Data.PREFERRED_PHONE_ACCOUNT_ID)
             .add(Data.DATA_VERSION)
             .add(Data.IS_PRIMARY)
             .add(Data.IS_SUPER_PRIMARY)
@@ -4649,6 +4651,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (flagExists(values, RawContacts.STARRED)) {
                 if (!callerIsSyncAdapter) {
                     updateFavoritesMembership(rawContactId, flagIsSet(values, RawContacts.STARRED));
+                    mTransactionContext.get().markRawContactDirtyAndChanged(
+                        rawContactId, callerIsSyncAdapter);
+                    mSyncToNetwork |= !callerIsSyncAdapter;
                 }
                 aggregator.updateStarred(rawContactId);
                 aggregator.updatePinned(rawContactId);
@@ -4662,6 +4667,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             SELECTION_STARRED_FROM_RAW_CONTACTS,
                             new String[] {Long.toString(rawContactId)});
                     updateFavoritesMembership(rawContactId, starred);
+                    mTransactionContext.get().markRawContactDirtyAndChanged(
+                        rawContactId, callerIsSyncAdapter);
+                    mSyncToNetwork |= !callerIsSyncAdapter;
                 }
             }
             if (flagExists(values, RawContacts.SEND_TO_VOICEMAIL)) {
@@ -4832,6 +4840,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     if (hasStarredValue) {
                         updateFavoritesMembership(rawContactId,
                                 flagIsSet(values, RawContacts.STARRED));
+                        mSyncToNetwork |= !callerIsSyncAdapter;
                     }
 
                     if (hasStarredValue || hasPinnedValue || hasVoiceMailValue) {
@@ -5536,7 +5545,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return mProfileProvider.query(uri, projection, selection, selectionArgs, sortOrder,
                     cancellationSignal);
         }
-        incrementStats(mQueryStats);
+        final int callingUid = Binder.getCallingUid();
+        mStats.incrementQueryStats(callingUid);
         try {
             // Otherwise proceed with a normal query against the contacts DB.
             switchToContactMode();
@@ -5544,7 +5554,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return queryDirectoryIfNecessary(uri, projection, selection, selectionArgs, sortOrder,
                     cancellationSignal);
         } finally {
-            finishOperation();
+            mStats.finishOperation(callingUid);
         }
     }
 

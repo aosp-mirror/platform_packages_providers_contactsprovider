@@ -27,7 +27,7 @@
     <string name="voicemail_from_column" msgid="435732568832121444">"Hlasová zpráva od uživatele "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopírování databáze kontaktů"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Chystáte se 1) vytvořit v interním úložišti kopii databáze obsahující všechny informace o kontaktech a veškerou historii hovorů a 2) odeslat ji e-mailem. Po úspěšném zkopírování ze zařízení nebo přijetí e-mailem ji nezapomeňte ihned odstranit."</string>
-    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Smazat nyní"</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Smazat teď"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Spustit"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Vyberte program pro odeslání souboru."</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"Databáze kontaktů v příloze"</string>

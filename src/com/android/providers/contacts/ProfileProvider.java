@@ -24,6 +24,7 @@ import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
+import android.os.Binder;
 import android.os.CancellationSignal;
 import android.provider.ContactsContract.Intents;
 
@@ -70,12 +71,13 @@ public class ProfileProvider extends AbstractContactsProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder, CancellationSignal cancellationSignal) {
-        incrementStats(mQueryStats);
+        final int callingUid = Binder.getCallingUid();
+        mStats.incrementQueryStats(callingUid);
         try {
             return mDelegate.queryLocal(uri, projection, selection, selectionArgs, sortOrder, -1,
                     cancellationSignal);
         } finally {
-            finishOperation();
+            mStats.finishOperation(callingUid);
         }
     }
 

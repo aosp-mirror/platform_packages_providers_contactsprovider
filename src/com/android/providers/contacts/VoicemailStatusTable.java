@@ -32,8 +32,6 @@ import android.util.ArraySet;
 import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.VoicemailContentProvider.UriData;
 
-import java.util.Set;
-
 /**
  * Implementation of {@link VoicemailTable.Delegate} for the voicemail status table.
  *
@@ -78,7 +76,7 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
             SQLiteDatabase db = mDbHelper.getWritableDatabase();
             // Try to update before insert.
             String combinedClause = uriData.getWhereClause();
-            int rowsChanged = getDatabaseModifier(db)
+            int rowsChanged = createDatabaseModifier(db)
                     .update(uriData.getUri(), mTableName, values, combinedClause, null);
             if (rowsChanged != 0) {
                 final String[] selection = new String[] {Status._ID};
@@ -90,7 +88,7 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
             }
             ContentValues copiedValues = new ContentValues(values);
             mDelegateHelper.checkAndAddSourcePackageIntoValues(uriData, copiedValues);
-            long rowId = getDatabaseModifier(db).insert(mTableName, null, copiedValues);
+            long rowId = createDatabaseModifier(db).insert(mTableName, null, copiedValues);
             if (rowId > 0) {
                 return ContentUris.withAppendedId(uriData.getUri(), rowId);
             } else {
@@ -100,11 +98,23 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
     }
 
     @Override
+    public int bulkInsert(UriData uriData, ContentValues[] values) {
+        int count = 0;
+        for (ContentValues value : values) {
+            Uri uri = insert(uriData, value);
+            if (uri != null) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    @Override
     public int delete(UriData uriData, String selection, String[] selectionArgs) {
         synchronized (DATABASE_LOCK) {
             SQLiteDatabase db = mDbHelper.getWritableDatabase();
             String combinedClause = concatenateClauses(selection, uriData.getWhereClause());
-            return getDatabaseModifier(db).delete(mTableName, combinedClause,
+            return createDatabaseModifier(db).delete(mTableName, combinedClause,
                     selectionArgs);
         }
     }
@@ -135,7 +145,7 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
         synchronized (DATABASE_LOCK) {
             SQLiteDatabase db = mDbHelper.getWritableDatabase();
             String combinedClause = concatenateClauses(selection, uriData.getWhereClause());
-            return getDatabaseModifier(db)
+            return createDatabaseModifier(db)
                     .update(uriData.getUri(), mTableName, values, combinedClause, selectionArgs);
         }
     }
@@ -154,7 +164,7 @@ public class VoicemailStatusTable implements VoicemailTable.Delegate {
         throw new UnsupportedOperationException("File operation is not supported for status table");
     }
 
-    private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
+    private DatabaseModifier createDatabaseModifier(SQLiteDatabase db) {
         return new DbModifierWithNotification(mTableName, db, mContext);
     }
 
