@@ -57,9 +57,11 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
+import android.telephony.TelephonyManager;
 import android.test.IsolatedContext;
 import android.test.mock.MockContentResolver;
 import android.test.mock.MockContext;
+import android.text.TextUtils;
 
 import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.MockSharedPreferences;
@@ -70,6 +72,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -98,6 +101,7 @@ public class ContactsActor {
 
     private Set<String> mGrantedPermissions = Sets.newHashSet();
     private final Set<Uri> mGrantedUriPermissions = Sets.newHashSet();
+    private boolean mHasCarrierPrivileges;
 
     private List<ContentProvider> mAllProviders = new ArrayList<>();
 
@@ -242,6 +246,31 @@ public class ContactsActor {
         }
     }
 
+    private MockTelephonyManager mMockTelephonyManager;
+
+    private class MockTelephonyManager extends TelephonyManager {
+        public MockTelephonyManager(Context context) {
+            super(context);
+        }
+
+        @Override
+        public int checkCarrierPrivilegesForPackageAnyPhone(String packageName) {
+            if (TextUtils.equals(packageName, ContactsActor.this.packageName)
+                    && mHasCarrierPrivileges) {
+                return TelephonyManager.CARRIER_PRIVILEGE_STATUS_HAS_ACCESS;
+            }
+            return TelephonyManager.CARRIER_PRIVILEGE_STATUS_NO_ACCESS;
+        }
+
+        @Override
+        public List<String> getPackagesWithCarrierPrivileges() {
+            if (!mHasCarrierPrivileges) {
+                return Collections.emptyList();
+            }
+            return Collections.singletonList(packageName);
+        }
+    }
+
     /**
      * A context wrapper that reports a different user id.
      *
@@ -290,6 +319,9 @@ public class ContactsActor {
                 if (Context.USER_SERVICE.equals(name)) {
                     return mockUserManager;
                 }
+                if (Context.TELEPHONY_SERVICE.equals(name)) {
+                    return mMockTelephonyManager;
+                }
                 // Use overallContext here; super.getSystemService() somehow won't return
                 // DevicePolicyManager.
                 return overallContext.getSystemService(name);
@@ -334,6 +366,9 @@ public class ContactsActor {
                 if (Context.USER_SERVICE.equals(name)) {
                     return mockUserManager;
                 }
+                if (Context.TELEPHONY_SERVICE.equals(name)) {
+                    return mMockTelephonyManager;
+                }
                 // Use overallContext here; super.getSystemService() somehow won't return
                 // DevicePolicyManager.
                 return overallContext.getSystemService(name);
@@ -367,6 +402,7 @@ public class ContactsActor {
 
         mMockAccountManager = new MockAccountManager(mProviderContext);
         mockUserManager = new MockUserManager(mProviderContext);
+        mMockTelephonyManager = new MockTelephonyManager(mProviderContext);
         provider = addProvider(providerClass, authority);
     }
 
@@ -425,6 +461,14 @@ public class ContactsActor {
 
     public void removeUriPermissions(Uri... uris) {
         mGrantedUriPermissions.removeAll(Arrays.asList(uris));
+    }
+
+    public void grantCarrierPrivileges() {
+        mHasCarrierPrivileges = true;
+    }
+
+    public void revokeCarrierPrivileges() {
+        mHasCarrierPrivileges = false;
     }
 
     /**

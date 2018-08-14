@@ -46,6 +46,8 @@ public interface VoicemailTable {
         public ParcelFileDescriptor openFile(UriData uriData, String mode)
                 throws FileNotFoundException;
         public ArraySet<String> getSourcePackages();
+
+        int bulkInsert(UriData uriData, ContentValues[] values);
     }
 
     /**

@@ -39,7 +39,6 @@ import com.android.providers.contacts.VoicemailContentProvider.UriData;
 import com.android.providers.contacts.util.CloseUtils;
 
 import com.google.common.collect.ImmutableSet;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -52,16 +51,19 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
     private static final String TAG = "VmContentProvider";
     private final ProjectionMap mVoicemailProjectionMap;
 
-    /** The private directory in which to store the data associated with the voicemail. */
+    /**
+     * The private directory in which to store the data associated with the voicemail.
+     */
     private static final String DATA_DIRECTORY = "voicemail-data";
 
-    private static final String[] FILENAME_ONLY_PROJECTION = new String[] { Voicemails._DATA };
+    private static final String[] FILENAME_ONLY_PROJECTION = new String[] {Voicemails._DATA};
 
-    private static final ImmutableSet<String> ALLOWED_COLUMNS = new ImmutableSet.Builder<String>()
+    public static final ImmutableSet<String> ALLOWED_COLUMNS = new ImmutableSet.Builder<String>()
             .add(Voicemails._ID)
             .add(Voicemails.NUMBER)
             .add(Voicemails.DATE)
             .add(Voicemails.DURATION)
+            .add(Voicemails.NEW)
             .add(Voicemails.IS_READ)
             .add(Voicemails.TRANSCRIPTION)
             .add(Voicemails.TRANSCRIPTION_STATE)
@@ -83,6 +85,8 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
             .add(OpenableColumns.SIZE)
             .build();
 
+    private static final int BULK_INSERTS_PER_YIELD_POINT = 50;
+
     private final String mTableName;
     private final CallLogDatabaseHelper mDbHelper;
     private final Context mContext;
@@ -101,6 +105,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
                 .add(Voicemails.NUMBER)
                 .add(Voicemails.DATE)
                 .add(Voicemails.DURATION)
+                .add(Voicemails.NEW)
                 .add(Voicemails.IS_READ)
                 .add(Voicemails.TRANSCRIPTION)
                 .add(Voicemails.TRANSCRIPTION_STATE)
@@ -138,6 +143,30 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
 
     @Override
     public Uri insert(UriData uriData, ContentValues values) {
+        DatabaseModifier modifier = createDatabaseModifier(mDbHelper.getWritableDatabase());
+        Uri uri = insertRow(modifier, uriData, values);
+        return uri;
+    }
+
+    @Override
+    public int bulkInsert(UriData uriData, ContentValues[] values) {
+        DatabaseModifier modifier = createDatabaseModifier(mDbHelper.getWritableDatabase());
+        modifier.startBulkOperation();
+        int count = 0;
+        for (ContentValues value : values) {
+            Uri uri = insertRow(modifier, uriData, value);
+            if (uri != null) {
+                count++;
+            }
+            if((count % BULK_INSERTS_PER_YIELD_POINT) == 0){
+                modifier.yieldBulkOperation();
+            }
+        }
+        modifier.finishBulkOperation();
+        return count;
+    }
+
+    private Uri insertRow(DatabaseModifier modifier, UriData uriData, ContentValues values) {
         checkForSupportedColumns(mVoicemailProjectionMap, values);
         ContentValues copiedValues = new ContentValues(values);
         checkInsertSupported(uriData);
@@ -160,7 +189,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         }
 
         SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        long rowId = getDatabaseModifier(db).insert(mTableName, null, copiedValues);
+        long rowId = modifier.insert(mTableName, null, copiedValues);
         if (rowId > 0) {
             Uri newUri = ContentUris.withAppendedId(uriData.getUri(), rowId);
             // Populate the 'voicemail_uri' field to be used by the call_log provider.
@@ -228,7 +257,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         }
 
         // Now delete the rows themselves.
-        return getDatabaseModifier(db).delete(mTableName, combinedClause,
+        return createDatabaseModifier(db).delete(mTableName, combinedClause,
                 selectionArgs);
     }
 
@@ -262,7 +291,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         // URI that include message Id. I think we do want to support bulk update.
         String combinedClause = concatenateClauses(selection, uriData.getWhereClause(),
                 getCallTypeClause());
-        return getDatabaseModifier(db).update(uriData.getUri(), mTableName, values, combinedClause,
+        return createDatabaseModifier(db).update(uriData.getUri(), mTableName, values, combinedClause,
                 selectionArgs);
     }
 
@@ -298,7 +327,7 @@ public class VoicemailContentTable implements VoicemailTable.Delegate {
         return getEqualityClause(Calls.TYPE, Calls.VOICEMAIL_TYPE);
     }
 
-    private DatabaseModifier getDatabaseModifier(SQLiteDatabase db) {
+    private DatabaseModifier createDatabaseModifier(SQLiteDatabase db) {
         return new DbModifierWithNotification(mTableName, db, mContext);
     }
 

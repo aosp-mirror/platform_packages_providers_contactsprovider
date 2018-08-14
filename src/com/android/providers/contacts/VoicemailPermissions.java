@@ -16,10 +16,12 @@
 
 package com.android.providers.contacts;
 
-import com.android.providers.contacts.util.ContactsPermissions;
-
 import android.content.Context;
+import android.os.Binder;
 import android.telecom.DefaultDialerManager;
+import android.telephony.TelephonyManager;
+
+import com.android.providers.contacts.util.ContactsPermissions;
 
 /**
  * Provides method related to check various voicemail permissions under the
@@ -35,7 +37,8 @@ public class VoicemailPermissions {
 
     /** Determines if the calling process has access to its own voicemails. */
     public boolean callerHasOwnVoicemailAccess() {
-        return callerHasPermission(android.Manifest.permission.ADD_VOICEMAIL);
+        return callerHasPermission(android.Manifest.permission.ADD_VOICEMAIL)
+                || callerHasCarrierPrivileges();
     }
 
     /** Determine if the calling process has full read access to all voicemails. */
@@ -63,7 +66,7 @@ public class VoicemailPermissions {
     public void checkCallerHasOwnVoicemailAccess() {
         if (!callerHasOwnVoicemailAccess()) {
             throw new SecurityException("The caller must have permission: " +
-                    android.Manifest.permission.ADD_VOICEMAIL);
+                    android.Manifest.permission.ADD_VOICEMAIL + " or carrier privileges");
         }
     }
 
@@ -91,7 +94,8 @@ public class VoicemailPermissions {
     /** Determines if the given package has access to its own voicemails. */
     public boolean packageHasOwnVoicemailAccess(String packageName) {
         return packageHasPermission(packageName,
-                android.Manifest.permission.ADD_VOICEMAIL);
+                android.Manifest.permission.ADD_VOICEMAIL)
+                || packageHasCarrierPrivileges(packageName);
     }
 
     /** Determines if the given package has read access. */
@@ -112,5 +116,26 @@ public class VoicemailPermissions {
     /** Determines if the calling process has the given permission. */
     private boolean callerHasPermission(String permission) {
         return ContactsPermissions.hasCallerOrSelfPermission(mContext, permission);
+    }
+
+    /** Determines if the calling process has carrier privileges. */
+    public boolean callerHasCarrierPrivileges() {
+        TelephonyManager tm =
+                (TelephonyManager) mContext.getSystemService(Context.TELEPHONY_SERVICE);
+        String[] packages = mContext.getPackageManager().getPackagesForUid(Binder.getCallingUid());
+        for (String packageName : packages) {
+            if (tm.checkCarrierPrivilegesForPackageAnyPhone(packageName)
+                    == TelephonyManager.CARRIER_PRIVILEGE_STATUS_HAS_ACCESS) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Determines if the given package has carrier privileges. */
+    private boolean packageHasCarrierPrivileges(String packageName) {
+        TelephonyManager tm =
+                (TelephonyManager) mContext.getSystemService(Context.TELEPHONY_SERVICE);
+        return tm.getPackagesWithCarrierPrivileges().contains(packageName);
     }
 }
