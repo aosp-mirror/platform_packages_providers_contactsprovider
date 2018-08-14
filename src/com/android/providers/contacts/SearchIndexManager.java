@@ -24,7 +24,6 @@ import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.Data;
-import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.text.TextUtils;
 import android.util.ArraySet;
@@ -35,6 +34,8 @@ import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SearchIndexColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.util.CappedStringBuilder;
+
 import com.google.android.collect.Lists;
 import com.google.common.annotations.VisibleForTesting;
 
@@ -50,6 +51,8 @@ public class SearchIndexManager {
     private static final String TAG = "ContactsFTS";
 
     private static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
+
+    private static final int MAX_STRING_BUILDER_SIZE = 1024 * 10;
 
     public static final String PROPERTY_SEARCH_INDEX_VERSION = "search_index";
     private static final int SEARCH_INDEX_VERSION = 1;
@@ -72,10 +75,11 @@ public class SearchIndexManager {
         public static final int SEPARATOR_SLASH = 2;
         public static final int SEPARATOR_COMMA = 3;
 
-        private StringBuilder mSbContent = new StringBuilder();
-        private StringBuilder mSbName = new StringBuilder();
-        private StringBuilder mSbTokens = new StringBuilder();
-        private StringBuilder mSbElementContent = new StringBuilder();
+        private CappedStringBuilder mSbContent = new CappedStringBuilder(MAX_STRING_BUILDER_SIZE);
+        private CappedStringBuilder mSbName = new CappedStringBuilder(MAX_STRING_BUILDER_SIZE);
+        private CappedStringBuilder mSbTokens = new CappedStringBuilder(MAX_STRING_BUILDER_SIZE);
+        private CappedStringBuilder mSbElementContent = new CappedStringBuilder(
+                MAX_STRING_BUILDER_SIZE);
         private ArraySet<String> mUniqueElements = new ArraySet<>();
         private Cursor mCursor;
 
@@ -84,10 +88,10 @@ public class SearchIndexManager {
         }
 
         void reset() {
-            mSbContent.setLength(0);
-            mSbTokens.setLength(0);
-            mSbName.setLength(0);
-            mSbElementContent.setLength(0);
+            mSbContent.clear();
+            mSbTokens.clear();
+            mSbName.clear();
+            mSbElementContent.clear();
             mUniqueElements.clear();
         }
 
@@ -126,7 +130,7 @@ public class SearchIndexManager {
                     mSbContent.append(content);
                     mUniqueElements.add(content);
                 }
-                mSbElementContent.setLength(0);
+                mSbElementContent.clear();
             }
         }
 

@@ -16,7 +16,6 @@
 
 package com.android.providers.contacts;
 
-import static com.android.providers.contacts.TestUtils.createDatabaseSnapshot;
 import static com.android.providers.contacts.TestUtils.cv;
 import static com.android.providers.contacts.TestUtils.dumpCursor;
 
@@ -420,6 +419,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA14,
                 Data.DATA15,
                 Data.CARRIER_PRESENCE,
+                Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                Data.PREFERRED_PHONE_ACCOUNT_ID,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -508,6 +509,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA14,
                 Data.DATA15,
                 Data.CARRIER_PRESENCE,
+                Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                Data.PREFERRED_PHONE_ACCOUNT_ID,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -590,6 +593,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA14,
                 Data.DATA15,
                 Data.CARRIER_PRESENCE,
+                Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                Data.PREFERRED_PHONE_ACCOUNT_ID,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -698,6 +703,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.DATA14,
                 Data.DATA15,
                 Data.CARRIER_PRESENCE,
+                Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                Data.PREFERRED_PHONE_ACCOUNT_ID,
                 Data.SYNC1,
                 Data.SYNC2,
                 Data.SYNC3,
@@ -6485,6 +6492,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA14, "old14");
         values.put(Data.DATA15, "old15");
         values.put(Data.CARRIER_PRESENCE, 0);
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME, "oldcomponentname");
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, "oldid");
         Uri uri = mResolver.insert(Data.CONTENT_URI, values);
         assertStoredValues(uri, values);
         assertNetworkNotified(true);
@@ -6509,6 +6518,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA14, "new14");
         values.put(Data.DATA15, "new15");
         values.put(Data.CARRIER_PRESENCE, Data.CARRIER_PRESENCE_VT_CAPABLE);
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME, "newcomponentname");
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, "newid");
         mResolver.update(Data.CONTENT_URI, values, Data.RAW_CONTACT_ID + "=" + rawContactId +
                 " AND " + Data.MIMETYPE + "='testmimetype'", null);
         assertNetworkNotified(true);
@@ -7021,7 +7032,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(ContactsContract.RawContacts.SEND_TO_VOICEMAIL, 1);
         values.put(ContactsContract.RawContacts.AGGREGATION_MODE,
                 RawContacts.AGGREGATION_MODE_IMMEDIATE);
-        values.put(ContactsContract.RawContacts.STARRED, 1);
         assertEquals(1, mResolver.update(uri, values, null, null));
         assertEquals(version, getVersion(uri));
 
@@ -7872,6 +7882,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         assertStoredValue(contactUri, Contacts.STARRED, "0");
 
+        assertDirty(rawContactUri1, true);
+        assertDirty(rawContactUri2, true);
+        clearDirty(rawContactUri1);
+        clearDirty(rawContactUri2);
+
         ContentValues values = new ContentValues();
         values.put(RawContacts.STARRED, "1");
 
@@ -7880,20 +7895,41 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(rawContactUri1, RawContacts.STARRED, "1");
         assertStoredValue(rawContactUri2, RawContacts.STARRED, "0");
         assertStoredValue(contactUri, Contacts.STARRED, "1");
+        assertDirty(rawContactUri1, true);
+        assertNetworkNotified(true);
 
+        clearDirty(rawContactUri1);
         values.put(RawContacts.STARRED, "0");
         mResolver.update(rawContactUri1, values, null, null);
 
         assertStoredValue(rawContactUri1, RawContacts.STARRED, "0");
         assertStoredValue(rawContactUri2, RawContacts.STARRED, "0");
         assertStoredValue(contactUri, Contacts.STARRED, "0");
+        assertDirty(rawContactUri1, true);
+        assertNetworkNotified(true);
 
+        clearDirty(rawContactUri1);
         values.put(Contacts.STARRED, "1");
         mResolver.update(contactUri, values, null, null);
 
         assertStoredValue(rawContactUri1, RawContacts.STARRED, "1");
         assertStoredValue(rawContactUri2, RawContacts.STARRED, "1");
         assertStoredValue(contactUri, Contacts.STARRED, "1");
+        assertDirty(rawContactUri1, true);
+        assertNetworkNotified(true);
+    }
+
+    public void testUpdateContactOptionsSetStarred() {
+        long rawContactId = RawContactUtil.createRawContact(mResolver);
+        long contactId = queryContactId(rawContactId);
+        String lookupKey = queryLookupKey(contactId);
+        ContentValues values =new ContentValues();
+        values.put(Contacts.STARRED, 1);
+
+        Uri contactLookupUri = ContentUris.withAppendedId(
+            Uri.withAppendedPath(Contacts.CONTENT_LOOKUP_URI, lookupKey), contactId);
+        mResolver.update(contactLookupUri, values, null, null);
+        assertNetworkNotified(true);
     }
 
     public void testSetAndClearSuperPrimaryEmail() {
@@ -9884,6 +9920,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(Data.DATA14, "fourteen");
         values.put(Data.DATA15, "fifteen".getBytes());
         values.put(Data.CARRIER_PRESENCE, Data.CARRIER_PRESENCE_VT_CAPABLE);
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME, "preferredcomponentname");
+        values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, "preferredid");
         values.put(Data.SYNC1, "sync1");
         values.put(Data.SYNC2, "sync2");
         values.put(Data.SYNC3, "sync3");

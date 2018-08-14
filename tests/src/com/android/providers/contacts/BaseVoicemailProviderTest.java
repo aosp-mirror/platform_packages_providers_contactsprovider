@@ -70,6 +70,15 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
         mActor.removePermissions(READ_VOICEMAIL_PERMISSION);
         mActor.removePermissions(WRITE_VOICEMAIL_PERMISSION);
         mActor.addPermissions(ADD_VOICEMAIL_PERMISSION);
+        mActor.revokeCarrierPrivileges();
+        mUseSourceUri = true;
+    }
+
+    protected void setUpForOwnPermissionViaCarrierPrivileges() {
+        mActor.removePermissions(READ_VOICEMAIL_PERMISSION);
+        mActor.removePermissions(WRITE_VOICEMAIL_PERMISSION);
+        mActor.removePermissions(ADD_VOICEMAIL_PERMISSION);
+        mActor.grantCarrierPrivileges();
         mUseSourceUri = true;
     }
 
@@ -77,6 +86,7 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
         mActor.addPermissions(ADD_VOICEMAIL_PERMISSION);
         mActor.addPermissions(READ_VOICEMAIL_PERMISSION);
         mActor.addPermissions(WRITE_VOICEMAIL_PERMISSION);
+        mActor.revokeCarrierPrivileges();
         mUseSourceUri = false;
     }
 
@@ -84,6 +94,7 @@ public abstract class BaseVoicemailProviderTest extends BaseContactsProvider2Tes
         mActor.removePermissions(ADD_VOICEMAIL_PERMISSION);
         mActor.removePermissions(READ_VOICEMAIL_PERMISSION);
         mActor.removePermissions(WRITE_VOICEMAIL_PERMISSION);
+        mActor.revokeCarrierPrivileges();
         mUseSourceUri = true;
     }
 
