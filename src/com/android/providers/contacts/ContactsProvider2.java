@@ -1480,6 +1480,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private boolean mSyncToNetwork;
     private boolean mSyncToMetadataNetWork;
 
+    private boolean mRawContactInserted;
+    private boolean mRawContactUpdated;
+    private boolean mRawContactDeleted;
+
     private LocaleSet mCurrentLocales;
     private int mContactsAccountCount;
 
@@ -2582,6 +2586,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         getContext().getContentResolver().notifyChange(MetadataSync.METADATA_AUTHORITY_URI,
                 null, syncToMetadataNetwork);
+
+        if (mRawContactInserted) {
+            getContext().getContentResolver().notifyChange(
+                    RawContacts.RAW_CONTACTS_NOTIFICATION_INSERT_URI, null);
+            mRawContactInserted = false;
+        }
+        if (mRawContactUpdated) {
+            getContext().getContentResolver().notifyChange(
+                    RawContacts.RAW_CONTACTS_NOTIFICATION_UPDATE_URI, null);
+            mRawContactUpdated = false;
+        }
+        if (mRawContactDeleted) {
+            getContext().getContentResolver().notifyChange(
+                    RawContacts.RAW_CONTACTS_NOTIFICATION_DELETE_URI, null);
+            mRawContactDeleted = false;
+        }
     }
 
     protected void setProviderStatus(int status) {
@@ -2883,6 +2903,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         mProviderStatusUpdateNeeded = true;
+        mRawContactInserted = true;
         return rawContactId;
     }
 
@@ -3873,6 +3894,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (!contactIsSingleton) {
             mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
         }
+        if (count != 0) {
+            mRawContactDeleted = true;
+        }
         return count;
     }
 
@@ -4644,6 +4668,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 mTransactionContext.get().rawContactInserted(rawContactId, accountId);
             }
             mTransactionContext.get().markRawContactChangedOrDeletedOrInserted(rawContactId);
+        }
+        if (count != 0) {
+            mRawContactUpdated = true;
         }
         return count;
     }
@@ -9040,6 +9067,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         updateValues.put(Photo.PHOTO, processor.getThumbnailPhotoBytes());
                         update(ContentUris.withAppendedId(Data.CONTENT_URI, mDataId),
                                 updateValues, null, null);
+                        mRawContactUpdated = true;
                     } else {
                         // Insert a new primary data record with the photo.
                         ContentValues insertValues = new ContentValues();
