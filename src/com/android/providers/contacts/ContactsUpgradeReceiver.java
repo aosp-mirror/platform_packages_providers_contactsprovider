@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.icu.util.VersionInfo;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -25,8 +26,6 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.RemoteException;
 import android.util.Log;
-
-import libcore.icu.ICU;
 
 /**
  * This will be launched during system boot, after the core system has
@@ -56,7 +55,7 @@ public class ContactsUpgradeReceiver extends BroadcastReceiver {
             final SharedPreferences prefs = context.getSharedPreferences(TAG, Context.MODE_PRIVATE);
             final int prefDbVersion = prefs.getInt(PREF_DB_VERSION, 0);
 
-            final String curIcuVersion = ICU.getIcuVersion();
+            final String curIcuVersion = VersionInfo.ICU_VERSION.toString();
             final String curOsVersion = getOsVersionString();
 
             final String prefIcuVersion = prefs.getString(PREF_ICU_VERSION, "");
