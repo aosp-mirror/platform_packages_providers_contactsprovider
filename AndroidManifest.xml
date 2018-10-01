@@ -120,10 +120,5 @@
             android:exported="true">
         </provider>
 
-        <provider android:name="RawContactsChangeNotificationProvider"
-          android:authorities="com.android.contacts.raw_contacts"
-          android:exported="true">
-        </provider>
-
     </application>
 </manifest>
