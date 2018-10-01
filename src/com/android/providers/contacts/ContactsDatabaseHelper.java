@@ -42,6 +42,7 @@ import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
+import android.icu.util.VersionInfo;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
@@ -102,8 +103,6 @@ import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
 import com.android.providers.contacts.util.NeededForTesting;
-
-import libcore.icu.ICU;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -2755,7 +2754,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (!dbLocale.equals(locales.toString())) {
             return true;
         }
-        final String curICUVersion = ICU.getIcuVersion();
+        final String curICUVersion = getDeviceIcuVersion();
         final String dbICUVersion = getProperty(DbProperties.ICU_VERSION,
                 "(unknown)");
         if (!curICUVersion.equals(dbICUVersion)) {
@@ -2766,10 +2765,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return false;
     }
 
+    private static String getDeviceIcuVersion() {
+        return VersionInfo.ICU_VERSION.toString();
+    }
+
     private void upgradeLocaleData(SQLiteDatabase db, boolean rebuildSqliteStats) {
         final LocaleSet locales = LocaleSet.newDefault();
         Log.i(TAG, "Upgrading locale data for " + locales
-                + " (ICU v" + ICU.getIcuVersion() + ")");
+                + " (ICU v" + getDeviceIcuVersion() + ")");
         final long start = SystemClock.elapsedRealtime();
         rebuildLocaleData(db, locales, rebuildSqliteStats);
         Log.i(TAG, "Locale update completed in " + (SystemClock.elapsedRealtime() - start) + "ms");
@@ -2788,7 +2791,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         FastScrollingIndexCache.getInstance(mContext).invalidate();
         // Update the ICU version used to generate the locale derived data
         // so we can tell when we need to rebuild with new ICU versions.
-        PropertyUtils.setProperty(db, DbProperties.ICU_VERSION, ICU.getIcuVersion());
+        PropertyUtils.setProperty(db, DbProperties.ICU_VERSION, getDeviceIcuVersion());
         PropertyUtils.setProperty(db, DbProperties.LOCALE, locales.toString());
     }
 
@@ -2802,7 +2805,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             return;
         }
         Log.i(TAG, "Switching to locale " + locales
-                + " (ICU v" + ICU.getIcuVersion() + ")");
+                + " (ICU v" + getDeviceIcuVersion() + ")");
 
         final long start = SystemClock.elapsedRealtime();
         SQLiteDatabase db = getWritableDatabase();
