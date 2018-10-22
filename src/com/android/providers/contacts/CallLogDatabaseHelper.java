@@ -39,7 +39,7 @@ import com.android.providers.contacts.util.PropertyUtils;
 public class CallLogDatabaseHelper {
     private static final String TAG = "CallLogDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 5;
+    private static final int DATABASE_VERSION = 6;
 
     private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
@@ -149,6 +149,9 @@ public class CallLogDatabaseHelper {
                     Calls.CACHED_FORMATTED_NUMBER + " TEXT," +
                     Calls.ADD_FOR_ALL_USERS + " INTEGER NOT NULL DEFAULT 1," +
                     Calls.LAST_MODIFIED + " INTEGER DEFAULT 0," +
+                    Calls.CALL_SCREENING_COMPONENT_NAME + " TEXT," +
+                    Calls.CALL_SCREENING_APP_NAME + " TEXT," +
+                    Calls.BLOCK_REASON + " INTEGER NOT NULL DEFAULT 0," +
                     Voicemails._DATA + " TEXT," +
                     Voicemails.HAS_CONTENT + " INTEGER," +
                     Voicemails.MIME_TYPE + " TEXT," +
@@ -203,6 +206,10 @@ public class CallLogDatabaseHelper {
 
             if (oldVersion < 5) {
                 upgradeToVersion5(db);
+            }
+
+            if (oldVersion < 6) {
+                upgradeToVersion6(db);
             }
         }
     }
@@ -277,6 +284,17 @@ public class CallLogDatabaseHelper {
      */
     private void upgradeToVersion5(SQLiteDatabase db) {
         db.execSQL("ALTER TABLE calls ADD transcription_state INTEGER NOT NULL DEFAULT 0");
+    }
+
+    /**
+     * Add {@link CallLog.Calls#CALL_SCREENING_COMPONENT_NAME}
+     * {@link CallLog.Calls#CALL_SCREENING_APP_NAME}
+     * {@link CallLog.Calls#BLOCK_REASON} column to the CallLog database.
+     */
+    private void upgradeToVersion6(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD call_screening_component_name TEXT");
+        db.execSQL("ALTER TABLE calls ADD call_screening_app_name TEXT");
+        db.execSQL("ALTER TABLE calls ADD block_reason INTEGER NOT NULL DEFAULT 0");
     }
 
     /**
