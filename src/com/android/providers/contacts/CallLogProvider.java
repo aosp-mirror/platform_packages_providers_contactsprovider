@@ -157,6 +157,10 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.CACHED_FORMATTED_NUMBER, Calls.CACHED_FORMATTED_NUMBER);
         sCallsProjectionMap.put(Calls.ADD_FOR_ALL_USERS, Calls.ADD_FOR_ALL_USERS);
         sCallsProjectionMap.put(Calls.LAST_MODIFIED, Calls.LAST_MODIFIED);
+        sCallsProjectionMap
+            .put(Calls.CALL_SCREENING_COMPONENT_NAME, Calls.CALL_SCREENING_COMPONENT_NAME);
+        sCallsProjectionMap.put(Calls.CALL_SCREENING_APP_NAME, Calls.CALL_SCREENING_APP_NAME);
+        sCallsProjectionMap.put(Calls.BLOCK_REASON, Calls.BLOCK_REASON);
     }
 
     private static final String ALLOWED_PACKAGE_FOR_TESTING = "com.android.providers.contacts";
