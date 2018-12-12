@@ -957,6 +957,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             .add(PhoneLookup.TYPE, Phone.TYPE)
             .add(PhoneLookup.LABEL, Phone.LABEL)
             .add(PhoneLookup.NORMALIZED_NUMBER, Phone.NORMALIZED_NUMBER)
+            .add(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME)
+            .add(Data.PREFERRED_PHONE_ACCOUNT_ID)
             .build();
 
     /** Contains the just the {@link Groups} columns */
