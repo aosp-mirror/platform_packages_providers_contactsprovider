@@ -62,7 +62,6 @@ import android.os.ParcelFileDescriptor.AutoCloseInputStream;
 import android.os.RemoteException;
 import android.os.StrictMode;
 import android.os.SystemClock;
-import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
@@ -107,6 +106,7 @@ import android.provider.ContactsContract.StreamItems;
 import android.provider.OpenableColumns;
 import android.provider.Settings.Global;
 import android.provider.SyncStateContract;
+import android.sysprop.ContactsProperties;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
@@ -291,21 +291,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final int AGGREGATION_ALGORITHM_NEW_VERSION = 5;
 
-    private static final String AGGREGATE_CONTACTS = "sync.contacts.aggregate";
-
     private static final String CONTACT_MEMORY_FILE_NAME = "contactAssetFile";
-
-    /**
-     * If set to "1", we don't remove account data when accounts have been removed.
-     *
-     * This should be used sparingly; even though there are data still available, the UI
-     * don't know anything about them, so they won't show up in the contact filter screen, and
-     * the contact card/editor may get confused to see unknown custom mimetypes.
-     *
-     * We can't spell it out because a property name must be less than 32 chars.
-     */
-    private static final String DEBUG_PROPERTY_KEEP_STALE_ACCOUNT_DATA =
-            "debug.contacts.ksad";
 
     public static final ProfileAwareUriMatcher sUriMatcher =
             new ProfileAwareUriMatcher(UriMatcher.NO_MATCH);
@@ -1646,7 +1632,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache)
                 : new ContactAggregator(this, mContactsHelper,
                 createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache);
-        mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
+        mContactAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         initDataRowHandlers(mDataRowHandlers, mContactsHelper, mContactAggregator,
                 mContactsPhotoStore);
     }
@@ -1678,10 +1664,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 : new ContactAggregator2(this, mContactsHelper,
                         createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
 
-        mContactAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
+        mContactAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         mProfileAggregator = new ProfileAggregator(this, mProfileHelper,
                 createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
-        mProfileAggregator.setEnabled(SystemProperties.getBoolean(AGGREGATE_CONTACTS, true));
+        mProfileAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         mSearchIndexManager = new SearchIndexManager(this);
         mContactsPhotoStore = new PhotoStore(getContext().getFilesDir(), mContactsHelper);
         mProfilePhotoStore =
@@ -5234,9 +5220,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (!haveAccountsChanged(systemAccounts)) {
             return false;
         }
-        if ("1".equals(SystemProperties.get(DEBUG_PROPERTY_KEEP_STALE_ACCOUNT_DATA))) {
-            Log.w(TAG, "Accounts changed, but not removing stale data for " +
-                    DEBUG_PROPERTY_KEEP_STALE_ACCOUNT_DATA);
+        if (ContactsProperties.keep_stale_account_data().orElse(false)) {
+            Log.w(TAG, "Accounts changed, but not removing stale data for debug.contacts.ksad");
             return true;
         }
         Log.i(TAG, "Accounts changed");

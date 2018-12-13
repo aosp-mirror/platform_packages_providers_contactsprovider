@@ -30,9 +30,9 @@ import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
-import android.os.SystemProperties;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Directory;
+import android.sysprop.ContactsProperties;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -194,7 +194,7 @@ public class ContactDirectoryManager {
 
     @VisibleForTesting
     boolean isRescanNeeded() {
-        if ("1".equals(SystemProperties.get("debug.cp2.scan_all_packages", "0"))) {
+        if (ContactsProperties.debug_scan_all_packages().orElse(false)) {
             Log.w(TAG, "debug.cp2.scan_all_packages set to 1.");
             return true; // For debugging.
         }
