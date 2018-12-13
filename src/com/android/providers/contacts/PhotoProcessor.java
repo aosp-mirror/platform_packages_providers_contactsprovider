@@ -22,7 +22,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.os.SystemProperties;
+import android.sysprop.ContactsProperties;
 
 import com.android.providers.contacts.util.MemoryUtils;
 import com.google.common.annotations.VisibleForTesting;
@@ -61,11 +61,10 @@ import java.io.IOException;
         final boolean isExpensiveDevice =
                 MemoryUtils.getTotalMemorySize() >= PhotoSizes.LARGE_RAM_THRESHOLD;
 
-        sMaxThumbnailDim = SystemProperties.getInt(
-                PhotoSizes.SYS_PROPERTY_THUMBNAIL_SIZE, PhotoSizes.DEFAULT_THUMBNAIL);
+        sMaxThumbnailDim = ContactsProperties.thumbnail_size().orElse(
+                PhotoSizes.DEFAULT_THUMBNAIL);
 
-        sMaxDisplayPhotoDim = SystemProperties.getInt(
-                PhotoSizes.SYS_PROPERTY_DISPLAY_PHOTO_SIZE,
+        sMaxDisplayPhotoDim = ContactsProperties.display_photo_size().orElse(
                 isExpensiveDevice
                         ? PhotoSizes.DEFAULT_DISPLAY_PHOTO_LARGE_MEMORY
                         : PhotoSizes.DEFAULT_DISPLAY_PHOTO_MEMORY_CONSTRAINED);
@@ -95,12 +94,6 @@ import java.io.IOException;
          * photos
          */
         public static final int LARGE_RAM_THRESHOLD = 640 * 1024 * 1024;
-
-        /** If present, overrides the size given in {@link #DEFAULT_THUMBNAIL} */
-        public static final String SYS_PROPERTY_THUMBNAIL_SIZE = "contacts.thumbnail_size";
-
-        /** If present, overrides the size determined for the display photo */
-        public static final String SYS_PROPERTY_DISPLAY_PHOTO_SIZE = "contacts.display_photo_size";
     }
 
     private final int mMaxDisplayPhotoDim;
