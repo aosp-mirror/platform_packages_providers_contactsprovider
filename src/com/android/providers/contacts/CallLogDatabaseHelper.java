@@ -39,7 +39,7 @@ import com.android.providers.contacts.util.PropertyUtils;
 public class CallLogDatabaseHelper {
     private static final String TAG = "CallLogDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 6;
+    private static final int DATABASE_VERSION = 7;
 
     private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
@@ -152,6 +152,13 @@ public class CallLogDatabaseHelper {
                     Calls.CALL_SCREENING_COMPONENT_NAME + " TEXT," +
                     Calls.CALL_SCREENING_APP_NAME + " TEXT," +
                     Calls.BLOCK_REASON + " INTEGER NOT NULL DEFAULT 0," +
+                    Calls.CALL_ID_PACKAGE_NAME + " TEXT NULL, " +
+                    Calls.CALL_ID_APP_NAME + " TEXT NULL, " +
+                    Calls.CALL_ID_NAME + " TEXT NULL, " +
+                    Calls.CALL_ID_DESCRIPTION + " TEXT NULL, " +
+                    Calls.CALL_ID_DETAILS + " TEXT NULL, " +
+                    Calls.CALL_ID_NUISANCE_CONFIDENCE + " INTEGER NULL, " +
+
                     Voicemails._DATA + " TEXT," +
                     Voicemails.HAS_CONTENT + " INTEGER," +
                     Voicemails.MIME_TYPE + " TEXT," +
@@ -210,6 +217,10 @@ public class CallLogDatabaseHelper {
 
             if (oldVersion < 6) {
                 upgradeToVersion6(db);
+            }
+
+            if (oldVersion < 7) {
+                upgradeToVersion7(db);
             }
         }
     }
@@ -295,6 +306,19 @@ public class CallLogDatabaseHelper {
         db.execSQL("ALTER TABLE calls ADD call_screening_component_name TEXT");
         db.execSQL("ALTER TABLE calls ADD call_screening_app_name TEXT");
         db.execSQL("ALTER TABLE calls ADD block_reason INTEGER NOT NULL DEFAULT 0");
+    }
+
+    /**
+     * Add {@link android.telecom.CallIdentification} columns.
+     * @param db DB to upgrade
+     */
+    private void upgradeToVersion7(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD call_id_package_name TEXT NULL");
+        db.execSQL("ALTER TABLE calls ADD call_id_app_name TEXT NULL");
+        db.execSQL("ALTER TABLE calls ADD call_id_name TEXT NULL");
+        db.execSQL("ALTER TABLE calls ADD call_id_description TEXT NULL");
+        db.execSQL("ALTER TABLE calls ADD call_id_details TEXT NULL");
+        db.execSQL("ALTER TABLE calls ADD call_id_nuisance_confidence INTEGER NULL");
     }
 
     /**
