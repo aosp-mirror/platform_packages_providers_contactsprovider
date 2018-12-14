@@ -20,14 +20,15 @@ import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
 import android.os.FileUtils;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Profile;
 import android.provider.ContactsContract.RawContacts;
-import android.support.annotation.Nullable;
-import android.database.sqlite.SQLiteDatabase;
-import android.net.Uri;
 import android.util.Log;
+
+import androidx.annotation.Nullable;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 

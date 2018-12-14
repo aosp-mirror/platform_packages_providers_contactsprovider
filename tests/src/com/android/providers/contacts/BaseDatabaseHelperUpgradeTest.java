@@ -15,10 +15,8 @@
  */
 package com.android.providers.contacts;
 
-import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.support.test.InstrumentationRegistry;
 
 import junit.framework.AssertionFailedError;
 

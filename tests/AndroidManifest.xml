@@ -37,7 +37,7 @@
     </application>
 
     <instrumentation
-        android:name="android.support.test.runner.AndroidJUnitRunner"
+        android:name="androidx.test.runner.AndroidJUnitRunner"
         android:targetPackage="com.android.providers.contacts"
         android:label="Contacts Provider Tests">
     </instrumentation>
