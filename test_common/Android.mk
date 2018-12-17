@@ -21,7 +21,7 @@ LOCAL_SRC_FILES := \
 
 LOCAL_JAVA_LIBRARIES := \
     android.test.runner \
-    android-support-test \
+    androidx.test.rules \
     mockito-target-minus-junit4
 
 LOCAL_MODULE_TAGS := optional

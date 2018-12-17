@@ -16,8 +16,9 @@
 package com.android.providers.contacts;
 
 import android.content.Context;
-import android.support.test.InstrumentationRegistry;
 import android.test.AndroidTestCase;
+
+import androidx.test.InstrumentationRegistry;
 
 /**
  * {@link FixedAndroidTestCase#getTestContext} isn't set when executed on the support test runner. This

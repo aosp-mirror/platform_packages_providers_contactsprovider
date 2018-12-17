@@ -16,9 +16,7 @@
 
 package com.android.providers.contacts;
 
-import android.content.Context;
 import android.content.res.Resources;
-import android.support.test.InstrumentationRegistry;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import com.google.android.collect.Maps;
