@@ -6,7 +6,7 @@ LOCAL_MODULE_TAGS := tests
 
 LOCAL_STATIC_JAVA_LIBRARIES := \
     ContactsProviderTestUtils \
-    android-support-test \
+    androidx.test.rules \
     mockito-target-minus-junit4
 
 LOCAL_JAVA_LIBRARIES := android.test.runner android.test.base android.test.mock
