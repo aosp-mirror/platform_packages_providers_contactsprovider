@@ -30,6 +30,6 @@
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"এতিয়াই মচক"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"আৰম্ভ কৰক"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"আপোনাৰ ফাইল পঠাবলৈ কোনো প্ৰ\'গ্ৰাম বাছনি কৰক"</string>
-    <string name="debug_dump_email_subject" msgid="108188398416385976">"সম্পৰ্কসূচী Db সংলগ্ন কৰা হ\'ল"</string>
-    <string name="debug_dump_email_body" msgid="4577749800871444318">"মোৰ সকলো সম্পৰ্ক তথ্য়সহ মোৰ সম্পৰ্কসূচী সংলগ্ন কৰা হ\'ল। সাবধানে চলাব।"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"সম্পৰ্কসূচী Db সংলগ্ন কৰা হ’ল"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"মোৰ সকলো সম্পৰ্ক তথ্য়সহ মোৰ সম্পৰ্কসূচী সংলগ্ন কৰা হ’ল। সাবধানে চলাব।"</string>
 </resources>
