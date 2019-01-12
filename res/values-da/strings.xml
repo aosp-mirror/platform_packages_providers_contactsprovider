@@ -19,17 +19,17 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android-kerneapplikationer"</string>
     <string name="app_label" msgid="3389954322874982620">"Lagring af kontakter"</string>
     <string name="provider_label" msgid="6012150850819899907">"Kontakter"</string>
-    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Opgradering af kontaktpersoner kræver mere hukommelse."</string>
-    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Opgraderer lagring af kontaktpersoner"</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Opgradering af kontakter kræver mere hukommelse."</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Opgraderer lagring af kontakter"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"Tryk for at gennemføre opgraderingen."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontakter"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Andre"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Telefonsvarerbesked fra "</string>
-    <string name="debug_dump_title" msgid="4916885724165570279">"Kopiér database med kontaktpersoner"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"Du er ved at 1) lave en kopi af din database, som indeholder alle oplysninger om dine kontaktpersoner og alle opkaldslister, til det interne lager, og 2) sende den som mail. Husk at slette kopien, så snart du har kopieret den fra enheden, eller mailen er modtaget."</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"Kopiér database med kontakter"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Du er ved at 1) lave en kopi af din database, som indeholder alle oplysninger om dine kontakter og alle opkaldslister, til det interne lager, og 2) sende den som mail. Husk at slette kopien, så snart du har kopieret den fra enheden, eller mailen er modtaget."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Slet nu"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Start"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Vælg et program, for at sende din fil"</string>
-    <string name="debug_dump_email_subject" msgid="108188398416385976">"Database med kontaktpersoner er vedhæftet"</string>
-    <string name="debug_dump_email_body" msgid="4577749800871444318">"Min database med kontaktpersoner med alle oplysninger om mine kontaktpersoner er vedhæftet. Brug den med omhu."</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"Database med kontakter er vedhæftet"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"Min database med kontakter med alle oplysninger om mine kontakter er vedhæftet. Brug den med omhu."</string>
 </resources>
