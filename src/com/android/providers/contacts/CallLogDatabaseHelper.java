@@ -39,7 +39,7 @@ import com.android.providers.contacts.util.PropertyUtils;
 public class CallLogDatabaseHelper {
     private static final String TAG = "CallLogDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 7;
+    private static final int DATABASE_VERSION = 8;
 
     private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
@@ -152,12 +152,6 @@ public class CallLogDatabaseHelper {
                     Calls.CALL_SCREENING_COMPONENT_NAME + " TEXT," +
                     Calls.CALL_SCREENING_APP_NAME + " TEXT," +
                     Calls.BLOCK_REASON + " INTEGER NOT NULL DEFAULT 0," +
-                    Calls.CALL_ID_PACKAGE_NAME + " TEXT NULL, " +
-                    Calls.CALL_ID_APP_NAME + " TEXT NULL, " +
-                    Calls.CALL_ID_NAME + " TEXT NULL, " +
-                    Calls.CALL_ID_DESCRIPTION + " TEXT NULL, " +
-                    Calls.CALL_ID_DETAILS + " TEXT NULL, " +
-                    Calls.CALL_ID_NUISANCE_CONFIDENCE + " INTEGER NULL, " +
 
                     Voicemails._DATA + " TEXT," +
                     Voicemails.HAS_CONTENT + " INTEGER," +
@@ -221,6 +215,10 @@ public class CallLogDatabaseHelper {
 
             if (oldVersion < 7) {
                 upgradeToVersion7(db);
+            }
+
+            if (oldVersion < 8) {
+                upgradetoVersion8(db);
             }
         }
     }
@@ -309,7 +307,8 @@ public class CallLogDatabaseHelper {
     }
 
     /**
-     * Add {@link android.telecom.CallIdentification} columns.
+     * Add {@code android.telecom.CallIdentification} columns; these are destined to be removed
+     * in {@link #upgradetoVersion8(SQLiteDatabase)}.
      * @param db DB to upgrade
      */
     private void upgradeToVersion7(SQLiteDatabase db) {
@@ -319,6 +318,136 @@ public class CallLogDatabaseHelper {
         db.execSQL("ALTER TABLE calls ADD call_id_description TEXT NULL");
         db.execSQL("ALTER TABLE calls ADD call_id_details TEXT NULL");
         db.execSQL("ALTER TABLE calls ADD call_id_nuisance_confidence INTEGER NULL");
+    }
+
+    /**
+     * Remove the {@code android.telecom.CallIdentification} column.
+     * @param db DB to upgrade
+     */
+    private void upgradetoVersion8(SQLiteDatabase db) {
+        db.beginTransaction();
+        try {
+            String oldTable = Tables.CALLS + "_old";
+            // SQLite3 doesn't support altering a column name, so we'll rename the old calls table..
+            db.execSQL("ALTER TABLE calls RENAME TO " + oldTable);
+
+            // ... create a new one (yes, this seems similar to what is in onCreate, but we can't
+            // assume that one won't change in the future) ...
+            db.execSQL("CREATE TABLE " + Tables.CALLS + " (" +
+                    Calls._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    Calls.NUMBER + " TEXT," +
+                    Calls.NUMBER_PRESENTATION + " INTEGER NOT NULL DEFAULT " +
+                    Calls.PRESENTATION_ALLOWED + "," +
+                    Calls.POST_DIAL_DIGITS + " TEXT NOT NULL DEFAULT ''," +
+                    Calls.VIA_NUMBER + " TEXT NOT NULL DEFAULT ''," +
+                    Calls.DATE + " INTEGER," +
+                    Calls.DURATION + " INTEGER," +
+                    Calls.DATA_USAGE + " INTEGER," +
+                    Calls.TYPE + " INTEGER," +
+                    Calls.FEATURES + " INTEGER NOT NULL DEFAULT 0," +
+                    Calls.PHONE_ACCOUNT_COMPONENT_NAME + " TEXT," +
+                    Calls.PHONE_ACCOUNT_ID + " TEXT," +
+                    Calls.PHONE_ACCOUNT_ADDRESS + " TEXT," +
+                    Calls.PHONE_ACCOUNT_HIDDEN + " INTEGER NOT NULL DEFAULT 0," +
+                    Calls.SUB_ID + " INTEGER DEFAULT -1," +
+                    Calls.NEW + " INTEGER," +
+                    Calls.CACHED_NAME + " TEXT," +
+                    Calls.CACHED_NUMBER_TYPE + " INTEGER," +
+                    Calls.CACHED_NUMBER_LABEL + " TEXT," +
+                    Calls.COUNTRY_ISO + " TEXT," +
+                    Calls.VOICEMAIL_URI + " TEXT," +
+                    Calls.IS_READ + " INTEGER," +
+                    Calls.GEOCODED_LOCATION + " TEXT," +
+                    Calls.CACHED_LOOKUP_URI + " TEXT," +
+                    Calls.CACHED_MATCHED_NUMBER + " TEXT," +
+                    Calls.CACHED_NORMALIZED_NUMBER + " TEXT," +
+                    Calls.CACHED_PHOTO_ID + " INTEGER NOT NULL DEFAULT 0," +
+                    Calls.CACHED_PHOTO_URI + " TEXT," +
+                    Calls.CACHED_FORMATTED_NUMBER + " TEXT," +
+                    Calls.ADD_FOR_ALL_USERS + " INTEGER NOT NULL DEFAULT 1," +
+                    Calls.LAST_MODIFIED + " INTEGER DEFAULT 0," +
+                    Calls.CALL_SCREENING_COMPONENT_NAME + " TEXT," +
+                    Calls.CALL_SCREENING_APP_NAME + " TEXT," +
+                    Calls.BLOCK_REASON + " INTEGER NOT NULL DEFAULT 0," +
+
+                    Voicemails._DATA + " TEXT," +
+                    Voicemails.HAS_CONTENT + " INTEGER," +
+                    Voicemails.MIME_TYPE + " TEXT," +
+                    Voicemails.SOURCE_DATA + " TEXT," +
+                    Voicemails.SOURCE_PACKAGE + " TEXT," +
+                    Voicemails.TRANSCRIPTION + " TEXT," +
+                    Voicemails.TRANSCRIPTION_STATE + " INTEGER NOT NULL DEFAULT 0," +
+                    Voicemails.STATE + " INTEGER," +
+                    Voicemails.DIRTY + " INTEGER NOT NULL DEFAULT 0," +
+                    Voicemails.DELETED + " INTEGER NOT NULL DEFAULT 0," +
+                    Voicemails.BACKED_UP + " INTEGER NOT NULL DEFAULT 0," +
+                    Voicemails.RESTORED + " INTEGER NOT NULL DEFAULT 0," +
+                    Voicemails.ARCHIVED + " INTEGER NOT NULL DEFAULT 0," +
+                    Voicemails.IS_OMTP_VOICEMAIL + " INTEGER NOT NULL DEFAULT 0" +
+                    ");");
+
+            String allTheColumns = Calls._ID + ", " +
+                    Calls.NUMBER + ", " +
+                    Calls.NUMBER_PRESENTATION + ", " +
+                    Calls.POST_DIAL_DIGITS + ", " +
+                    Calls.VIA_NUMBER + ", " +
+                    Calls.DATE + ", " +
+                    Calls.DURATION + ", " +
+                    Calls.DATA_USAGE + ", " +
+                    Calls.TYPE + ", " +
+                    Calls.FEATURES + ", " +
+                    Calls.PHONE_ACCOUNT_COMPONENT_NAME + ", " +
+                    Calls.PHONE_ACCOUNT_ID + ", " +
+                    Calls.PHONE_ACCOUNT_ADDRESS + ", " +
+                    Calls.PHONE_ACCOUNT_HIDDEN + ", " +
+                    Calls.SUB_ID + ", " +
+                    Calls.NEW + ", " +
+                    Calls.CACHED_NAME + ", " +
+                    Calls.CACHED_NUMBER_TYPE + ", " +
+                    Calls.CACHED_NUMBER_LABEL + ", " +
+                    Calls.COUNTRY_ISO + ", " +
+                    Calls.VOICEMAIL_URI + ", " +
+                    Calls.IS_READ + ", " +
+                    Calls.GEOCODED_LOCATION + ", " +
+                    Calls.CACHED_LOOKUP_URI + ", " +
+                    Calls.CACHED_MATCHED_NUMBER + ", " +
+                    Calls.CACHED_NORMALIZED_NUMBER + ", " +
+                    Calls.CACHED_PHOTO_ID + ", " +
+                    Calls.CACHED_PHOTO_URI + ", " +
+                    Calls.CACHED_FORMATTED_NUMBER + ", " +
+                    Calls.ADD_FOR_ALL_USERS + ", " +
+                    Calls.LAST_MODIFIED + ", " +
+                    Calls.CALL_SCREENING_COMPONENT_NAME + ", " +
+                    Calls.CALL_SCREENING_APP_NAME + ", " +
+                    Calls.BLOCK_REASON + ", " +
+
+                    Voicemails._DATA + ", " +
+                    Voicemails.HAS_CONTENT + ", " +
+                    Voicemails.MIME_TYPE + ", " +
+                    Voicemails.SOURCE_DATA + ", " +
+                    Voicemails.SOURCE_PACKAGE + ", " +
+                    Voicemails.TRANSCRIPTION + ", " +
+                    Voicemails.TRANSCRIPTION_STATE + ", " +
+                    Voicemails.STATE + ", " +
+                    Voicemails.DIRTY + ", " +
+                    Voicemails.DELETED + ", " +
+                    Voicemails.BACKED_UP + ", " +
+                    Voicemails.RESTORED + ", " +
+                    Voicemails.ARCHIVED + ", " +
+                    Voicemails.IS_OMTP_VOICEMAIL;
+
+            // .. so we insert into the new table all the values from the old table ...
+            db.execSQL("INSERT INTO " + Tables.CALLS + " (" +
+                    allTheColumns + ") SELECT " +
+                    allTheColumns + " FROM " + oldTable);
+
+            // .. and drop the old table we renamed.
+            db.execSQL("DROP TABLE " + oldTable);
+
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 
     /**
