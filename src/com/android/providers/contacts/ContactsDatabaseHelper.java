@@ -84,6 +84,7 @@ import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
+import android.provider.DeviceConfig;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
@@ -146,6 +147,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     static final boolean DISALLOW_SUB_QUERIES = false;
 
     private static final int IDLE_CONNECTION_TIMEOUT_MS = 30000;
+
+    private static final String USE_STRICT_PHONE_NUMBER_COMPARISON_KEY
+            = "use_strict_phone_number_comparison";
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -997,8 +1001,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
         mCountryMonitor = new CountryMonitor(context);
-        mUseStrictPhoneNumberComparison = resources.getBoolean(
-                com.android.internal.R.bool.config_use_strict_phone_number_comparation);
+        mUseStrictPhoneNumberComparison =
+                DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_CONTACTS_PROVIDER,
+                        USE_STRICT_PHONE_NUMBER_COMPARISON_KEY,
+                resources.getBoolean(
+                    com.android.internal.R.bool.config_use_strict_phone_number_comparation));
     }
 
     public SQLiteDatabase getDatabase(boolean writable) {
