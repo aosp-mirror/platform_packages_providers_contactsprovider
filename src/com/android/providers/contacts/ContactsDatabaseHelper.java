@@ -151,6 +151,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String USE_STRICT_PHONE_NUMBER_COMPARISON_KEY
             = "use_strict_phone_number_comparison";
 
+    private static final String USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_RUSSIAN_KEY
+            = "use_strict_phone_number_comparison_for_russian";
+
+    private static final String RUSSIAN_COUNTRY_CODE = "RU";
+
     public interface Tables {
         public static final String CONTACTS = "contacts";
         public static final String DELETED_CONTACTS = "deleted_contacts";
@@ -1001,11 +1006,22 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
         mCountryMonitor = new CountryMonitor(context);
-        mUseStrictPhoneNumberComparison =
-                DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_CONTACTS_PROVIDER,
-                        USE_STRICT_PHONE_NUMBER_COMPARISON_KEY,
-                resources.getBoolean(
-                    com.android.internal.R.bool.config_use_strict_phone_number_comparation));
+
+        if (RUSSIAN_COUNTRY_CODE.equals(getCurrentCountryIso())) {
+            mUseStrictPhoneNumberComparison =
+                    DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_CONTACTS_PROVIDER,
+                            USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_RUSSIAN_KEY,
+                    resources.getBoolean(
+                            com.android.internal.R.
+                                    bool.config_use_strict_phone_number_comparation_for_russian));
+        } else {
+            mUseStrictPhoneNumberComparison =
+                    DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_CONTACTS_PROVIDER,
+                            USE_STRICT_PHONE_NUMBER_COMPARISON_KEY,
+                    resources.getBoolean(
+                            com.android.internal.R.
+                                    bool.config_use_strict_phone_number_comparation));
+        }
     }
 
     public SQLiteDatabase getDatabase(boolean writable) {
