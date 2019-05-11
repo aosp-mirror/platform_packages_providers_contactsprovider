@@ -31,5 +31,5 @@
     <string name="debug_dump_start_button" msgid="2837506913757600001">"प्रारंभ करें"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"अपनी फ़ाइल भेजने के लिए कोई प्रोग्राम चुनें"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"संपर्क Db अनुलग्न है"</string>
-    <string name="debug_dump_email_body" msgid="4577749800871444318">"मेरी समस्त संपर्क जानकारी के साथ मेरा संपर्क डेटाबेस अनुलग्न है. सावधानी से कार्य करें."</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"मेरी समस्त संपर्क जानकारी के साथ मेरा संपर्क डेटाबेस अनुलग्न है. सावधानी से काम करें."</string>
 </resources>
