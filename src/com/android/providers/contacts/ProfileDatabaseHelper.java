@@ -88,4 +88,14 @@ public class ProfileDatabaseHelper extends ContactsDatabaseHelper {
     protected void loadDatabaseCreationTime(SQLiteDatabase db) {
         // We don't need the creation time for the profile DB.
     }
+
+    @Override
+    protected void startListeningToDeviceConfigUpdates() {
+        // Do nothing for the profile DB.
+    }
+
+    @Override
+    protected void updateUseStrictPhoneNumberComparison() {
+        // Do nothing for the profile DB.
+    }
 }
