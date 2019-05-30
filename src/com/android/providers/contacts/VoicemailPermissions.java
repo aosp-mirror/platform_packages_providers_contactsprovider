@@ -124,8 +124,7 @@ public class VoicemailPermissions {
                 (TelephonyManager) mContext.getSystemService(Context.TELEPHONY_SERVICE);
         String[] packages = mContext.getPackageManager().getPackagesForUid(Binder.getCallingUid());
         for (String packageName : packages) {
-            if (tm.checkCarrierPrivilegesForPackageAnyPhone(packageName)
-                    == TelephonyManager.CARRIER_PRIVILEGE_STATUS_HAS_ACCESS) {
+            if (packageHasCarrierPrivileges(tm, packageName)) {
                 return true;
             }
         }
@@ -136,6 +135,11 @@ public class VoicemailPermissions {
     private boolean packageHasCarrierPrivileges(String packageName) {
         TelephonyManager tm =
                 (TelephonyManager) mContext.getSystemService(Context.TELEPHONY_SERVICE);
-        return tm.getPackagesWithCarrierPrivileges().contains(packageName);
+        return packageHasCarrierPrivileges(tm, packageName);
+    }
+
+    private static boolean packageHasCarrierPrivileges(TelephonyManager tm, String packageName) {
+        return tm.checkCarrierPrivilegesForPackageAnyPhone(packageName)
+                == TelephonyManager.CARRIER_PRIVILEGE_STATUS_HAS_ACCESS;
     }
 }
