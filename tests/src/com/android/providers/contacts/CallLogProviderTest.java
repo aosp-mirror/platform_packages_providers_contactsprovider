@@ -202,8 +202,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_ALLOWED);
         values.put(Calls.DATE, 2000);
         values.put(Calls.DURATION, 40);
-        // Cached values should not be updated immediately by the framework when inserting the call.
-        values.put(Calls.CACHED_NAME, (String) null);
+        values.put(Calls.CACHED_NAME, ci.name);
         values.put(Calls.CACHED_NUMBER_TYPE, (String) null);
         values.put(Calls.CACHED_NUMBER_LABEL, (String) null);
         values.put(Calls.COUNTRY_ISO, "us");
