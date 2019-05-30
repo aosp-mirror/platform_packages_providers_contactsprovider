@@ -743,6 +743,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 PhoneLookup.TYPE,
                 PhoneLookup.LABEL,
                 PhoneLookup.NORMALIZED_NUMBER,
+                Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                Data.PREFERRED_PHONE_ACCOUNT_ID,
         });
     }
 
@@ -777,6 +779,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                         PhoneLookup.TYPE,
                         PhoneLookup.LABEL,
                         PhoneLookup.NORMALIZED_NUMBER,
+                        Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                        Data.PREFERRED_PHONE_ACCOUNT_ID,
                 });
     }
 
