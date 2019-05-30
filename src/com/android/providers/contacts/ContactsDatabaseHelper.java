@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import com.android.internal.R.bool;
 import com.android.providers.contacts.sqlite.DatabaseAnalyzer;
 import com.android.providers.contacts.sqlite.SqlChecker;
 import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
@@ -30,7 +31,6 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.UserInfo;
-import android.content.res.Resources;
 import android.database.CharArrayBuffer;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
@@ -105,11 +105,16 @@ import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
 import com.android.providers.contacts.util.NeededForTesting;
 
+import java.io.PrintWriter;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Database helper for contacts. Designed as a singleton to make sure that all
@@ -151,10 +156,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String USE_STRICT_PHONE_NUMBER_COMPARISON_KEY
             = "use_strict_phone_number_comparison";
 
-    private static final String USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_RUSSIAN_KEY
-            = "use_strict_phone_number_comparison_for_russian";
+    private static final String USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_RUSSIA_KEY
+            = "use_strict_phone_number_comparison_for_russia";
 
-    private static final String RUSSIAN_COUNTRY_CODE = "RU";
+    private static final String USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_KAZAKHSTAN_KEY
+            = "use_strict_phone_number_comparison_for_kazakhstan";
+
+    private static final String RUSSIA_COUNTRY_CODE = "RU";
+    private static final String KAZAKHSTAN_COUNTRY_CODE = "KZ";
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -965,12 +974,22 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    private boolean mUseStrictPhoneNumberComparison;
+    // We access it from multiple threads, so mark as volatile.
+    private volatile boolean mUseStrictPhoneNumberComparison;
+
+    // They're basically accessed only in one method, as well as in dump(), so technically
+    // they should be volatile too, but it's not really needed in practice.
+    private boolean mUseStrictPhoneNumberComparisonBase;
+    private boolean mUseStrictPhoneNumberComparisonForRussia;
+    private boolean mUseStrictPhoneNumberComparisonForKazakhstan;
 
     private String[] mSelectionArgs1 = new String[1];
     private NameSplitter.Name mName = new NameSplitter.Name();
     private CharArrayBuffer mCharArrayBuffer = new CharArrayBuffer(128);
     private NameSplitter mNameSplitter;
+
+    private final Executor mLazilyCreatedExecutor =
+            new ThreadPoolExecutor(0, 1, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
 
     public static synchronized ContactsDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
@@ -1002,26 +1021,62 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         setIdleConnectionTimeout(IDLE_CONNECTION_TIMEOUT_MS);
         mDatabaseOptimizationEnabled = optimizationEnabled;
         mIsTestInstance = isTestInstance;
-        Resources resources = context.getResources();
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
-        mCountryMonitor = new CountryMonitor(context);
 
-        if (RUSSIAN_COUNTRY_CODE.equals(getCurrentCountryIso())) {
-            mUseStrictPhoneNumberComparison =
-                    DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_CONTACTS_PROVIDER,
-                            USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_RUSSIAN_KEY,
-                    resources.getBoolean(
-                            com.android.internal.R.
-                                    bool.config_use_strict_phone_number_comparation_for_russian));
+        mCountryMonitor = new CountryMonitor(context, this::updateUseStrictPhoneNumberComparison);
+
+        startListeningToDeviceConfigUpdates();
+
+        updateUseStrictPhoneNumberComparison();
+    }
+
+    protected void startListeningToDeviceConfigUpdates() {
+        // Note we override this method in the profile helper to skip it.
+
+        DeviceConfig.addOnPropertiesChangedListener(DeviceConfig.NAMESPACE_CONTACTS_PROVIDER,
+                mLazilyCreatedExecutor, (props) -> onDeviceConfigUpdated());
+    }
+
+    private void onDeviceConfigUpdated() {
+        updateUseStrictPhoneNumberComparison();
+    }
+
+    protected void updateUseStrictPhoneNumberComparison() {
+        // Note we override this method in the profile helper to skip it.
+
+        final String country = getCurrentCountryIso();
+
+        Log.i(TAG, "updateUseStrictPhoneNumberComparison: " + country);
+
+        // Load all the configs so we can show them in dumpsys.
+        mUseStrictPhoneNumberComparisonBase = getConfig(
+                USE_STRICT_PHONE_NUMBER_COMPARISON_KEY,
+                bool.config_use_strict_phone_number_comparation);
+
+        mUseStrictPhoneNumberComparisonForRussia = getConfig(
+                USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_RUSSIA_KEY,
+                bool.config_use_strict_phone_number_comparation_for_russia);
+
+        mUseStrictPhoneNumberComparisonForKazakhstan = getConfig(
+                USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_KAZAKHSTAN_KEY,
+                bool.config_use_strict_phone_number_comparation_for_kazakhstan);
+
+        if (RUSSIA_COUNTRY_CODE.equals(country)) {
+            mUseStrictPhoneNumberComparison = mUseStrictPhoneNumberComparisonForRussia;
+
+        } else if (KAZAKHSTAN_COUNTRY_CODE.equals(country)) {
+            mUseStrictPhoneNumberComparison = mUseStrictPhoneNumberComparisonForKazakhstan;
+
         } else {
-            mUseStrictPhoneNumberComparison =
-                    DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_CONTACTS_PROVIDER,
-                            USE_STRICT_PHONE_NUMBER_COMPARISON_KEY,
-                    resources.getBoolean(
-                            com.android.internal.R.
-                                    bool.config_use_strict_phone_number_comparation));
+            mUseStrictPhoneNumberComparison = mUseStrictPhoneNumberComparisonBase;
         }
+    }
+
+    private boolean getConfig(String configKey, int defaultResId) {
+        return DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_CONTACTS_PROVIDER, configKey,
+                mContext.getResources().getBoolean(defaultResId));
     }
 
     public SQLiteDatabase getDatabase(boolean writable) {
@@ -4883,6 +4938,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public String getCurrentCountryIso() {
+        // For debugging.
+        // String injected = android.os.SystemProperties.get("debug.cp2.injectedCountryIso");
+        // if (!TextUtils.isEmpty(injected)) return injected;
         return mCountryMonitor.getCountryIso();
     }
 
@@ -5035,5 +5093,24 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         } else {
             Slog.wtfStack(TAG, message);
         }
+    }
+
+    public void dump(PrintWriter pw) {
+        pw.print("CountryISO: ");
+        pw.println(getCurrentCountryIso());
+
+        pw.print("UseStrictPhoneNumberComparison: ");
+        pw.println(mUseStrictPhoneNumberComparison);
+
+        pw.print("UseStrictPhoneNumberComparisonBase: ");
+        pw.println(mUseStrictPhoneNumberComparisonBase);
+
+        pw.print("UseStrictPhoneNumberComparisonRU: ");
+        pw.println(mUseStrictPhoneNumberComparisonForRussia);
+
+        pw.print("UseStrictPhoneNumberComparisonKZ: ");
+        pw.println(mUseStrictPhoneNumberComparisonForKazakhstan);
+
+        pw.println();
     }
 }
