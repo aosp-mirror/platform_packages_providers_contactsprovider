@@ -800,11 +800,25 @@ public class ContactAggregator extends AbstractContactAggregator {
 
     private void updateMatchScoresBasedOnPhoneMatches(SQLiteDatabase db, long rawContactId,
             ContactMatcher matcher) {
-        mSelectionArgs2[0] = String.valueOf(rawContactId);
-        mSelectionArgs2[1] = mDbHelper.getUseStrictPhoneNumberComparisonParameter();
-        Cursor c = db.query(PhoneLookupQuery.TABLE, PhoneLookupQuery.COLUMNS,
+        Cursor c;
+        String useStrictPhoneNumberComparison =
+                mDbHelper.getUseStrictPhoneNumberComparisonParameter();
+
+        if (useStrictPhoneNumberComparison.equals("1")) {
+            mSelectionArgs2[0] = String.valueOf(rawContactId);
+            mSelectionArgs2[1] = useStrictPhoneNumberComparison;
+            c = db.query(PhoneLookupQuery.TABLE, PhoneLookupQuery.COLUMNS,
                 PhoneLookupQuery.SELECTION,
                 mSelectionArgs2, null, null, null, SECONDARY_HIT_LIMIT_STRING);
+        } else {
+            mSelectionArgs3[0] = String.valueOf(rawContactId);
+            mSelectionArgs3[1] = useStrictPhoneNumberComparison;
+            mSelectionArgs3[2] = mDbHelper.getMinMatchParameter();
+            c = db.query(PhoneLookupQuery.TABLE, PhoneLookupQuery.COLUMNS,
+                PhoneLookupQuery.SELECTION_MIN_MATCH,
+                mSelectionArgs3, null, null, null, SECONDARY_HIT_LIMIT_STRING);
+        }
+
         try {
             while (c.moveToNext()) {
                 long contactId = c.getLong(PhoneLookupQuery.CONTACT_ID);
