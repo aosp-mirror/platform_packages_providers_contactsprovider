@@ -9848,13 +9848,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 safeDiv(mTotalTimeFastScrollingIndexGenerate, mFastScrollingIndexCacheMissCount));
         pw.println();
 
-        pw.print("mUseStrictPhoneNumberComparison=");
         if (mContactsHelper != null) {
-            pw.println(mContactsHelper.getUseStrictPhoneNumberComparisonParameter());
+            mContactsHelper.dump(pw);
         }
-        pw.println();
-
-        pw.println();
 
         // DB queries may be blocked and timed out, so do it at the end.
 
