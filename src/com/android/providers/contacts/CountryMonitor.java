@@ -16,8 +16,6 @@
 
 package com.android.providers.contacts;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.content.Context;
 import android.location.Country;
 import android.location.CountryDetector;
@@ -34,20 +32,10 @@ import java.util.Locale;
  */
 public class CountryMonitor {
     private String mCurrentCountryIso;
+    private Context mContext;
 
-    @NonNull
-    private final Context mContext;
-
-    @Nullable
-    private final Runnable mUpdateCallback;
-
-    public CountryMonitor(@NonNull Context context) {
-        this(context, null);
-    }
-
-    public CountryMonitor(@NonNull Context context, @Nullable Runnable updateCallback) {
+    public CountryMonitor(Context context) {
         mContext = context;
-        mUpdateCallback = updateCallback;
     }
 
     /**
@@ -68,14 +56,11 @@ public class CountryMonitor {
             }
 
             mCurrentCountryIso = country.getCountryIso();
-            countryDetector.addCountryListener(new CountryListener() {
-                public void onCountryDetected(Country country) {
-                    mCurrentCountryIso = country.getCountryIso();
-                    if (mUpdateCallback != null) {
-                        mUpdateCallback.run();
+                countryDetector.addCountryListener(new CountryListener() {
+                    public void onCountryDetected(Country country) {
+                        mCurrentCountryIso = country.getCountryIso();
                     }
-                }
-            }, Looper.getMainLooper());
+                }, Looper.getMainLooper());
         }
         return mCurrentCountryIso;
     }
