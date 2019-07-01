@@ -16,12 +16,11 @@
 
 package com.android.providers.contacts;
 
-import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.test.suitebuilder.annotation.SmallTest;
 
 @LargeTest
-public class PhoneLookupWithStarPrefixTest extends AndroidTestCase {
+public class PhoneLookupWithStarPrefixTest extends FixedAndroidTestCase {
 
     @SmallTest
     public void testNormalizeNumberWithStar() {

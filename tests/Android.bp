@@ -2,7 +2,7 @@ android_test {
     name: "ContactsProviderTests",
     static_libs: [
         "ContactsProviderTestUtils",
-        "android-support-test",
+        "androidx.test.rules",
         "mockito-target-minus-junit4",
     ],
     libs: [
@@ -10,6 +10,7 @@ android_test {
         "android.test.base",
         "android.test.mock",
     ],
+
     // Only compile source java files in this apk.
     srcs: ["src/**/*.java"],
     platform_apis: true,
