@@ -10143,7 +10143,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @return the currently active {@link ContactsDatabaseHelper} for the current thread.
      */
     @NeededForTesting
-    protected ContactsDatabaseHelper getThreadActiveDatabaseHelperForTest() {
+    public ContactsDatabaseHelper getThreadActiveDatabaseHelperForTest() {
         return mDbHelper.get();
     }
 

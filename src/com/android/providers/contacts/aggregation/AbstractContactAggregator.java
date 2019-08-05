@@ -174,6 +174,7 @@ public abstract class AbstractContactAggregator {
 
     protected String[] mSelectionArgs1 = new String[1];
     protected String[] mSelectionArgs2 = new String[2];
+    protected String[] mSelectionArgs3 = new String[3];
 
     protected long mMimeTypeIdIdentity;
     protected long mMimeTypeIdEmail;
@@ -794,8 +795,8 @@ public abstract class AbstractContactAggregator {
                 " AND d1." + Data.RAW_CONTACT_ID + " IN (" + rawContactIdSet1 + ")" +
                 " AND d2." + Data.RAW_CONTACT_ID + " IN (" + rawContactIdSet2 + ")" +
                 " AND PHONE_NUMBERS_EQUAL(d1." + Phone.NUMBER + ",d2." + Phone.NUMBER + "," +
-                        String.valueOf(mDbHelper.getUseStrictPhoneNumberComparisonParameter()) +
-                        ")";
+                        (mDbHelper.getUseStrictPhoneNumberComparisonParameter().equals("1") ? "1)"
+                         : "0," + mDbHelper.getMinMatchParameter() + ")");
         return (countOnly) ? RawContactMatchingSelectionStatement.SELECT_COUNT + sql :
                 RawContactMatchingSelectionStatement.SELECT_ID + sql;
     }
@@ -1192,6 +1193,12 @@ public abstract class AbstractContactAggregator {
         String SELECTION = "dataA." + Data.RAW_CONTACT_ID + "=?"
                 + " AND PHONE_NUMBERS_EQUAL(dataA." + Phone.NUMBER + ", "
                         + "dataB." + Phone.NUMBER + ",?)"
+                + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0"
+                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
+
+        String SELECTION_MIN_MATCH = "dataA." + Data.RAW_CONTACT_ID + "=?"
+                + " AND PHONE_NUMBERS_EQUAL(dataA." + Phone.NUMBER + ", "
+                        + "dataB." + Phone.NUMBER + ",?,?)"
                 + " AND " + RawContactsColumns.AGGREGATION_NEEDED + "=0"
                 + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
 
