@@ -6,8 +6,7 @@ android_app {
         "src/com/android/providers/contacts/EventLogTags.logtags",
     ],
     libs: [
-        "ext",
-        "telephony-common",
+        "ext"
     ],
     static_libs: [
         "android-common",
