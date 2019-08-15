@@ -63,6 +63,10 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     /** Total number of columns exposed by call_log provider. */
     private static final int NUM_CALLLOG_FIELDS = 34;
 
+    private static final int MIN_MATCH = 7;
+
+    private int mOldMinMatch;
+
     private CallLogProviderTestable mCallLogProvider;
 
     @Override
@@ -79,6 +83,8 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     protected void setUp() throws Exception {
         super.setUp();
         mCallLogProvider = addProvider(CallLogProviderTestable.class, CallLog.AUTHORITY);
+        mOldMinMatch = mCallLogProvider.getMinMatchForTest();
+        mCallLogProvider.setMinMatchForTest(MIN_MATCH);
     }
 
     @Override
@@ -86,6 +92,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         setUpWithVoicemailPermissions();
         mResolver.delete(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null);
         setTimeForTest(null);
+        mCallLogProvider.setMinMatchForTest(mOldMinMatch);
         super.tearDown();
     }
 
@@ -202,8 +209,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_ALLOWED);
         values.put(Calls.DATE, 2000);
         values.put(Calls.DURATION, 40);
-        // Cached values should not be updated immediately by the framework when inserting the call.
-        values.put(Calls.CACHED_NAME, (String) null);
+        values.put(Calls.CACHED_NAME, ci.name);
         values.put(Calls.CACHED_NUMBER_TYPE, (String) null);
         values.put(Calls.CACHED_NUMBER_LABEL, (String) null);
         values.put(Calls.COUNTRY_ISO, "us");
