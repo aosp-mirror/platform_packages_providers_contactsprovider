@@ -7190,6 +7190,98 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, mResolver.delete(lookupUri, null, null));
     }
 
+    public void testDeleteContactComposedOfSingleLocalRawContact() {
+        // Create a raw contact in the local (null) account
+        long rawContactId = RawContactUtil.createRawContact(mResolver, null);
+        DataUtil.insertStructuredName(mResolver, rawContactId, "John", "Smith");
+
+        // Delete the contact
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        assertEquals(1, mResolver.delete(contactUri, null, null));
+
+        // Assert that the raw contact was removed
+        Cursor c1 = queryRawContact(rawContactId);
+        assertEquals(0, c1.getCount());
+        c1.close();
+
+        // Assert that the contact was removed
+        Cursor c2 = mResolver.query(contactUri, null, null, null, "");
+        assertEquals(0, c2.getCount());
+        c2.close();
+    }
+
+    public void testDeleteContactComposedOfTwoLocalRawContacts() {
+        // Create a raw contact in the local (null) account
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, null);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "John", "Smith");
+
+        // Create another local raw contact with the same name
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, null);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "John", "Smith");
+
+        // Join the two raw contacts explicitly
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        // Check that the two raw contacts are aggregated together
+        assertAggregated(rawContactId1, rawContactId2, "John Smith");
+
+        // Delete the aggregate contact
+        long contactId = queryContactId(rawContactId1);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        assertEquals(1, mResolver.delete(contactUri, null, null));
+
+        // Assert that both of the local raw contacts were removed completely
+        Cursor c1 = queryRawContact(rawContactId1);
+        assertEquals(0, c1.getCount());
+        c1.close();
+
+        Cursor c2 = queryRawContact(rawContactId2);
+        assertEquals(0, c2.getCount());
+        c2.close();
+
+        // Assert that the contact was removed
+        Cursor c3 = queryContact(contactId);
+        assertEquals(0, c3.getCount());
+        c3.close();
+    }
+
+    public void testDeleteContactComposedOfSomeLocalRawContacts() {
+        // Create a raw contact in the local (null) account
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, null);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "John", "Smith");
+
+        // Create another one in a non-local account with the same name
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, mAccount);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "John", "Smith");
+
+        // Check that the two new raw contacts are aggregated together
+        assertAggregated(rawContactId1, rawContactId2, "John Smith");
+
+        // Delete the aggregate contact
+        long contactId = queryContactId(rawContactId1);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        assertEquals(1, mResolver.delete(contactUri, null, null));
+
+        // Assert that the local raw contact was removed completely
+        Cursor c1 = queryRawContact(rawContactId1);
+        assertEquals(0, c1.getCount());
+        c1.close();
+
+        // Assert that the non-local raw contact is still present just marked as deleted
+        Cursor c2 = queryRawContact(rawContactId2);
+        assertEquals(1, c2.getCount());
+        assertTrue(c2.moveToFirst());
+        assertEquals(1, c2.getInt(c2.getColumnIndex(RawContacts.DELETED)));
+        c2.close();
+
+        // Assert that the contact was removed
+        Cursor c3 = queryContact(contactId);
+        assertEquals(0, c3.getCount());
+        c3.close();
+    }
+
     public void testQueryContactWithEscapedUri() {
         ContentValues values = new ContentValues();
         values.put(RawContacts.SOURCE_ID, "!@#$%^&*()_+=-/.,<>?;'\":[]}{\\|`~");
@@ -8889,7 +8981,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testContactDelete_marksRawContactsForDeletion() {
-        DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete();
+        DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete(mAccount);
 
         String[] projection = new String[]{ContactsContract.RawContacts.DIRTY,
                 ContactsContract.RawContacts.DELETED};
@@ -8903,7 +8995,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testContactDelete_checkRawContactContactId() {
-        DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete();
+        DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete(mAccount);
 
         String[] projection = new String[]{ContactsContract.RawContacts.CONTACT_ID};
         String[] record = RawContactUtil.queryByRawContactId(mResolver, ids.mRawContactId,
@@ -9144,13 +9236,23 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     /**
-     * Create a contact. Assert it's not present in the delete log. Delete it.
-     * And assert that the contact record is no longer present.
+     * Creates a contact in the local account. Assert it's not present in the delete log.
+     * Delete it. And assert that the contact record is no longer present.
      *
      * @return The contact id and raw contact id that was created.
      */
     private DatabaseAsserts.ContactIdPair assertContactCreateDelete() {
-        DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
+        return assertContactCreateDelete(null);
+    }
+
+    /**
+     * Creates a contact in the given account. Assert it's not present in the delete log.
+     * Delete it. And assert that the contact record is no longer present.
+     * @return The contact id and raw contact id that was created.
+     */
+    private DatabaseAsserts.ContactIdPair assertContactCreateDelete(Account account) {
+        DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver,
+                account);
 
         assertEquals(CommonDatabaseUtils.NOT_FOUND,
                 DeletedContactUtil.queryDeletedTimestampForContactId(mResolver, ids.mContactId));

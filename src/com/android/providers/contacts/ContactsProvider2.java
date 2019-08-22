@@ -3802,15 +3802,25 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int deleteContact(long contactId, boolean callerIsSyncAdapter) {
+        ArrayList<Long> localRawContactIds = new ArrayList();
+
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         mSelectionArgs1[0] = Long.toString(contactId);
         Cursor c = db.query(Tables.RAW_CONTACTS, new String[] {RawContacts._ID},
                 RawContacts.CONTACT_ID + "=?", mSelectionArgs1,
                 null, null, null);
+
+        // Raw contacts need to be deleted after the contact so just loop through and mark
+        // non-local raw contacts as deleted and collect the local raw contacts that will be
+        // deleted after the contact is deleted.
         try {
             while (c.moveToNext()) {
                 long rawContactId = c.getLong(0);
-                markRawContactAsDeleted(db, rawContactId, callerIsSyncAdapter);
+                if (rawContactIsLocal(rawContactId)) {
+                    localRawContactIds.add(rawContactId);
+                } else {
+                    markRawContactAsDeleted(db, rawContactId, callerIsSyncAdapter);
+                }
             }
         } finally {
             c.close();
@@ -3819,6 +3829,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mProviderStatusUpdateNeeded = true;
 
         int result = ContactsTableUtil.deleteContact(db, contactId);
+
+        // Now purge the local raw contacts
+        deleteRawContactsImmediately(db, localRawContactIds);
+
         scheduleBackgroundTask(BACKGROUND_TASK_CLEAN_DELETE_LOG);
         return result;
     }
@@ -3842,19 +3856,19 @@ public class ContactsProvider2 extends AbstractContactsProvider
             c.close();
         }
 
+        // When a raw contact is deleted, a sqlite trigger deletes the parent contact.
+        // TODO: all contact deletes was consolidated into ContactTableUtil but this one can't
+        // because it's in a trigger.  Consider removing trigger and replacing with java code.
+        // This has to happen before the raw contact is deleted since it relies on the number
+        // of raw contacts.
         final boolean contactIsSingleton =
                 ContactsTableUtil.deleteContactIfSingleton(db, rawContactId) == 1;
         final int count;
 
         if (callerIsSyncAdapter || rawContactIsLocal(rawContactId)) {
-            // When a raw contact is deleted, a SQLite trigger deletes the parent contact.
-            // TODO: all contact deletes was consolidated into ContactTableUtil but this one can't
-            // because it's in a trigger.  Consider removing trigger and replacing with java code.
-            // This has to happen before the raw contact is deleted since it relies on the number
-            // of raw contacts.
-            db.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
-            count = db.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
-            mTransactionContext.get().markRawContactChangedOrDeletedOrInserted(rawContactId);
+            ArrayList<Long> rawContactsIds = new ArrayList<>();
+            rawContactsIds.add(rawContactId);
+            count = deleteRawContactsImmediately(db, rawContactsIds);
         } else {
             count = markRawContactAsDeleted(db, rawContactId, callerIsSyncAdapter);
         }
@@ -3862,6 +3876,43 @@ public class ContactsProvider2 extends AbstractContactsProvider
             mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
         }
         return count;
+    }
+
+    /**
+     * Returns the number of raw contacts that were deleted immediately -- we don't merely set
+     * the DELETED column to 1, the entire raw contact row is deleted straightaway.
+     */
+    private int deleteRawContactsImmediately(SQLiteDatabase db, List<Long> rawContactIds) {
+        if (rawContactIds == null || rawContactIds.isEmpty()) {
+            return 0;
+        }
+
+        // Build the where clause for the raw contacts to be deleted
+        ArrayList<String> whereArgs = new ArrayList<>();
+        StringBuilder whereClause = new StringBuilder(rawContactIds.size() * 2 - 1);
+        whereClause.append(" IN (?");
+        whereArgs.add(String.valueOf(rawContactIds.get(0)));
+        for (int i = 1; i < rawContactIds.size(); i++) {
+            whereClause.append(",?");
+            whereArgs.add(String.valueOf(rawContactIds.get(i)));
+        }
+        whereClause.append(")");
+
+        // Remove presence rows
+        db.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + whereClause.toString(),
+                whereArgs.toArray(new String[0]));
+
+        // Remove raw contact rows
+        int result = db.delete(Tables.RAW_CONTACTS, RawContacts._ID + whereClause.toString(),
+                whereArgs.toArray(new String[0]));
+
+        if (result > 0) {
+            for (Long rawContactId : rawContactIds) {
+                mTransactionContext.get().markRawContactChangedOrDeletedOrInserted(rawContactId);
+            }
+        }
+
+        return result;
     }
 
     /**
