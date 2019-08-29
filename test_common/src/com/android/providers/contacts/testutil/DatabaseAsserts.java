@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts.testutil;
 
+import android.accounts.Account;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.net.Uri;
@@ -50,12 +51,21 @@ public class DatabaseAsserts {
     }
 
     /**
-     * Create a contact and assert that the record exists.
+     * Create a contact in the local account and assert that the record exists.
      *
      * @return The created contact id pair.
      */
     public static ContactIdPair assertAndCreateContact(ContentResolver resolver) {
-        long rawContactId = RawContactUtil.createRawContactWithName(resolver);
+        return assertAndCreateContact(resolver, null);
+    }
+
+    /**
+     * Create a contact in the given account and assert that the record exists.
+     *
+     * @return The created contact id pair.
+     */
+    public static ContactIdPair assertAndCreateContact(ContentResolver resolver, Account account) {
+        long rawContactId = RawContactUtil.createRawContactWithName(resolver, account);
 
         long contactId = RawContactUtil.queryContactIdByRawContactId(resolver, rawContactId);
         MoreAsserts.assertNotEqual(CommonDatabaseUtils.NOT_FOUND, contactId);
