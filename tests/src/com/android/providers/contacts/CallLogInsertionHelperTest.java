@@ -19,12 +19,10 @@ package com.android.providers.contacts;
 import android.content.ContentValues;
 import android.provider.CallLog.Calls;
 
-import android.test.AndroidTestCase;
-
 /**
  * Test cases for {@link com.android.providers.contacts.DefaultCallLogInsertionHelper}.
  */
-public class CallLogInsertionHelperTest extends AndroidTestCase {
+public class CallLogInsertionHelperTest extends FixedAndroidTestCase {
 
     /**
      * The default insertion helper under test.

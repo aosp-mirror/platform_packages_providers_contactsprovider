@@ -17,14 +17,13 @@ package com.android.providers.contacts;
 
 import android.icu.text.AlphabeticIndex;
 import android.icu.text.AlphabeticIndex.ImmutableIndex;
-import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.Suppress;
 import android.util.Log;
 
 import java.util.Arrays;
 import java.util.Locale;
 
-public class ContactsIcuTest extends AndroidTestCase {
+public class ContactsIcuTest extends FixedAndroidTestCase {
     private static final String TAG = "ContactsIcuTest";
 
     private static ImmutableIndex buildIndex(String... localeTags) {

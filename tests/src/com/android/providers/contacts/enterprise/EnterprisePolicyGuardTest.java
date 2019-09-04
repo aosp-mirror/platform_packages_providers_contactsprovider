@@ -24,7 +24,6 @@ import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Directory;
-import android.test.AndroidTestCase;
 import android.test.mock.MockContext;
 import android.test.suitebuilder.annotation.SmallTest;
 
@@ -36,12 +35,14 @@ import java.util.List;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.android.providers.contacts.FixedAndroidTestCase;
+
 
 /**
  * Unit tests for {@link EnterprisePolicyGuard}.
  */
 @SmallTest
-public class EnterprisePolicyGuardTest extends AndroidTestCase {
+public class EnterprisePolicyGuardTest extends FixedAndroidTestCase {
     private static final String SYSTEM_PROPERTY_DEXMAKER_DEXCACHE = "dexmaker.dexcache";
 
     private static final int CONTACT_ID = 10;
