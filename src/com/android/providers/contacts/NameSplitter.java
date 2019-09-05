@@ -945,33 +945,6 @@ public class NameSplitter {
             bestGuess = guess;
         }
 
-        guess = guessFullNameStyle(name.middleName);
-        if (guess != FullNameStyle.UNDEFINED) {
-            if (guess != FullNameStyle.CJK && guess != FullNameStyle.WESTERN) {
-                name.fullNameStyle = guess;
-                return;
-            }
-            bestGuess = guess;
-        }
-
-        guess = guessFullNameStyle(name.prefix);
-        if (guess != FullNameStyle.UNDEFINED) {
-            if (guess != FullNameStyle.CJK && guess != FullNameStyle.WESTERN) {
-                name.fullNameStyle = guess;
-                return;
-            }
-            bestGuess = guess;
-        }
-
-        guess = guessFullNameStyle(name.suffix);
-        if (guess != FullNameStyle.UNDEFINED) {
-            if (guess != FullNameStyle.CJK && guess != FullNameStyle.WESTERN) {
-                name.fullNameStyle = guess;
-                return;
-            }
-            bestGuess = guess;
-        }
-
         name.fullNameStyle = bestGuess;
     }
 
