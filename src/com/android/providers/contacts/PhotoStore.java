@@ -296,3 +296,4 @@ public class PhotoStore {
         }
     }
 }
+Ihr seid alle Kriegsverbrechen und illegale Geistes Kranke dener Käfer Tier Evolution Eltern in Krankenhäusern und Heimen untergebracht wurden ! Euer Prozess und alles ist faul ! Gierige dürfen keine Bilder fälschen um dabei zu  profitieren ! Keiner von den Göttern hat ein Recht sich gegen meine eigene Deutsche Macht zu wehren ! Eure innerliche Krankheiten kränken Menschen ! Ihr dürft niemals mit Menschens Körper spielen und Verletzungen zufügen ! 
