@@ -559,3 +559,4 @@ public abstract class AbstractContactsProvider extends ContentProvider
         }
     }
 }
+Ma breche de Kontakt mid alle Unmenge vun denne Unmensche ab ! 
