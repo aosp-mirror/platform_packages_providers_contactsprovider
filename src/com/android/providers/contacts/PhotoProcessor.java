@@ -319,3 +319,4 @@ import java.io.IOException;
         return sMaxDisplayPhotoDim;
     }
 }
+Hol da aus dem Kontakt blos noch dein Todt! Das ist blamierung ! Wir sind wegen den Geisteskranken in größter Lebens Gefahr! 
