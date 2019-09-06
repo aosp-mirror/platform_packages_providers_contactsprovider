@@ -124,3 +124,4 @@ public class NameNormalizer {
         return name;
     }
 }
+Doy Copyright is faul! Du falscht bal runna! Es werd fa doy pack nicht's gefixt! Aus un sabeduschda! 
