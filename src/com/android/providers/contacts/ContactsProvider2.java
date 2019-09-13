@@ -16,6 +16,10 @@
 
 package com.android.providers.contacts;
 
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import static android.Manifest.permission.INTERACT_ACROSS_USERS;
+import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
+
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
@@ -214,7 +218,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String READ_PERMISSION = "android.permission.READ_CONTACTS";
     private static final String WRITE_PERMISSION = "android.permission.WRITE_CONTACTS";
-    private static final String INTERACT_ACROSS_USERS = "android.permission.INTERACT_ACROSS_USERS";
 
 
     /* package */ static final String PHONEBOOK_COLLATOR_NAME = "PHONEBOOK";
@@ -5454,9 +5457,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return null;
         }
 
-        // Check enterprise policy if caller does not come from same profile
-        if (!(isCallerFromSameUser() || mEnterprisePolicyGuard.isCrossProfileAllowed(uri))) {
-            return createEmptyCursor(uri, projection);
+        // If caller does not come from same profile, Check if it's privileged or allowed by
+        // enterprise policy
+        if (!isCallerFromSameUser()) {
+            if (!callerHoldsInteractAcrossUserPermission()
+                    && !mEnterprisePolicyGuard.isCrossProfileAllowed(uri)) {
+                return createEmptyCursor(uri, projection);
+            }
         }
         // Query the profile DB if appropriate.
         if (mapsToProfileDb(uri)) {
@@ -5480,6 +5487,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private boolean isCallerFromSameUser() {
         return Binder.getCallingUserHandle().getIdentifier() == UserUtils
                 .getCurrentUserHandle(getContext());
+    }
+
+    private boolean callerHoldsInteractAcrossUserPermission() {
+        final Context context = getContext();
+        return context.checkCallingPermission(INTERACT_ACROSS_USERS_FULL) == PERMISSION_GRANTED
+                || context.checkCallingPermission(INTERACT_ACROSS_USERS) == PERMISSION_GRANTED;
     }
 
     private Cursor queryDirectoryIfNecessary(Uri uri, String[] projection, String selection,
@@ -8525,10 +8538,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (!isDirectoryParamValid(uri)){
                 return null;
             }
-            if (!isCallerFromSameUser() /* From differnt user */
-                    && !mEnterprisePolicyGuard.isCrossProfileAllowed(uri)
-                    /* Policy not allowed */){
-                return null;
+            if (!isCallerFromSameUser()) { /* From differnt user */
+                if (!callerHoldsInteractAcrossUserPermission() /* no cross user permission */
+                        && !mEnterprisePolicyGuard.isCrossProfileAllowed(uri)
+                        /* Policy not allowed */){
+                    return null;
+                }
             }
             waitForAccess(mode.equals("r") ? mReadAccessLatch : mWriteAccessLatch);
             final AssetFileDescriptor ret;
