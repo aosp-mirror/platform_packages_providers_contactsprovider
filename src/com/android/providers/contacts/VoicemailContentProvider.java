@@ -179,7 +179,8 @@ public class VoicemailContentProvider extends ContentProvider
     public Uri insert(Uri uri, ContentValues values) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "insert: uri=" + uri + "  values=[" + values + "]" +
-                    " CPID=" + Binder.getCallingPid());
+                    " CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid());
         }
         UriData uriData = checkPermissionsAndCreateUriDataForWrite(uri, values);
         return getTableDelegate(uriData).insert(uriData, values);
@@ -198,6 +199,7 @@ public class VoicemailContentProvider extends ContentProvider
             Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
         UriData uriData = checkPermissionsAndCreateUriDataForRead(uri);
@@ -213,6 +215,7 @@ public class VoicemailContentProvider extends ContentProvider
             Log.v(TAG, "update: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     "  values=[" + values + "] CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
         UriData uriData = checkPermissionsAndCreateUriDataForWrite(uri, values);
@@ -228,6 +231,7 @@ public class VoicemailContentProvider extends ContentProvider
             Log.v(TAG, "delete: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     " CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
         UriData uriData = checkPermissionsAndCreateUriDataForWrite(uri);
@@ -254,6 +258,7 @@ public class VoicemailContentProvider extends ContentProvider
             if (VERBOSE_LOGGING) {
                 Log.v(TAG, "openFile uri=" + uri + " mode=" + mode + " success=" + success +
                         " CPID=" + Binder.getCallingPid() +
+                        " CUID=" + Binder.getCallingUid() +
                         " User=" + UserUtils.getCurrentUserHandle(getContext()));
             }
         }
