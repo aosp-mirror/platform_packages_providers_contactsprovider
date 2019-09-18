@@ -2609,7 +2609,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     protected Uri insertInTransaction(Uri uri, ContentValues values) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "insertInTransaction: uri=" + uri + "  values=[" + values + "]" +
-                    " CPID=" + Binder.getCallingPid());
+                    " CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid());
         }
 
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
@@ -3553,6 +3554,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Log.v(TAG, "deleteInTransaction: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     " CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
@@ -4018,6 +4020,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Log.v(TAG, "updateInTransaction: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     "  values=[" + values + "] CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
@@ -5495,6 +5498,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
@@ -8611,6 +8615,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (VERBOSE_LOGGING) {
                 Log.v(TAG, "openAssetFile uri=" + uri + " mode=" + mode + " success=" + success +
                         " CPID=" + Binder.getCallingPid() +
+                        " CUID=" + Binder.getCallingUid() +
                         " User=" + UserUtils.getCurrentUserHandle(getContext()));
             }
         }
