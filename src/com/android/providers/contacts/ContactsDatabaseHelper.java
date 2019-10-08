@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import com.android.internal.R.bool;
 import com.android.providers.contacts.sqlite.DatabaseAnalyzer;
 import com.android.providers.contacts.sqlite.SqlChecker;
 import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
@@ -30,7 +31,6 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.UserInfo;
-import android.content.res.Resources;
 import android.database.CharArrayBuffer;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
@@ -84,6 +84,7 @@ import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
+import android.provider.DeviceConfig;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
@@ -104,11 +105,16 @@ import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
 import com.android.providers.contacts.util.NeededForTesting;
 
+import java.io.PrintWriter;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Database helper for contacts. Designed as a singleton to make sure that all
@@ -136,15 +142,28 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1100-1199 N
      *   1200-1299 O
      *   1300-1399 P
+     *   1400-1499 Q
      * </pre>
      */
-    static final int DATABASE_VERSION = 1300;
+    static final int DATABASE_VERSION = 1400;
     private static final int MINIMUM_SUPPORTED_VERSION = 700;
 
     @VisibleForTesting
     static final boolean DISALLOW_SUB_QUERIES = false;
 
     private static final int IDLE_CONNECTION_TIMEOUT_MS = 30000;
+
+    private static final String USE_STRICT_PHONE_NUMBER_COMPARISON_KEY
+            = "use_strict_phone_number_comparison";
+
+    private static final String USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_RUSSIA_KEY
+            = "use_strict_phone_number_comparison_for_russia";
+
+    private static final String USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_KAZAKHSTAN_KEY
+            = "use_strict_phone_number_comparison_for_kazakhstan";
+
+    private static final String RUSSIA_COUNTRY_CODE = "RU";
+    private static final String KAZAKHSTAN_COUNTRY_CODE = "KZ";
 
     public interface Tables {
         public static final String CONTACTS = "contacts";
@@ -333,9 +352,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String RAW_ENTITIES = "view_raw_entities";
         public static final String GROUPS = "view_groups";
 
-        /** The data_usage_stat table joined with other tables. */
-        public static final String DATA_USAGE_STAT = "view_data_usage_stat";
-
         /** The data_usage_stat table with the low-res columns. */
         public static final String DATA_USAGE_LR = "view_data_usage";
         public static final String STREAM_ITEMS = "view_stream_items";
@@ -422,11 +438,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String CONCRETE_PHOTO_FILE_ID = Tables.CONTACTS + "."
                 + Contacts.PHOTO_FILE_ID;
 
-        public static final String CONCRETE_RAW_TIMES_CONTACTED = Tables.CONTACTS + "."
-                + Contacts.RAW_TIMES_CONTACTED;
-        public static final String CONCRETE_RAW_LAST_TIME_CONTACTED = Tables.CONTACTS + "."
-                + Contacts.RAW_LAST_TIME_CONTACTED;
-
         public static final String CONCRETE_STARRED = Tables.CONTACTS + "." + Contacts.STARRED;
         public static final String CONCRETE_PINNED = Tables.CONTACTS + "." + Contacts.PINNED;
         public static final String CONCRETE_CUSTOM_RINGTONE = Tables.CONTACTS + "."
@@ -471,10 +482,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Tables.RAW_CONTACTS + "." + RawContacts.CUSTOM_RINGTONE;
         public static final String CONCRETE_SEND_TO_VOICEMAIL =
                 Tables.RAW_CONTACTS + "." + RawContacts.SEND_TO_VOICEMAIL;
-        public static final String CONCRETE_RAW_LAST_TIME_CONTACTED =
-                Tables.RAW_CONTACTS + "." + RawContacts.RAW_LAST_TIME_CONTACTED;
-        public static final String CONCRETE_RAW_TIMES_CONTACTED =
-                Tables.RAW_CONTACTS + "." + RawContacts.RAW_TIMES_CONTACTED;
         public static final String CONCRETE_STARRED =
                 Tables.RAW_CONTACTS + "." + RawContacts.STARRED;
         public static final String CONCRETE_PINNED =
@@ -748,18 +755,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String RAW_TIMES_USED = Data.RAW_TIMES_USED;
         public static final String LR_TIMES_USED = Data.LR_TIMES_USED;
 
-        public static final String CONCRETE_RAW_LAST_TIME_USED =
-                Tables.DATA_USAGE_STAT + "." + RAW_LAST_TIME_USED;
-
-        public static final String CONCRETE_RAW_TIMES_USED =
-                Tables.DATA_USAGE_STAT + "." + RAW_TIMES_USED;
-
-        public static final String CONCRETE_LR_LAST_TIME_USED =
-                Tables.DATA_USAGE_STAT + "." + LR_LAST_TIME_USED;
-
-        public static final String CONCRETE_LR_TIMES_USED =
-                Tables.DATA_USAGE_STAT + "." + LR_TIMES_USED;
-
         /** type: INTEGER */
         public static final String USAGE_TYPE_INT = "usage_type";
         public static final String CONCRETE_USAGE_TYPE =
@@ -928,60 +923,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    /** Placeholder for the methods to build the "low-res" SQL expressions. */
-    @VisibleForTesting
-    interface LowRes {
-        /** To be replaced with a real column name.  Only used within this interface. */
-        String TEMPLATE_PLACEHOLDER = "XX";
-
-        /**
-         * To be replaced with a constant in the expression.
-         * Only used within this interface.
-         */
-        String CONSTANT_PLACEHOLDER = "YY";
-
-        /** Only used within this interface. */
-        int TIMES_USED_GRANULARITY = 10;
-
-        /** Only used within this interface. */
-        int LAST_TIME_USED_GRANULARITY = 24 * 60 * 60;
-
-        /**
-         * Template to build the "low-res times used/contacted".  Only used within this interface.
-         * The outermost cast is needed to tell SQLite that the result is of the integer type.
-         */
-        String TEMPLATE_TIMES_USED =
-                ("cast(ifnull((case when (XX) <= 0 then 0"
-                + " when (XX) < (YY) then (XX)"
-                + " else (cast((XX) as int) / (YY)) * (YY) end), 0) as int)")
-                .replaceAll(CONSTANT_PLACEHOLDER, String.valueOf(TIMES_USED_GRANULARITY));
-
-        /**
-         * Template to build the "low-res last time used/contacted".
-         * Only used within this interface.
-         * The outermost cast is needed to tell SQLite that the result is of the integer type.
-         */
-        String TEMPLATE_LAST_TIME_USED =
-                ("cast((cast((XX) as int) / (YY)) * (YY) as int)")
-                .replaceAll(CONSTANT_PLACEHOLDER, String.valueOf(LAST_TIME_USED_GRANULARITY));
-
-        /**
-         * Build the SQL expression for the "low-res times used/contacted" expression from the
-         * give column name.
-         */
-        static String getTimesUsedExpression(String column) {
-            return TEMPLATE_TIMES_USED.replaceAll(TEMPLATE_PLACEHOLDER, column);
-        }
-
-        /**
-         * Build the SQL expression for the "low-res last time used/contacted" expression from the
-         * give column name.
-         */
-        static String getLastTimeUsedExpression(String column) {
-            return TEMPLATE_LAST_TIME_USED.replaceAll(TEMPLATE_PLACEHOLDER, column);
-        }
-    }
-
     private static final String TAG = "ContactsDatabaseHelper";
 
     private static final String DATABASE_NAME = "contacts2.db";
@@ -1033,13 +974,23 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    private boolean mUseStrictPhoneNumberComparison;
+    // We access it from multiple threads, so mark as volatile.
+    private volatile boolean mUseStrictPhoneNumberComparison;
+
+    // They're basically accessed only in one method, as well as in dump(), so technically
+    // they should be volatile too, but it's not really needed in practice.
+    private boolean mUseStrictPhoneNumberComparisonBase;
+    private boolean mUseStrictPhoneNumberComparisonForRussia;
+    private boolean mUseStrictPhoneNumberComparisonForKazakhstan;
     private int mMinMatch;
 
     private String[] mSelectionArgs1 = new String[1];
     private NameSplitter.Name mName = new NameSplitter.Name();
     private CharArrayBuffer mCharArrayBuffer = new CharArrayBuffer(128);
     private NameSplitter mNameSplitter;
+
+    private final Executor mLazilyCreatedExecutor =
+            new ThreadPoolExecutor(0, 1, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
 
     public static synchronized ContactsDatabaseHelper getInstance(Context context) {
         if (sSingleton == null) {
@@ -1071,14 +1022,65 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         setIdleConnectionTimeout(IDLE_CONNECTION_TIMEOUT_MS);
         mDatabaseOptimizationEnabled = optimizationEnabled;
         mIsTestInstance = isTestInstance;
-        Resources resources = context.getResources();
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
-        mCountryMonitor = new CountryMonitor(context);
-        mUseStrictPhoneNumberComparison = resources.getBoolean(
-                com.android.internal.R.bool.config_use_strict_phone_number_comparation);
+
+        mCountryMonitor = new CountryMonitor(context, this::updateUseStrictPhoneNumberComparison);
+
+        startListeningToDeviceConfigUpdates();
+
+        updateUseStrictPhoneNumberComparison();
+    }
+
+    protected void startListeningToDeviceConfigUpdates() {
+        // Note we override this method in the profile helper to skip it.
+
+        DeviceConfig.addOnPropertiesChangedListener(DeviceConfig.NAMESPACE_CONTACTS_PROVIDER,
+                mLazilyCreatedExecutor, (props) -> onDeviceConfigUpdated());
+    }
+
+    private void onDeviceConfigUpdated() {
+        updateUseStrictPhoneNumberComparison();
+    }
+
+    protected void updateUseStrictPhoneNumberComparison() {
+        // Note we override this method in the profile helper to skip it.
+
+        final String country = getCurrentCountryIso();
+
+        Log.i(TAG, "updateUseStrictPhoneNumberComparison: " + country);
+
+        // Load all the configs so we can show them in dumpsys.
+        mUseStrictPhoneNumberComparisonBase = getConfig(
+                USE_STRICT_PHONE_NUMBER_COMPARISON_KEY,
+                bool.config_use_strict_phone_number_comparation);
+
+        mUseStrictPhoneNumberComparisonForRussia = getConfig(
+                USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_RUSSIA_KEY,
+                bool.config_use_strict_phone_number_comparation_for_russia);
+
+        mUseStrictPhoneNumberComparisonForKazakhstan = getConfig(
+                USE_STRICT_PHONE_NUMBER_COMPARISON_FOR_KAZAKHSTAN_KEY,
+                bool.config_use_strict_phone_number_comparation_for_kazakhstan);
+
+        if (RUSSIA_COUNTRY_CODE.equals(country)) {
+            mUseStrictPhoneNumberComparison = mUseStrictPhoneNumberComparisonForRussia;
+
+        } else if (KAZAKHSTAN_COUNTRY_CODE.equals(country)) {
+            mUseStrictPhoneNumberComparison = mUseStrictPhoneNumberComparisonForKazakhstan;
+
+        } else {
+            mUseStrictPhoneNumberComparison = mUseStrictPhoneNumberComparisonBase;
+        }
+
         mMinMatch = mContext.getResources().getInteger(
                 com.android.internal.R.integer.config_phonenumber_compare_min_match);
+    }
+
+    private boolean getConfig(String configKey, int defaultResId) {
+        return DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_CONTACTS_PROVIDER, configKey,
+                mContext.getResources().getBoolean(defaultResId));
     }
 
     public SQLiteDatabase getDatabase(boolean writable) {
@@ -1898,7 +1900,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_CONTACTS + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.RAW_ENTITIES + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.ENTITIES + ";");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_STAT + ";");
+        db.execSQL("DROP VIEW IF EXISTS view_data_usage_stat;");
         db.execSQL("DROP VIEW IF EXISTS " + Views.DATA_USAGE_LR + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.STREAM_ITEMS + ";");
         db.execSQL("DROP VIEW IF EXISTS " + Views.METADATA_SYNC_STATE + ";");
@@ -1974,15 +1976,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
                         + " AS " + Contacts.SEND_TO_VOICEMAIL + ","
 
-                + ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED
-                        + " AS " + Contacts.RAW_LAST_TIME_CONTACTED + ","
-                + ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED
-                        + " AS " + Contacts.RAW_TIMES_CONTACTED + ","
+                + "0 AS " + Contacts.RAW_LAST_TIME_CONTACTED + ","
+                + "0 AS " + Contacts.RAW_TIMES_CONTACTED + ","
 
-                + LowRes.getLastTimeUsedExpression(ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED)
-                        + " AS " + Contacts.LR_LAST_TIME_CONTACTED + ","
-                + LowRes.getTimesUsedExpression(ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED)
-                        + " AS " + Contacts.LR_TIMES_CONTACTED + ","
+                + "0 AS " + Contacts.LR_LAST_TIME_CONTACTED + ","
+                + "0 AS " + Contacts.LR_TIMES_CONTACTED + ","
 
                 + ContactsColumns.CONCRETE_STARRED
                         + " AS " + Contacts.STARRED + ","
@@ -2053,12 +2051,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String rawContactOptionColumns =
                 RawContacts.CUSTOM_RINGTONE + ","
                 + RawContacts.SEND_TO_VOICEMAIL + ","
-                + RawContacts.RAW_LAST_TIME_CONTACTED + ","
-                + LowRes.getLastTimeUsedExpression(RawContacts.RAW_LAST_TIME_CONTACTED)
-                        + " AS " + RawContacts.LR_LAST_TIME_CONTACTED + ","
-                + RawContacts.RAW_TIMES_CONTACTED + ","
-                + LowRes.getTimesUsedExpression(RawContacts.RAW_TIMES_CONTACTED)
-                        + " AS " + RawContacts.LR_TIMES_CONTACTED + ","
+                + "0 AS " + RawContacts.RAW_LAST_TIME_CONTACTED + ","
+                + "0 AS " + RawContacts.LR_LAST_TIME_CONTACTED + ","
+                + "0 AS " + RawContacts.RAW_TIMES_CONTACTED + ","
+                + "0 AS " + RawContacts.LR_TIMES_CONTACTED + ","
                 + RawContacts.STARRED + ","
                 + RawContacts.PINNED;
 
@@ -2096,10 +2092,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + contactNameColumns + ", "
                 + baseContactColumns + ", "
 
-                + ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED
-                        + " AS " + Contacts.RAW_LAST_TIME_CONTACTED + ", "
-                + LowRes.getLastTimeUsedExpression(ContactsColumns.CONCRETE_RAW_LAST_TIME_CONTACTED)
-                        + " AS " + Contacts.LR_LAST_TIME_CONTACTED + ", "
+                + "0 AS " + Contacts.RAW_LAST_TIME_CONTACTED + ", "
+                + "0 AS " + Contacts.LR_LAST_TIME_CONTACTED + ", "
 
                 + ContactsColumns.CONCRETE_SEND_TO_VOICEMAIL
                         + " AS " + Contacts.SEND_TO_VOICEMAIL + ", "
@@ -2108,10 +2102,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + ContactsColumns.CONCRETE_PINNED
                 + " AS " + Contacts.PINNED + ", "
 
-                + ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED
-                        + " AS " + Contacts.RAW_TIMES_CONTACTED + ", "
-                + LowRes.getTimesUsedExpression(ContactsColumns.CONCRETE_RAW_TIMES_CONTACTED)
-                        + " AS " + Contacts.LR_TIMES_CONTACTED;
+                + "0 AS " + Contacts.RAW_TIMES_CONTACTED + ", "
+                + "0 AS " + Contacts.LR_TIMES_CONTACTED;
 
         String contactsSelect = "SELECT "
                 + ContactsColumns.CONCRETE_ID + " AS " + Contacts._ID + ","
@@ -2201,43 +2193,21 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE VIEW " + Views.ENTITIES + " AS "
                 + entitiesSelect);
 
-        // Data usage view, with the low res columns, with no joins.
+        // View on top of DATA_USAGE_STAT, which is always empty.
         final String dataUsageViewSelect = "SELECT "
                 + DataUsageStatColumns._ID + ", "
                 + DataUsageStatColumns.DATA_ID + ", "
                 + DataUsageStatColumns.USAGE_TYPE_INT + ", "
-                + DataUsageStatColumns.RAW_TIMES_USED + ", "
-                + DataUsageStatColumns.RAW_LAST_TIME_USED + ","
-                + LowRes.getTimesUsedExpression(DataUsageStatColumns.RAW_TIMES_USED)
-                    + " AS " + DataUsageStatColumns.LR_TIMES_USED + ","
-                + LowRes.getLastTimeUsedExpression(DataUsageStatColumns.RAW_LAST_TIME_USED)
-                    + " AS " + DataUsageStatColumns.LR_LAST_TIME_USED
-                + " FROM " + Tables.DATA_USAGE_STAT;
+                + "0 AS " + DataUsageStatColumns.RAW_TIMES_USED + ", "
+                + "0 AS " + DataUsageStatColumns.RAW_LAST_TIME_USED + ","
+                + "0 AS " + DataUsageStatColumns.LR_TIMES_USED + ","
+                + "0 AS " + DataUsageStatColumns.LR_LAST_TIME_USED
+                + " FROM " + Tables.DATA_USAGE_STAT
+                + " WHERE 0";
 
         // When the data_usage_stat table is needed with the low-res columns, use this, which is
         // faster than the DATA_USAGE_STAT view since it doesn't involve joins.
         db.execSQL("CREATE VIEW " + Views.DATA_USAGE_LR + " AS " + dataUsageViewSelect);
-
-        String dataUsageStatSelect = "SELECT "
-                + DataUsageStatColumns.CONCRETE_ID + " AS " + DataUsageStatColumns._ID + ", "
-                + DataUsageStatColumns.DATA_ID + ", "
-                + RawContactsColumns.CONCRETE_CONTACT_ID + " AS " + RawContacts.CONTACT_ID + ", "
-                + MimetypesColumns.CONCRETE_MIMETYPE + " AS " + Data.MIMETYPE + ", "
-                + DataUsageStatColumns.USAGE_TYPE_INT + ", "
-                + DataUsageStatColumns.RAW_TIMES_USED + ", "
-                + DataUsageStatColumns.RAW_LAST_TIME_USED + ", "
-                + DataUsageStatColumns.LR_TIMES_USED + ", "
-                + DataUsageStatColumns.LR_LAST_TIME_USED
-                + " FROM " + Views.DATA_USAGE_LR + " AS " + Tables.DATA_USAGE_STAT
-                + " JOIN " + Tables.DATA + " ON ("
-                +   DataColumns.CONCRETE_ID + "=" + DataUsageStatColumns.CONCRETE_DATA_ID + ")"
-                + " JOIN " + Tables.RAW_CONTACTS + " ON ("
-                +   RawContactsColumns.CONCRETE_ID + "=" + DataColumns.CONCRETE_RAW_CONTACT_ID
-                    + " )"
-                + " JOIN " + Tables.MIMETYPES + " ON ("
-                +   MimetypesColumns.CONCRETE_ID + "=" + DataColumns.CONCRETE_MIMETYPE_ID + ")";
-
-        db.execSQL("CREATE VIEW " + Views.DATA_USAGE_STAT + " AS " + dataUsageStatSelect);
 
         String streamItemSelect = "SELECT " +
                 StreamItemsColumns.CONCRETE_ID + ", " +
@@ -2677,6 +2647,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             upgradeToVersion1300(db);
             upgradeViewsAndTriggers = true;
             oldVersion = 1300;
+        }
+
+        if (isUpgradeRequired(oldVersion, newVersion, 1400)) {
+            ContactsProvider2.deleteDataUsage(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1400;
         }
 
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
@@ -4970,6 +4946,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public String getCurrentCountryIso() {
+        // For debugging.
+        // String injected = android.os.SystemProperties.get("debug.cp2.injectedCountryIso");
+        // if (!TextUtils.isEmpty(injected)) return injected;
         return mCountryMonitor.getCountryIso();
     }
 
@@ -5132,5 +5111,24 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         } else {
             Slog.wtfStack(TAG, message);
         }
+    }
+
+    public void dump(PrintWriter pw) {
+        pw.print("CountryISO: ");
+        pw.println(getCurrentCountryIso());
+
+        pw.print("UseStrictPhoneNumberComparison: ");
+        pw.println(mUseStrictPhoneNumberComparison);
+
+        pw.print("UseStrictPhoneNumberComparisonBase: ");
+        pw.println(mUseStrictPhoneNumberComparisonBase);
+
+        pw.print("UseStrictPhoneNumberComparisonRU: ");
+        pw.println(mUseStrictPhoneNumberComparisonForRussia);
+
+        pw.print("UseStrictPhoneNumberComparisonKZ: ");
+        pw.println(mUseStrictPhoneNumberComparisonForKazakhstan);
+
+        pw.println();
     }
 }

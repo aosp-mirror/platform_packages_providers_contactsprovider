@@ -21,10 +21,8 @@ import static org.mockito.Mockito.verify;
 
 import android.content.ContentUris;
 import android.content.ContentValues;
-import android.database.ContentObserver;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
 import android.provider.CallLog;
@@ -739,28 +737,6 @@ public class VoicemailProviderTest extends BaseVoicemailProviderTest {
         int count = mResolver.update(uri, values, null, null);
         assertEquals(1, count);
         assertStoredValues(uri, values);
-    }
-
-    public void testStatusUpdate_observerNotified() throws Exception {
-        Uri uri = insertTestStatusEntry();
-        ContentValues values = getTestStatusValues();
-        values.put(Status.DATA_CHANNEL_STATE, Status.DATA_CHANNEL_STATE_NO_CONNECTION);
-        values.put(Status.NOTIFICATION_CHANNEL_STATE,
-            Status.NOTIFICATION_CHANNEL_STATE_MESSAGE_WAITING);
-        values.put(Status.SOURCE_TYPE,
-            "vvm_type_test2");
-        Boolean[] observerTriggered = new Boolean[]{false};
-        mResolver.registerContentObserver(Status.CONTENT_URI, true,
-            new ContentObserver(new Handler()) {
-                @Override
-                public void onChange(boolean selfChange, Uri uri) {
-                    observerTriggered[0] = true;
-                }
-            });
-
-        mResolver.update(uri, values, null, null);
-
-        assertTrue(observerTriggered[0]);
     }
 
     public void testStatusUpsert() throws Exception {

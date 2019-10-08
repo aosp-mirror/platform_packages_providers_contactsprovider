@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--  Copyright (C) 2009 The Android Open Source Project
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
+ -->
+
+<resources xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core এপসমূহ"</string>
+    <string name="app_label" msgid="3389954322874982620">"সম্পৰ্কসমূহৰ সঞ্চয়াগাৰ"</string>
+    <string name="provider_label" msgid="6012150850819899907">"সম্পর্কবোৰ"</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"সম্পৰ্কসূচী আপগ্ৰেড কৰিবলৈ অধিক মেম\'ৰিৰ প্ৰয়োজন।"</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"সম্পৰ্কসূচীৰ বাবে সঞ্চয়াগাৰ আপগ্ৰেড কৰিথকা হৈছে"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"আপগ্ৰেড প্ৰক্ৰিয়া সম্পূৰ্ণ কৰিবলৈ টিপক।"</string>
+    <string name="default_directory" msgid="93961630309570294">"সম্পর্কসূচী"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"অন্যান্য"</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"ইয়াৰ পৰা অহা ভইচমেল "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"সম্পৰ্কসূচীৰ ডেটাবেছ প্ৰতিলিপি কৰক"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"আপুনি এই কাৰ্যবোৰ কৰিবলৈ লৈছে ১) সকলো সম্পৰ্ক সম্বন্ধীয় তথ্য় আৰু কল লগ সন্নিবিষ্ট থকা আপোনাৰ ডেটাবেছক আভ্য়ন্তৰীণ সঞ্চয়াগাৰলৈ প্ৰতিলিপি কৰা আৰু ২) ইয়াক ইমেইল কৰা। ডিভাইচৰ পৰা সফলতাৰে প্ৰতিলিপি কৰাৰ বা ইমেইল পোৱাৰ পিছত উক্ত প্ৰতিলিপি মচিবলৈ নাপাহৰিব।"</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"এতিয়াই মচক"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"আৰম্ভ কৰক"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"আপোনাৰ ফাইল পঠাবলৈ কোনো প্ৰ\'গ্ৰাম বাছনি কৰক"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"সম্পৰ্কসূচী Db সংলগ্ন কৰা হ’ল"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"মোৰ সকলো সম্পৰ্ক তথ্য়সহ মোৰ সম্পৰ্কসূচী সংলগ্ন কৰা হ’ল। সাবধানে চলাব।"</string>
+</resources>

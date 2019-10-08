@@ -1234,14 +1234,13 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     private static final String[] DATA_USAGE_PROJECTION =
             new String[] {Data.DATA1, Data.TIMES_USED, Data.LAST_TIME_USED};
 
-    protected void assertDataUsageCursorContains(Uri uri, String data1, int timesUsed,
-            int lastTimeUsed) {
+    protected void assertDataUsageZero(Uri uri, String data1) {
         final Cursor cursor = mResolver.query(uri, DATA_USAGE_PROJECTION, null, null,
                 null);
         try {
             dumpCursor(cursor);
-            assertCursorHasAnyRecordMatch(cursor, cv(Data.DATA1, data1, Data.TIMES_USED, timesUsed,
-                    Data.LAST_TIME_USED, lastTimeUsed));
+            assertCursorHasAnyRecordMatch(cursor, cv(Data.DATA1, data1, Data.TIMES_USED, 0,
+                    Data.LAST_TIME_USED, 0));
         } finally {
             cursor.close();
         }

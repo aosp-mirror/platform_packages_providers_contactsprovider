@@ -6,14 +6,14 @@ android_app {
         "src/com/android/providers/contacts/EventLogTags.logtags",
     ],
     libs: [
-        "ext",
-        "telephony-common",
+        "ext"
     ],
     static_libs: [
         "android-common",
         "com.android.vcard",
         "guava",
     ],
+
     // The Jacoco tool analyzes code coverage when running unit tests on the
     // application. This configuration line selects which packages will be analyzed,
     // leaving out code which is tested by other means (e.g. static libraries) that

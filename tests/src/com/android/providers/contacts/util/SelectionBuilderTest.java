@@ -16,14 +16,15 @@
 
 package com.android.providers.contacts.util;
 
-import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
+
+import com.android.providers.contacts.FixedAndroidTestCase;
 
 /**
  * Unit tests for {@link SelectionBuilder}.
  */
 @SmallTest
-public class SelectionBuilderTest extends AndroidTestCase {
+public class SelectionBuilderTest extends FixedAndroidTestCase {
     public void testEmptyClauses() {
         assertEquals(null, new SelectionBuilder(null).build());
         assertEquals(null, new SelectionBuilder("").build());

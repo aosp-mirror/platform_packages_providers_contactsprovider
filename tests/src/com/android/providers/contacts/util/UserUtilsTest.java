@@ -15,21 +15,19 @@
  */
 package com.android.providers.contacts.util;
 
-import com.android.providers.contacts.ContactsActor;
-import com.android.providers.contacts.ContactsActor.MockUserManager;
-import com.android.providers.contacts.SynchronousContactsProvider2;
-
-import android.content.ContentProvider;
-import android.content.Context;
-import android.os.UserManager;
-import android.provider.ContactsContract;
-import android.test.AndroidTestCase;
-import android.test.suitebuilder.annotation.SmallTest;
-
 import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
+import android.content.Context;
+import android.provider.ContactsContract;
+import android.test.suitebuilder.annotation.SmallTest;
+
+import com.android.providers.contacts.ContactsActor;
+import com.android.providers.contacts.ContactsActor.MockUserManager;
+import com.android.providers.contacts.FixedAndroidTestCase;
+import com.android.providers.contacts.SynchronousContactsProvider2;
+
 @SmallTest
-public class UserUtilsTest extends AndroidTestCase {
+public class UserUtilsTest extends FixedAndroidTestCase {
 
     protected ContactsActor mActor;
 

@@ -18,7 +18,7 @@ android_test {
     name: "ContactsProviderTests2",
     static_libs: [
         "ContactsProviderTestUtils",
-        "android-support-test",
+        "androidx.test.rules",
         "mockito-target-minus-junit4",
     ],
     libs: [
