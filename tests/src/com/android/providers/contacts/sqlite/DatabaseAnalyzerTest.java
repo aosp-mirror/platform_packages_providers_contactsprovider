@@ -16,14 +16,14 @@
 
 package com.android.providers.contacts.sqlite;
 
-import android.test.AndroidTestCase;
 
 import com.android.providers.contacts.ContactsDatabaseHelper;
+import com.android.providers.contacts.FixedAndroidTestCase;
 import com.android.providers.contacts.TestUtils;
 
 import java.util.List;
 
-public class DatabaseAnalyzerTest extends AndroidTestCase {
+public class DatabaseAnalyzerTest extends FixedAndroidTestCase {
     public void testFindTableViewsAllowingColumns() {
         final ContactsDatabaseHelper dbh =
                 ContactsDatabaseHelper.getNewInstanceForTest(getContext(),

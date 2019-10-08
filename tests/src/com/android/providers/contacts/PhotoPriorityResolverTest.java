@@ -16,7 +16,6 @@
 
 package com.android.providers.contacts;
 
-import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.MediumTest;
 
 /**
@@ -29,7 +28,7 @@ import android.test.suitebuilder.annotation.MediumTest;
  * </code>
  */
 @MediumTest
-public class PhotoPriorityResolverTest extends AndroidTestCase {
+public class PhotoPriorityResolverTest extends FixedAndroidTestCase {
 
     public void testLoadPicturePriorityFromXml() {
         PhotoPriorityResolver resolver = new PhotoPriorityResolver(getContext());

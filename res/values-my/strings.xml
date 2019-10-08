@@ -20,7 +20,7 @@
     <string name="app_label" msgid="3389954322874982620">"လိပ်စာများသိမ်းဆည်းသောအပ်ပလီကေးရှင်း"</string>
     <string name="provider_label" msgid="6012150850819899907">"အဆက်အသွယ်များ"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"အဆက်အသွယ်များ အဆင့်မြှင့်ခြင်းအတွက် မှတ်ဉာဏ်စွမ်းရည်ပိုလိုအပ်သည်"</string>
-    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"အဆယ်အသွယ်များ သိမ်းဆည်းရန် နေရာ အဆင့်မြှင့်ခြင်း"</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"အဆယ်အသွယ်များ သိမ်းရန် နေရာ အဆင့်မြှင့်ခြင်း"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"အဆင့်မြှင့်တင်ခြင်းပြီးမြောက်ရန် တို့ပါ။"</string>
     <string name="default_directory" msgid="93961630309570294">"အဆက်အသွယ်များ"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"တစ်ခြား"</string>

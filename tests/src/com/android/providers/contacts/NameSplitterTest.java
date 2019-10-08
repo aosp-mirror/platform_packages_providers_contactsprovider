@@ -233,6 +233,25 @@ public class NameSplitterTest extends TestCase {
         assertFullNameStyle(FullNameStyle.CHINESE, "\uFF5C--(\u675C\u9D51)");
     }
 
+    public void testGuessFullNameStyleChineseMixed() {
+        createNameSplitter(Locale.CHINA);
+        // Both first and last names are Chinese.
+        assertFullNameStyle(FullNameStyle.CHINESE, "\u675C \u9D51");
+        // Last name is Chinese, first name is English.
+        assertFullNameStyle(FullNameStyle.CHINESE, "\u675C Juan");
+        // Last name is English, first name is Chinese.
+        assertFullNameStyle(FullNameStyle.CHINESE, "Du \u9D51");
+        // Both first and last names are English, prefix, middle, suffix are all Chinese.
+        Name name = new Name();
+        name.prefix = "\u524D";
+        name.givenNames = "Du";
+        name.middleName = "\u5C0F";
+        name.familyName = "Juan";
+        name.suffix = "\u540E";
+        mNameSplitter.guessNameStyle(name);
+        // guessFullNameStyle() only look at last and first name.
+        assertEquals(FullNameStyle.WESTERN, name.fullNameStyle);
+    }
 
     public void testGuessPhoneticNameStyle() {
 

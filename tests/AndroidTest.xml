@@ -20,9 +20,8 @@
 
     <option name="test-suite-tag" value="apct" />
     <option name="test-tag" value="ContactsProviderTests" />
-    <test class="com.android.tradefed.testtype.InstrumentationTest" >
+    <test class="com.android.tradefed.testtype.AndroidJUnitTest" >
         <option name="package" value="com.android.providers.contacts.tests" />
-        <option name="runner" value="android.test.InstrumentationTestRunner" />
         <option name="hidden-api-checks" value="false"/>
     </test>
 </configuration>

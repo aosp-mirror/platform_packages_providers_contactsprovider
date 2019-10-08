@@ -17,7 +17,7 @@ java_library {
     srcs: ["src/**/*.java"],
     libs: [
         "android.test.runner",
-        "android-support-test",
+        "androidx.test.rules",
         "mockito-target-minus-junit4",
     ],
 }
