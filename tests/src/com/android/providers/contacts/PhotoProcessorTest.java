@@ -20,7 +20,6 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
 
 import com.android.providers.contacts.tests.R;
@@ -34,7 +33,7 @@ import java.io.IOException;
  * Most of tests are covered by {@link PhotoStoreTest}.
  */
 @SmallTest
-public class PhotoProcessorTest extends AndroidTestCase {
+public class PhotoProcessorTest extends FixedAndroidTestCase {
 
     public void testTransparency() throws IOException {
         final Drawable source = getTestContext().getResources().getDrawable(

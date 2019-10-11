@@ -13,6 +13,7 @@ android_app {
         "com.android.vcard",
         "guava",
     ],
+
     // The Jacoco tool analyzes code coverage when running unit tests on the
     // application. This configuration line selects which packages will be analyzed,
     // leaving out code which is tested by other means (e.g. static libraries) that

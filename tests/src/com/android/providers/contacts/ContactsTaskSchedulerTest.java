@@ -15,7 +15,6 @@
  */
 package com.android.providers.contacts;
 
-import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.LargeTest;
 
 import java.util.ArrayList;
@@ -25,7 +24,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 @LargeTest
-public class ContactsTaskSchedulerTest extends AndroidTestCase {
+public class ContactsTaskSchedulerTest extends FixedAndroidTestCase {
     private static final int SHUTDOWN_SECONDS = 3;
 
     private static class MyContactsTaskScheduler extends ContactsTaskScheduler {
