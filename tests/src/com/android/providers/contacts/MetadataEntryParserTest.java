@@ -17,7 +17,6 @@
 package com.android.providers.contacts;
 
 import android.content.Context;
-import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
 import com.android.providers.contacts.MetadataEntryParser.AggregationData;
 import com.android.providers.contacts.MetadataEntryParser.FieldData;
@@ -41,7 +40,7 @@ import java.util.ArrayList;
  * </code>
  */
 @SmallTest
-public class MetadataEntryParserTest extends AndroidTestCase {
+public class MetadataEntryParserTest extends FixedAndroidTestCase {
 
     public void testErrorForEmptyInput() {
         try {

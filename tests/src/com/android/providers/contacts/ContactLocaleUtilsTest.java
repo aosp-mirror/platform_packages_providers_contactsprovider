@@ -17,11 +17,8 @@
 package com.android.providers.contacts;
 
 import android.provider.ContactsContract.FullNameStyle;
-import android.test.AndroidTestCase;
 import android.test.suitebuilder.annotation.SmallTest;
-import android.util.Log;
 
-import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -30,7 +27,7 @@ import java.util.List;
 import java.util.Locale;
 
 @SmallTest
-public class ContactLocaleUtilsTest extends AndroidTestCase {
+public class ContactLocaleUtilsTest extends FixedAndroidTestCase {
     private static final String TAG = "ContactLocaleUtilsTest";
 
     private static final String PHONE_NUMBER_1 = "+1 (650) 555-1212";
