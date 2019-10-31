@@ -22,7 +22,7 @@ import android.net.Uri;
 import android.provider.ContactsContract.RawContacts;
 import android.test.suitebuilder.annotation.MediumTest;
 
-import android.telephony.CallerInfo;
+import android.telecom.CallerInfo;
 import com.android.providers.contacts.testutil.DataUtil;
 
 /**
