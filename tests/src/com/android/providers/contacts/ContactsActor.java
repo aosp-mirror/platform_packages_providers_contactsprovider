@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import static org.mockito.Mockito.when;
+
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.AccountManagerCallback;
@@ -57,6 +59,7 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
+import android.telecom.TelecomManager;
 import android.telephony.TelephonyManager;
 import android.test.IsolatedContext;
 import android.test.mock.MockContentResolver;
@@ -67,6 +70,8 @@ import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.MockSharedPreferences;
 
 import com.google.android.collect.Sets;
+
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
@@ -271,6 +276,8 @@ public class ContactsActor {
         }
     }
 
+    private TelecomManager mMockTelecomManager;
+
     /**
      * A context wrapper that reports a different user id.
      *
@@ -322,6 +329,9 @@ public class ContactsActor {
                 if (Context.TELEPHONY_SERVICE.equals(name)) {
                     return mMockTelephonyManager;
                 }
+                if (Context.TELECOM_SERVICE.equals(name)) {
+                    return mMockTelecomManager;
+                }
                 // Use overallContext here; super.getSystemService() somehow won't return
                 // DevicePolicyManager.
                 return overallContext.getSystemService(name);
@@ -369,6 +379,9 @@ public class ContactsActor {
                 if (Context.TELEPHONY_SERVICE.equals(name)) {
                     return mMockTelephonyManager;
                 }
+                if (Context.TELECOM_SERVICE.equals(name)) {
+                    return mMockTelecomManager;
+                }
                 // Use overallContext here; super.getSystemService() somehow won't return
                 // DevicePolicyManager.
                 return overallContext.getSystemService(name);
@@ -403,6 +416,9 @@ public class ContactsActor {
         mMockAccountManager = new MockAccountManager(mProviderContext);
         mockUserManager = new MockUserManager(mProviderContext);
         mMockTelephonyManager = new MockTelephonyManager(mProviderContext);
+        mMockTelecomManager = Mockito.mock(TelecomManager.class);
+        when(mMockTelecomManager.getDefaultDialerPackage()).thenReturn("");
+        when(mMockTelecomManager.getSystemDialerPackage()).thenReturn("");
         provider = addProvider(providerClass, authority);
     }
 
