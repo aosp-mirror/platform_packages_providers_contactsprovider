@@ -747,9 +747,8 @@ public class CallLogProvider extends ContentProvider {
                     mDbHelper.getWritableDatabase().execSQL(
                             UNHIDE_BY_PHONE_ACCOUNT_QUERY, handleArgs);
                 } else {
-                    TelecomManager tm = TelecomManager.from(getContext());
+                    TelecomManager tm = getContext().getSystemService(TelecomManager.class);
                     if (tm != null) {
-
                         PhoneAccount account = tm.getPhoneAccount(handle);
                         if (account != null && account.getAddress() != null) {
                             // We did not find any items for the specific phone account, so run the
