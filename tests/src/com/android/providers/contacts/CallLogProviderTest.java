@@ -16,9 +16,8 @@
 
 package com.android.providers.contacts;
 
-import com.android.internal.telephony.CallerInfo;
+import android.telephony.CallerInfo;
 import com.android.internal.telephony.PhoneConstants;
-import com.android.providers.contacts.CallLogDatabaseHelper.DbProperties;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 
 import android.content.ComponentName;
@@ -187,7 +186,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
 
     public void testAddCall() {
         CallerInfo ci = new CallerInfo();
-        ci.name = "1-800-GOOG-411";
+        ci.setName("1-800-GOOG-411");
         ci.numberType = Phone.TYPE_CUSTOM;
         ci.numberLabel = "Directory";
         final ComponentName sComponentName = new ComponentName(
@@ -209,7 +208,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_ALLOWED);
         values.put(Calls.DATE, 2000);
         values.put(Calls.DURATION, 40);
-        values.put(Calls.CACHED_NAME, ci.name);
+        values.put(Calls.CACHED_NAME, ci.getName());
         values.put(Calls.CACHED_NUMBER_TYPE, (String) null);
         values.put(Calls.CACHED_NUMBER_LABEL, (String) null);
         values.put(Calls.COUNTRY_ISO, "us");

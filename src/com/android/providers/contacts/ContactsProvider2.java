@@ -9664,7 +9664,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     protected boolean isPhone() {
         if (!mIsPhoneInitialized) {
-            mIsPhone = new TelephonyManager(getContext()).isVoiceCapable();
+            TelephonyManager tm = getContext().getSystemService(TelephonyManager.class);
+            mIsPhone = tm.isVoiceCapable();
             mIsPhoneInitialized = true;
         }
         return mIsPhone;
