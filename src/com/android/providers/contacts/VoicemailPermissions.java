@@ -20,6 +20,7 @@ import android.content.Context;
 import android.os.Binder;
 import android.telecom.TelecomManager;
 import android.telephony.TelephonyManager;
+import android.text.TextUtils;
 
 import com.android.providers.contacts.util.ContactsPermissions;
 
@@ -42,6 +43,11 @@ public class VoicemailPermissions {
     }
 
     private boolean isDefaultOrSystemDialer(String callingPackage) {
+        // Note: Mimics previous dependency on DefaultDialerManager; that code just returns false
+        // here if the calling package is empty.
+        if (TextUtils.isEmpty(callingPackage)) {
+            return false;
+        }
         TelecomManager tm = mContext.getSystemService(TelecomManager.class);
         return (callingPackage.equals(tm.getDefaultDialerPackage())
                 || callingPackage.equals(tm.getSystemDialerPackage()));
