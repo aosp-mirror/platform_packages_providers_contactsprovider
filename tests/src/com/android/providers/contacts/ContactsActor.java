@@ -158,11 +158,8 @@ public class ContactsActor {
 
     public static class MockUserManager extends UserManager {
         public static UserInfo createUserInfo(String name, int id, int groupId, int flags) {
-            final UserInfo ui = new UserInfo();
-            ui.name = name;
-            ui.id = id;
+            final UserInfo ui = new UserInfo(id, name, flags | UserInfo.FLAG_INITIALIZED);
             ui.profileGroupId = groupId;
-            ui.flags = flags | UserInfo.FLAG_INITIALIZED;
             return ui;
         }
 
