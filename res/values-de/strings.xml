@@ -26,7 +26,7 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Sonstige"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Mailboxnachricht von "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontaktdatenbank kopieren"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"Du 1) erstellst eine Kopie deiner Datenbank, die alle Kontaktinformationen und Anruflisteneinträge auf dem internen Speicher enthält, und 2) sendest diese Kopie per E-Mail. Denke daran, die Kopie so schnell wie möglich zu löschen, nachdem du sie vom Gerät kopiert hast oder die E-Mail empfangen wurde."</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Du 1) erstellst eine Kopie deiner Datenbank, die alle Kontaktinformationen und Anruflisten auf dem internen Speicher enthält, und 2) sendest diese Kopie per E-Mail. Denke daran, die Kopie so schnell wie möglich zu löschen, nachdem du sie vom Gerät kopiert hast oder die E-Mail empfangen wurde."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Jetzt löschen"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Starten"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Programm zum Senden der Datei auswählen"</string>
