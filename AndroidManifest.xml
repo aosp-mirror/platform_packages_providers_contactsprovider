@@ -25,7 +25,6 @@
 
     <application android:process="android.process.acore"
         android:label="@string/app_label"
-        android:icon="@drawable/app_icon"
         android:allowBackup="false"
         android:usesCleartextTraffic="false">
 

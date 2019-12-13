@@ -9720,25 +9720,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     protected boolean isPhone() {
         if (!mIsPhoneInitialized) {
-            TelephonyManager tm = getContext().getSystemService(TelephonyManager.class);
-            mIsPhone = tm.isVoiceCapable();
+            mIsPhone = isVoiceCapable();
             mIsPhoneInitialized = true;
         }
         return mIsPhone;
     }
 
     protected boolean isVoiceCapable() {
-        // this copied from com.android.phone.PhoneApp.onCreate():
-
-        // "voice capable" flag.
-        // This flag currently comes from a resource (which is
-        // overrideable on a per-product basis):
-        return getContext().getResources()
-                .getBoolean(com.android.internal.R.bool.config_voice_capable);
-        // ...but this might eventually become a PackageManager "system
-        // feature" instead, in which case we'd do something like:
-        // return
-        //   getPackageManager().hasSystemFeature(PackageManager.FEATURE_TELEPHONY_VOICE_CALLS);
+        TelephonyManager tm = getContext().getSystemService(TelephonyManager.class);
+        return tm.isVoiceCapable();
     }
 
     private void undemoteContact(SQLiteDatabase db, long id) {
