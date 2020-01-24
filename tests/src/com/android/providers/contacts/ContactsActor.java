@@ -96,6 +96,8 @@ public class ContactsActor {
     public static final String PACKAGE_GREEN = "com.example.green";
     public static final String PACKAGE_BLUE = "org.example.blue";
 
+    private static final int DEFAULT_USER_ID = 0;
+
     public Context context;
     public String packageName;
     public MockContentResolver resolver;
@@ -170,7 +172,7 @@ public class ContactsActor {
         public static final UserInfo SECONDARY_USER = createUserInfo("2nd", 11, 11, 0);
 
         /** "My" user.  Set it to change the current user. */
-        public int myUser = 0;
+        public int myUser = DEFAULT_USER_ID;
 
         private ArrayList<UserInfo> mUsers = new ArrayList<>();
 
@@ -396,7 +398,11 @@ public class ContactsActor {
 
             @Override
             public int getUserId() {
-                return mockUserManager.getUserHandle();
+                if (mockUserManager != null) {
+                    return mockUserManager.getUserHandle();
+                } else {
+                    return DEFAULT_USER_ID;
+                }
             }
 
             @Override
