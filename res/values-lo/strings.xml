@@ -18,7 +18,7 @@
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="sharedUserLabel" msgid="8024311725474286801">"ແອັບພລິເຄຊັນຫຼັກຂອງ Android"</string>
     <string name="app_label" msgid="3389954322874982620">"ບ່ອນຈັດເກັບຂໍ້ມູນລາຍຊື່ຜູ່ຕິດຕໍ່"</string>
-    <string name="provider_label" msgid="6012150850819899907">"ລາຍຊື່ຜູ່ຕິດຕໍ່"</string>
+    <string name="provider_label" msgid="6012150850819899907">"ລາຍຊື່ຜູ້ຕິດຕໍ່"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"ການອັບເກຣດລາຍຊື່ຜູ່ຕິດຕໍ່ ຈະຕ້ອງໃຊ້ໜ່ວຍຄວາມຈຳເພີ່ມຕື່ມ."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"ອັບເກຣດບ່ອນຈັດເກັບຂໍ້ມູນລາຍຊື່ຜູ່ຕິດຕໍ່"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"ແຕະເພື່ອສຳເລັດການອັບເກຣດ."</string>
