@@ -16,6 +16,10 @@
 
 package com.android.providers.contacts;
 
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import static android.Manifest.permission.INTERACT_ACROSS_USERS;
+import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
+
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
@@ -214,7 +218,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String READ_PERMISSION = "android.permission.READ_CONTACTS";
     private static final String WRITE_PERMISSION = "android.permission.WRITE_CONTACTS";
-    private static final String INTERACT_ACROSS_USERS = "android.permission.INTERACT_ACROSS_USERS";
 
 
     /* package */ static final String PHONEBOOK_COLLATOR_NAME = "PHONEBOOK";
@@ -5363,10 +5366,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return null;
         }
 
-        // Check enterprise policy if caller does not come from same profile
-        if (!(isCallerFromSameUser() || mEnterprisePolicyGuard.isCrossProfileAllowed(uri))) {
-            return createEmptyCursor(uri, projection);
+        // If caller does not come from same profile, Check if it's privileged or allowed by
+        // enterprise policy
+        if (!queryAllowedByEnterprisePolicy(uri)) {
+            return null;
         }
+
         // Query the profile DB if appropriate.
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
@@ -5386,9 +5391,46 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
+    private boolean queryAllowedByEnterprisePolicy(Uri uri) {
+        if (isCallerFromSameUser()) {
+            // Caller is on the same user; query allowed.
+            return true;
+        }
+        if (!doesCallerHoldInteractAcrossUserPermission()) {
+            // Cross-user and the caller has no INTERACT_ACROSS_USERS; don't allow query.
+            // Technically, in a cross-profile sharing case, this would be a valid query.
+            // But for now we don't allow it. (We never allowe it and no one complained about it.)
+            return false;
+        }
+        if (isCallerAnotherSelf()) {
+            // The caller is the other CP2 (which has INTERACT_ACROSS_USERS), meaning the reuest
+            // is on behalf of a "real" client app.
+            // Consult the enterprise policy.
+            return mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
+        }
+        return true;
+    }
+
     private boolean isCallerFromSameUser() {
-        return Binder.getCallingUserHandle().getIdentifier() == UserUtils
-                .getCurrentUserHandle(getContext());
+        return UserHandle.getUserId(Binder.getCallingUid()) == UserHandle.myUserId();
+    }
+
+    /**
+     * Returns true if called by a different user's CP2.
+     */
+    private boolean isCallerAnotherSelf() {
+        // Note normally myUid is always different from the callerUid in the code path where
+        // this method is used, except during unit tests, where the caller is always the same
+        // process.
+        final int myUid = android.os.Process.myUid();
+        final int callingUid = Binder.getCallingUid();
+        return (myUid != callingUid) && UserHandle.isSameApp(myUid, callingUid);
+    }
+
+    private boolean doesCallerHoldInteractAcrossUserPermission() {
+        final Context context = getContext();
+        return context.checkCallingPermission(INTERACT_ACROSS_USERS_FULL) == PERMISSION_GRANTED
+                || context.checkCallingPermission(INTERACT_ACROSS_USERS) == PERMISSION_GRANTED;
     }
 
     private Cursor queryDirectoryIfNecessary(Uri uri, String[] projection, String selection,
@@ -5435,7 +5477,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private String getRealCallerPackageName(Uri queryUri) {
         // If called by another CP2, then the URI should contain the original package name.
-        if (calledByAnotherSelf()) {
+        if (isCallerAnotherSelf()) {
             final String passedPackage = queryUri.getQueryParameter(
                     Directory.CALLER_PACKAGE_PARAM_KEY);
             if (TextUtils.isEmpty(passedPackage)) {
@@ -5448,18 +5490,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // Otherwise, just return the real calling package name.
             return getCallingPackage();
         }
-    }
-
-    /**
-     * Returns true if called by a different user's CP2.
-     */
-    private boolean calledByAnotherSelf() {
-        // Note normally myUid is always different from the callerUid in the code path where
-        // this method is used, except during unit tests, where the caller is always the same
-        // process.
-        final int myUid = android.os.Process.myUid();
-        final int callerUid = Binder.getCallingUid();
-        return (myUid != callerUid) && UserHandle.isSameApp(myUid, callerUid);
     }
 
     private Cursor queryDirectoryAuthority(Uri uri, String[] projection, String selection,
@@ -8434,9 +8464,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (!isDirectoryParamValid(uri)){
                 return null;
             }
-            if (!isCallerFromSameUser() /* From differnt user */
-                    && !mEnterprisePolicyGuard.isCrossProfileAllowed(uri)
-                    /* Policy not allowed */){
+            if (!queryAllowedByEnterprisePolicy(uri)) {
                 return null;
             }
             waitForAccess(mode.equals("r") ? mReadAccessLatch : mWriteAccessLatch);
