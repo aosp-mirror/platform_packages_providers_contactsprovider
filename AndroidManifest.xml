@@ -26,6 +26,7 @@
     <application android:process="android.process.acore"
         android:label="@string/app_label"
         android:allowBackup="false"
+        android:forceQueryable="true"
         android:usesCleartextTraffic="false">
 
         <provider android:name="ContactsProvider2"
