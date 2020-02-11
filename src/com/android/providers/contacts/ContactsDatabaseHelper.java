@@ -3221,8 +3221,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         //       ON_BOOT_COMPLETE instead of PRE_BOOT_COMPLETE.
         SubscriptionManager sm = SubscriptionManager.from(mContext);
         if (sm != null) {
-            Log.i(TAG, "count: " + sm.getAllSubscriptionInfoCount());
-            for (SubscriptionInfo info : sm.getAllSubscriptionInfoList()) {
+            for (SubscriptionInfo info : sm.getActiveSubscriptionInfoList()) {
                 String iccId = info.getIccId();
                 int subId = info.getSubscriptionId();
                 if (!TextUtils.isEmpty(iccId) &&
