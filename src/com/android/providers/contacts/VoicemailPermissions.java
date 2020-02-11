@@ -18,8 +18,9 @@ package com.android.providers.contacts;
 
 import android.content.Context;
 import android.os.Binder;
-import android.telecom.DefaultDialerManager;
+import android.telecom.TelecomManager;
 import android.telephony.TelephonyManager;
+import android.text.TextUtils;
 
 import com.android.providers.contacts.util.ContactsPermissions;
 
@@ -41,9 +42,20 @@ public class VoicemailPermissions {
                 || callerHasCarrierPrivileges();
     }
 
+    private boolean isDefaultOrSystemDialer(String callingPackage) {
+        // Note: Mimics previous dependency on DefaultDialerManager; that code just returns false
+        // here if the calling package is empty.
+        if (TextUtils.isEmpty(callingPackage)) {
+            return false;
+        }
+        TelecomManager tm = mContext.getSystemService(TelecomManager.class);
+        return (callingPackage.equals(tm.getDefaultDialerPackage())
+                || callingPackage.equals(tm.getSystemDialerPackage()));
+    }
+
     /** Determine if the calling process has full read access to all voicemails. */
     public boolean callerHasReadAccess(String callingPackage) {
-        if (DefaultDialerManager.isDefaultOrSystemDialer(mContext, callingPackage)) {
+        if (isDefaultOrSystemDialer(callingPackage)) {
             return true;
         }
         return callerHasPermission(android.Manifest.permission.READ_VOICEMAIL);
@@ -52,7 +64,7 @@ public class VoicemailPermissions {
     /** Determine if the calling process has the permission required to update and remove all
      * voicemails */
     public boolean callerHasWriteAccess(String callingPackage) {
-        if (DefaultDialerManager.isDefaultOrSystemDialer(mContext, callingPackage)) {
+        if (isDefaultOrSystemDialer(callingPackage)) {
             return true;
         }
         return callerHasPermission(android.Manifest.permission.WRITE_VOICEMAIL);
