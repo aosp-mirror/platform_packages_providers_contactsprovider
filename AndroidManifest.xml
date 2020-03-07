@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.PROCESS_PHONE_ACCOUNT_REGISTRATION" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
     <uses-permission android:name="android.permission.SEND_CALL_LOG_CHANGE" />
     <uses-permission android:name="android.permission.UPDATE_APP_OPS_STATS" />
