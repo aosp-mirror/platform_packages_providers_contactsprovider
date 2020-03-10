@@ -17,7 +17,6 @@
 package com.android.providers.contacts;
 
 import android.telecom.CallerInfo;
-import com.android.internal.telephony.PhoneConstants;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 
 import android.content.ComponentName;
