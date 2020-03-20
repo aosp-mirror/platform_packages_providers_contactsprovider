@@ -17,7 +17,6 @@
 package com.android.providers.contacts;
 
 import android.telecom.CallerInfo;
-import com.android.internal.telephony.PhoneConstants;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 
 import android.content.ComponentName;
@@ -196,7 +195,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 sComponentName, "sub0");
 
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
-                PhoneConstants.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 0, subscription, 2000,
+                Calls.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 0, subscription, 2000,
                 40, null);
         assertNotNull(uri);
         assertEquals("0@" + CallLog.AUTHORITY, uri.getAuthority());
