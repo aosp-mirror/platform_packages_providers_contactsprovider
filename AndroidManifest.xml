@@ -83,7 +83,8 @@
         </provider>
 
         <!-- Handles database upgrades after OTAs, then disables itself -->
-        <receiver android:name="ContactsUpgradeReceiver">
+        <receiver android:name="ContactsUpgradeReceiver"
+            android:exported="true">
             <!-- This broadcast is sent after the core system has finished
                  booting, before the home app is launched or BOOT_COMPLETED
                  is sent. -->
@@ -93,6 +94,7 @@
         </receiver>
 
         <receiver android:name="PhoneAccountRegistrationReceiver"
+                android:exported="true"
                 android:permission="android.permission.BROADCAST_PHONE_ACCOUNT_REGISTRATION">
             <!-- Broadcast sent after a phone account is registered in telecom. -->
             <intent-filter>
@@ -100,7 +102,8 @@
             </intent-filter>
         </receiver>
 
-        <receiver android:name="LocaleChangeReceiver">
+        <receiver android:name="LocaleChangeReceiver"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.LOCALE_CHANGED"/>
             </intent-filter>
@@ -109,6 +112,7 @@
         <activity android:name=".debug.ContactsDumpActivity"
                 android:label="@string/debug_dump_title"
                 android:theme="@android:style/Theme.Holo.Dialog"
+                android:exported="true"
                 >
             <intent-filter>
                 <action android:name="com.android.providers.contacts.DUMP_DATABASE"/>
