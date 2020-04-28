@@ -9664,8 +9664,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     protected boolean isPhone() {
         if (!mIsPhoneInitialized) {
-            TelephonyManager tm = getContext().getSystemService(TelephonyManager.class);
-            mIsPhone = tm.isVoiceCapable();
+            mIsPhone = new TelephonyManager(getContext()).isVoiceCapable();
             mIsPhoneInitialized = true;
         }
         return mIsPhone;
@@ -9829,7 +9828,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @return the currently active {@link ContactsDatabaseHelper} for the current thread.
      */
     @NeededForTesting
-    public ContactsDatabaseHelper getThreadActiveDatabaseHelperForTest() {
+    protected ContactsDatabaseHelper getThreadActiveDatabaseHelperForTest() {
         return mDbHelper.get();
     }
 

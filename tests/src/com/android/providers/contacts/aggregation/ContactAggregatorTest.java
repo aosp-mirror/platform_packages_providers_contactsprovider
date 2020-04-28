@@ -34,12 +34,10 @@ import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
-import android.telephony.PhoneNumberUtils;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.MediumTest;
 
 import com.android.providers.contacts.BaseContactsProvider2Test;
-import com.android.providers.contacts.ContactsDatabaseHelper;
 import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.TestUtils;
 import com.android.providers.contacts.tests.R;
@@ -65,38 +63,17 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
     private static final Account ACCOUNT_2 = new Account("account_name_2", "account_type_2");
     private static final Account ACCOUNT_3 = new Account("account_name_3", "account_type_3");
 
-    private static final int MIN_MATCH = 7;
-
-    private int mOldMinMatch1;
-    private int mOldMinMatch2;
-
     private static final String[] AGGREGATION_EXCEPTION_PROJECTION = new String[] {
             AggregationExceptions.TYPE,
             AggregationExceptions.RAW_CONTACT_ID1,
             AggregationExceptions.RAW_CONTACT_ID2
     };
 
-    @Override
     protected void setUp() throws Exception {
         super.setUp();
         final ContactsProvider2 cp = (ContactsProvider2) getProvider();
         // Make sure to use ContactAggregator.java class
         cp.setNewAggregatorForTest(false);
-
-        final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
-        mOldMinMatch1 = PhoneNumberUtils.getMinMatchForTest();
-        mOldMinMatch2 = dbHelper.getMinMatchForTest();
-        PhoneNumberUtils.setMinMatchForTest(MIN_MATCH);
-        dbHelper.setMinMatchForTest(MIN_MATCH);
-    }
-
-    @Override
-    protected void tearDown() throws Exception {
-        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
-        final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
-        PhoneNumberUtils.setMinMatchForTest(mOldMinMatch1);
-        dbHelper.setMinMatchForTest(mOldMinMatch2);
-        super.tearDown();
     }
 
     public void testCrudAggregationExceptions() throws Exception {

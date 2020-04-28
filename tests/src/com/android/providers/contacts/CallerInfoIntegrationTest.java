@@ -22,7 +22,7 @@ import android.net.Uri;
 import android.provider.ContactsContract.RawContacts;
 import android.test.suitebuilder.annotation.MediumTest;
 
-import android.telecom.CallerInfo;
+import com.android.internal.telephony.CallerInfo;
 import com.android.providers.contacts.testutil.DataUtil;
 
 /**
@@ -49,9 +49,9 @@ public class CallerInfoIntegrationTest extends BaseContactsProvider2Test {
         insertPhoneNumber(rawContactId, "800-466-4411");
 
         CallerInfo callerInfo = CallerInfo.getCallerInfo(getProvider().getContext(), "18004664411");
-        assertEquals("800-466-4411", callerInfo.getPhoneNumber());
+        assertEquals("800-466-4411", callerInfo.phoneNumber);
         assertEquals("Home", callerInfo.phoneLabel);
-        assertEquals("Hot Tamale", callerInfo.getName());
+        assertEquals("Hot Tamale", callerInfo.name);
         assertEquals("ring", String.valueOf(callerInfo.contactRingtoneUri));
         assertEquals(true, callerInfo.shouldSendToVoicemail);
         assertEquals("content://com.android.contacts/phone_lookup_enterprise/18004664411",

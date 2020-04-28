@@ -665,25 +665,11 @@ public class ContactAggregator2 extends AbstractContactAggregator {
 
     private void updateMatchScoresBasedOnPhoneMatches(SQLiteDatabase db, long rawContactId,
             RawContactMatcher matcher) {
-        Cursor c;
-        String useStrictPhoneNumberComparison =
-                mDbHelper.getUseStrictPhoneNumberComparisonParameter();
-
-        if (useStrictPhoneNumberComparison.equals("1")) {
-            mSelectionArgs2[0] = String.valueOf(rawContactId);
-            mSelectionArgs2[1] = useStrictPhoneNumberComparison;
-            c = db.query(PhoneLookupQuery.TABLE, PhoneLookupQuery.COLUMNS,
+        mSelectionArgs2[0] = String.valueOf(rawContactId);
+        mSelectionArgs2[1] = mDbHelper.getUseStrictPhoneNumberComparisonParameter();
+        Cursor c = db.query(PhoneLookupQuery.TABLE, PhoneLookupQuery.COLUMNS,
                 PhoneLookupQuery.SELECTION,
                 mSelectionArgs2, null, null, null, SECONDARY_HIT_LIMIT_STRING);
-        } else {
-            mSelectionArgs3[0] = String.valueOf(rawContactId);
-            mSelectionArgs3[1] = useStrictPhoneNumberComparison;
-            mSelectionArgs3[2] = mDbHelper.getMinMatchParameter();
-            c = db.query(PhoneLookupQuery.TABLE, PhoneLookupQuery.COLUMNS,
-                PhoneLookupQuery.SELECTION_MIN_MATCH,
-                mSelectionArgs3, null, null, null, SECONDARY_HIT_LIMIT_STRING);
-        }
-
         try {
             while (c.moveToNext()) {
                 long rId = c.getLong(PhoneLookupQuery.RAW_CONTACT_ID);
@@ -1041,11 +1027,6 @@ public class ContactAggregator2 extends AbstractContactAggregator {
         String SELECTION = "dataA." + Data.RAW_CONTACT_ID + "=?"
                 + " AND PHONE_NUMBERS_EQUAL(dataA." + Phone.NUMBER + ", "
                 + "dataB." + Phone.NUMBER + ",?)"
-                + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
-
-        String SELECTION_MIN_MATCH = "dataA." + Data.RAW_CONTACT_ID + "=?"
-                + " AND PHONE_NUMBERS_EQUAL(dataA." + Phone.NUMBER + ", "
-                + "dataB." + Phone.NUMBER + ",?,?)"
                 + " AND " + RawContacts.CONTACT_ID + " IN " + Tables.DEFAULT_DIRECTORY;
 
         String[] COLUMNS = new String[] {

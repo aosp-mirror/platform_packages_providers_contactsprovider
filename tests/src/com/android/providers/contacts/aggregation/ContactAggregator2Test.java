@@ -34,12 +34,10 @@ import android.provider.ContactsContract.Contacts.Photo;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
-import android.telephony.PhoneNumberUtils;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.MediumTest;
 
 import com.android.providers.contacts.BaseContactsProvider2Test;
-import com.android.providers.contacts.ContactsDatabaseHelper;
 import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.TestUtils;
 import com.android.providers.contacts.tests.R;
@@ -71,32 +69,11 @@ public class ContactAggregator2Test extends BaseContactsProvider2Test {
             AggregationExceptions.RAW_CONTACT_ID2
     };
 
-    private static final int MIN_MATCH = 7;
-
-    private static int mOldMinMatch1;
-    private static int mOldMinMatch2;
-
-    @Override
     protected void setUp() throws Exception {
         super.setUp();
         // Enable new aggregator.
         final ContactsProvider2 cp = (ContactsProvider2) getProvider();
         cp.setNewAggregatorForTest(true);
-
-        final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
-        mOldMinMatch1 = PhoneNumberUtils.getMinMatchForTest();
-        mOldMinMatch2 = dbHelper.getMinMatchForTest();
-        PhoneNumberUtils.setMinMatchForTest(MIN_MATCH);
-        dbHelper.setMinMatchForTest(MIN_MATCH);
-    }
-
-    @Override
-    protected void tearDown() throws Exception {
-        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
-        final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
-        PhoneNumberUtils.setMinMatchForTest(mOldMinMatch1);
-        dbHelper.setMinMatchForTest(mOldMinMatch2);
-        super.tearDown();
     }
 
     public void testCrudAggregationExceptions() throws Exception {

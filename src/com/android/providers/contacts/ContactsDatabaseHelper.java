@@ -982,7 +982,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private boolean mUseStrictPhoneNumberComparisonBase;
     private boolean mUseStrictPhoneNumberComparisonForRussia;
     private boolean mUseStrictPhoneNumberComparisonForKazakhstan;
-    private int mMinMatch;
 
     private String[] mSelectionArgs1 = new String[1];
     private NameSplitter.Name mName = new NameSplitter.Name();
@@ -1072,9 +1071,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         } else {
             mUseStrictPhoneNumberComparison = mUseStrictPhoneNumberComparisonBase;
         }
-
-        mMinMatch = mContext.getResources().getInteger(
-                com.android.internal.R.integer.config_phonenumber_compare_min_match);
     }
 
     private boolean getConfig(String configKey, int defaultResId) {
@@ -3221,7 +3217,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         //       ON_BOOT_COMPLETE instead of PRE_BOOT_COMPLETE.
         SubscriptionManager sm = SubscriptionManager.from(mContext);
         if (sm != null) {
-            for (SubscriptionInfo info : sm.getActiveSubscriptionInfoList()) {
+            Log.i(TAG, "count: " + sm.getAllSubscriptionInfoCount());
+            for (SubscriptionInfo info : sm.getAllSubscriptionInfoList()) {
                 String iccId = info.getIccId();
                 int subId = info.getSubscriptionId();
                 if (!TextUtils.isEmpty(iccId) &&
@@ -4242,7 +4239,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         sb.setLength(0);
         sb.append("PHONE_NUMBERS_EQUAL(" + Tables.DATA + "." + Phone.NUMBER + ", ");
         DatabaseUtils.appendEscapedSQLString(sb, number);
-        sb.append(mUseStrictPhoneNumberComparison ? ", 1)" : ", 0, " + mMinMatch + ")");
+        sb.append(mUseStrictPhoneNumberComparison ? ", 1)" : ", 0)");
         qb.appendWhere(sb.toString());
     }
 
@@ -4337,10 +4334,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     public String getUseStrictPhoneNumberComparisonParameter() {
         return mUseStrictPhoneNumberComparison ? "1" : "0";
-    }
-
-    public String getMinMatchParameter() {
-        return String.valueOf(mMinMatch);
     }
 
     /**
@@ -4959,16 +4952,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     @NeededForTesting
     /* package */ boolean getUseStrictPhoneNumberComparisonForTest() {
         return mUseStrictPhoneNumberComparison;
-    }
-
-    @VisibleForTesting
-    public void setMinMatchForTest(int minMatch) {
-        mMinMatch = minMatch;
-    }
-
-    @VisibleForTesting
-    public int getMinMatchForTest() {
-        return mMinMatch;
     }
 
     @NeededForTesting

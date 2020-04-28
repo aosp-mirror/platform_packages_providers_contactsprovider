@@ -16,8 +16,9 @@
 
 package com.android.providers.contacts;
 
-import android.telecom.CallerInfo;
+import com.android.internal.telephony.CallerInfo;
 import com.android.internal.telephony.PhoneConstants;
+import com.android.providers.contacts.CallLogDatabaseHelper.DbProperties;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 
 import android.content.ComponentName;
@@ -62,10 +63,6 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     /** Total number of columns exposed by call_log provider. */
     private static final int NUM_CALLLOG_FIELDS = 34;
 
-    private static final int MIN_MATCH = 7;
-
-    private int mOldMinMatch;
-
     private CallLogProviderTestable mCallLogProvider;
 
     @Override
@@ -82,8 +79,6 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     protected void setUp() throws Exception {
         super.setUp();
         mCallLogProvider = addProvider(CallLogProviderTestable.class, CallLog.AUTHORITY);
-        mOldMinMatch = mCallLogProvider.getMinMatchForTest();
-        mCallLogProvider.setMinMatchForTest(MIN_MATCH);
     }
 
     @Override
@@ -91,7 +86,6 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         setUpWithVoicemailPermissions();
         mResolver.delete(Calls.CONTENT_URI_WITH_VOICEMAIL, null, null);
         setTimeForTest(null);
-        mCallLogProvider.setMinMatchForTest(mOldMinMatch);
         super.tearDown();
     }
 
@@ -186,7 +180,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
 
     public void testAddCall() {
         CallerInfo ci = new CallerInfo();
-        ci.setName("1-800-GOOG-411");
+        ci.name = "1-800-GOOG-411";
         ci.numberType = Phone.TYPE_CUSTOM;
         ci.numberLabel = "Directory";
         final ComponentName sComponentName = new ComponentName(
@@ -208,7 +202,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         values.put(Calls.NUMBER_PRESENTATION, Calls.PRESENTATION_ALLOWED);
         values.put(Calls.DATE, 2000);
         values.put(Calls.DURATION, 40);
-        values.put(Calls.CACHED_NAME, ci.getName());
+        values.put(Calls.CACHED_NAME, ci.name);
         values.put(Calls.CACHED_NUMBER_TYPE, (String) null);
         values.put(Calls.CACHED_NUMBER_LABEL, (String) null);
         values.put(Calls.COUNTRY_ISO, "us");

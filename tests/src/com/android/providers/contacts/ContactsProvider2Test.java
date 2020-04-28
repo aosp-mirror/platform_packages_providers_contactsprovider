@@ -70,7 +70,6 @@ import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
 import android.provider.OpenableColumns;
-import android.telephony.PhoneNumberUtils;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.text.TextUtils;
@@ -129,31 +128,6 @@ import java.util.Set;
 public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     private static final String TAG = ContactsProvider2Test.class.getSimpleName();
-
-    private static final int MIN_MATCH = 7;
-
-    private int mOldMinMatch1;
-    private int mOldMinMatch2;
-
-    @Override
-    protected void setUp() throws Exception {
-        super.setUp();
-        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
-        final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
-        mOldMinMatch1 = PhoneNumberUtils.getMinMatchForTest();
-        mOldMinMatch2 = dbHelper.getMinMatchForTest();
-        PhoneNumberUtils.setMinMatchForTest(MIN_MATCH);
-        dbHelper.setMinMatchForTest(MIN_MATCH);
-    }
-
-    @Override
-    protected void tearDown() throws Exception {
-        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
-        final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
-        PhoneNumberUtils.setMinMatchForTest(mOldMinMatch1);
-        dbHelper.setMinMatchForTest(mOldMinMatch2);
-        super.tearDown();
-    }
 
     public void testConvertEnterpriseUriWithEnterpriseDirectoryToLocalUri() {
         String phoneNumber = "886";
