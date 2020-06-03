@@ -24,7 +24,7 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"Sakatu bertsio-berritzea osatzeko."</string>
     <string name="default_directory" msgid="93961630309570294">"Kontaktuak"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Beste bat"</string>
-    <string name="voicemail_from_column" msgid="435732568832121444">"Mezu bat utzi du erantzungailuan honek: "</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"Honen ahots-mezua: "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopiatu kontaktuen datu-basea"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Bi gauza egitera zoaz: 1) kontaktuekin erlazionatutako informazio guztia eta deien erregistro osoa jasotzen dituen datu-basearen kopia bat egingo duzu eta barneko memorian gordeko duzu eta 2) posta elektronikoz bidaliko duzu. Gogoratu kopia ezabatu behar duzula gailutik kopiatu edo mezu elektronikoa jaso bezain laster."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Ezabatu"</string>
