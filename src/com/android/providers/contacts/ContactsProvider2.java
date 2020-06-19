@@ -173,6 +173,8 @@ import com.android.providers.contacts.util.Clock;
 import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.NeededForTesting;
+import com.android.providers.contacts.util.LogFields;
+import com.android.providers.contacts.util.LogUtils;
 import com.android.providers.contacts.util.UserUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
@@ -2170,45 +2172,98 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     public Uri insert(Uri uri, ContentValues values) {
-        waitForAccess(mWriteAccessLatch);
+        LogFields.Builder logBuilder = LogFields.Builder.aLogFields()
+                .setApiType(LogUtils.ApiType.INSERT)
+                .setUriType(sUriMatcher.match(uri))
+                .setCallerIsSyncAdapter(readBooleanQueryParameter(
+                        uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
+                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+        Uri resultUri = null;
 
-        mContactsHelper.validateContentValues(getCallingPackage(), values);
+        try {
+            waitForAccess(mWriteAccessLatch);
 
-        if (mapsToProfileDbWithInsertedValues(uri, values)) {
-            switchToProfileMode();
-            return mProfileProvider.insert(uri, values);
+            mContactsHelper.validateContentValues(getCallingPackage(), values);
+
+            if (mapsToProfileDbWithInsertedValues(uri, values)) {
+                switchToProfileMode();
+                resultUri = mProfileProvider.insert(uri, values);
+                return resultUri;
+            }
+            switchToContactMode();
+            resultUri = super.insert(uri, values);
+            return resultUri;
+        } catch (Exception e) {
+            logBuilder.setException(e);
+            throw e;
+        } finally {
+            LogUtils.log(
+                    logBuilder.setResultUri(resultUri).setResultCount(resultUri == null ? 0 : 1)
+                            .build());
         }
-        switchToContactMode();
-        return super.insert(uri, values);
     }
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        waitForAccess(mWriteAccessLatch);
+        LogFields.Builder logBuilder = LogFields.Builder.aLogFields()
+                .setApiType(LogUtils.ApiType.UPDATE)
+                .setUriType(sUriMatcher.match(uri))
+                .setCallerIsSyncAdapter(readBooleanQueryParameter(
+                        uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
+                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+        int updates = 0;
 
-        mContactsHelper.validateContentValues(getCallingPackage(), values);
-        mContactsHelper.validateSql(getCallingPackage(), selection);
+        try {
+            waitForAccess(mWriteAccessLatch);
 
-        if (mapsToProfileDb(uri)) {
-            switchToProfileMode();
-            return mProfileProvider.update(uri, values, selection, selectionArgs);
+            mContactsHelper.validateContentValues(getCallingPackage(), values);
+            mContactsHelper.validateSql(getCallingPackage(), selection);
+
+            if (mapsToProfileDb(uri)) {
+                switchToProfileMode();
+                updates = mProfileProvider.update(uri, values, selection, selectionArgs);
+                return updates;
+            }
+            switchToContactMode();
+            updates = super.update(uri, values, selection, selectionArgs);
+            return updates;
+        } catch (Exception e) {
+            logBuilder.setException(e);
+            throw e;
+        } finally {
+            LogUtils.log(logBuilder.setResultCount(updates).build());
         }
-        switchToContactMode();
-        return super.update(uri, values, selection, selectionArgs);
     }
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        waitForAccess(mWriteAccessLatch);
+        LogFields.Builder logBuilder = LogFields.Builder.aLogFields()
+                .setApiType(LogUtils.ApiType.DELETE)
+                .setUriType(sUriMatcher.match(uri))
+                .setCallerIsSyncAdapter(readBooleanQueryParameter(
+                        uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
+                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+        int deletes = 0;
 
-        mContactsHelper.validateSql(getCallingPackage(), selection);
+        try {
+            waitForAccess(mWriteAccessLatch);
 
-        if (mapsToProfileDb(uri)) {
-            switchToProfileMode();
-            return mProfileProvider.delete(uri, selection, selectionArgs);
+            mContactsHelper.validateSql(getCallingPackage(), selection);
+
+            if (mapsToProfileDb(uri)) {
+                switchToProfileMode();
+                deletes = mProfileProvider.delete(uri, selection, selectionArgs);
+                return deletes;
+            }
+            switchToContactMode();
+            deletes = super.delete(uri, selection, selectionArgs);
+            return deletes;
+        } catch (Exception e) {
+            logBuilder.setException(e);
+            throw e;
+        } finally {
+            LogUtils.log(logBuilder.setResultCount(deletes).build());
         }
-        switchToContactMode();
-        return super.delete(uri, selection, selectionArgs);
     }
 
     @Override
@@ -3038,8 +3093,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         Uri dataUri = inProfileMode()
                 ? Uri.withAppendedPath(Profile.CONTENT_URI, RawContacts.Data.CONTENT_DIRECTORY)
                 : Data.CONTENT_URI;
-        Cursor c = query(dataUri, DataRowHandler.DataDeleteQuery.COLUMNS,
-                selection, selectionArgs, null);
+        Cursor c = queryInternal(dataUri, DataRowHandler.DataDeleteQuery.COLUMNS,
+                selection, selectionArgs, null, null);
         try {
             while(c.moveToNext()) {
                 long rawContactId = c.getLong(DataRowHandler.DataDeleteQuery.RAW_CONTACT_ID);
@@ -3066,8 +3121,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // Note that the query will return data according to the access restrictions,
         // so we don't need to worry about deleting data we don't have permission to read.
         mSelectionArgs1[0] = String.valueOf(dataId);
-        Cursor c = query(Data.CONTENT_URI, DataRowHandler.DataDeleteQuery.COLUMNS, Data._ID + "=?",
-                mSelectionArgs1, null);
+        Cursor c = queryInternal(Data.CONTENT_URI, DataRowHandler.DataDeleteQuery.COLUMNS,
+                Data._ID + "=?", mSelectionArgs1, null, null);
 
         try {
             if (!c.moveToFirst()) {
@@ -5348,6 +5403,29 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
             String sortOrder, CancellationSignal cancellationSignal) {
+        LogFields.Builder logBuilder = LogFields.Builder.aLogFields()
+                .setApiType(LogUtils.ApiType.QUERY)
+                .setUriType(sUriMatcher.match(uri))
+                .setCallerIsSyncAdapter(readBooleanQueryParameter(
+                        uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
+                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+
+        Cursor cursor = null;
+        try {
+            cursor = queryInternal(uri, projection, selection, selectionArgs, sortOrder,
+                    cancellationSignal);
+            return cursor;
+        } catch (Exception e) {
+            logBuilder.setException(e);
+            throw e;
+        } finally {
+            LogUtils.log(
+                    logBuilder.setResultCount(cursor == null ? 0 : cursor.getCount()).build());
+        }
+    }
+
+    private Cursor queryInternal(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
