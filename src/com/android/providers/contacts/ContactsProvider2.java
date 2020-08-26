@@ -94,7 +94,6 @@ import android.provider.ContactsContract.DeletedContacts;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.Groups;
-import android.provider.ContactsContract.MetadataSync;
 import android.provider.ContactsContract.PhoneLookup;
 import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.PinnedPositions;
@@ -134,8 +133,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumn
 import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Joins;
-import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncStateColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
@@ -152,11 +149,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.ContactsDatabaseHelper.ViewGroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
-import com.android.providers.contacts.MetadataEntryParser.AggregationData;
-import com.android.providers.contacts.MetadataEntryParser.FieldData;
-import com.android.providers.contacts.MetadataEntryParser.MetadataEntry;
-import com.android.providers.contacts.MetadataEntryParser.RawContactInfo;
-import com.android.providers.contacts.MetadataEntryParser.UsageStats;
 import com.android.providers.contacts.SearchIndexManager.FtsQueryBuilder;
 import com.android.providers.contacts.aggregation.AbstractContactAggregator;
 import com.android.providers.contacts.aggregation.AbstractContactAggregator.AggregationSuggestionParameter;
@@ -1454,7 +1446,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private boolean mVisibleTouched = false;
 
     private boolean mSyncToNetwork;
-    private boolean mSyncToMetadataNetWork;
 
     private LocaleSet mCurrentLocales;
     private int mContactsAccountCount;
@@ -1469,9 +1460,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private int mFastScrollingIndexCacheRequestCount;
     private int mFastScrollingIndexCacheMissCount;
     private long mTotalTimeFastScrollingIndexGenerate;
-
-    // MetadataSync flag.
-    private boolean mMetadataSyncEnabled;
 
     // Enterprise members
     private EnterprisePolicyGuard mEnterprisePolicyGuard;
@@ -1515,9 +1503,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 new StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build());
 
         mFastScrollingIndexCache = FastScrollingIndexCache.getInstance(getContext());
-
-        mMetadataSyncEnabled = android.provider.Settings.Global.getInt(
-                getContext().getContentResolver(), Global.CONTACT_METADATA_SYNC_ENABLED, 0) == 1;
 
         mContactsHelper = getDatabaseHelper();
         mDbHelper.set(mContactsHelper);
@@ -1972,8 +1957,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         ContentValues updateValues = new ContentValues();
                         updateValues.putNull(Photo.PHOTO_FILE_ID);
                         updateData(ContentUris.withAppendedId(Data.CONTENT_URI, dataId),
-                                updateValues, null, null, /* callerIsSyncAdapter =*/false,
-                                /* callerIsMetadataSyncAdapter =*/false);
+                                updateValues, null, null, /* callerIsSyncAdapter =*/false);
                     }
                     if (photoFileIdToStreamItemPhotoId.containsKey(missingPhotoId)) {
                         // For missing photos that were in stream item photos, just delete the
@@ -2509,11 +2493,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mTransactionContext.get().clearExceptSearchIndexUpdates();
     }
 
-    @VisibleForTesting
-    void setMetadataSyncForTest(boolean enabled) {
-        mMetadataSyncEnabled = enabled;
-    }
-
     /**
      * Appends comma separated IDs.
      * @param ids Should not be empty
@@ -2528,12 +2507,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     protected void notifyChange() {
-        notifyChange(mSyncToNetwork, mSyncToMetadataNetWork);
+        notifyChange(mSyncToNetwork);
         mSyncToNetwork = false;
-        mSyncToMetadataNetWork = false;
     }
 
-    protected void notifyChange(boolean syncToNetwork, boolean syncToMetadataNetwork) {
+    protected void notifyChange(boolean syncToNetwork) {
         getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null,
                 syncToNetwork);
     }
@@ -3949,8 +3927,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         values.put(RawContactsColumns.AGGREGATION_NEEDED, 1);
         values.putNull(RawContacts.CONTACT_ID);
         values.put(RawContacts.DIRTY, 1);
-        return updateRawContact(db, rawContactId, values, callerIsSyncAdapter,
-                /* callerIsMetadataSyncAdapter =*/false);
+        return updateRawContact(db, rawContactId, values, callerIsSyncAdapter);
     }
 
     static int deleteDataUsage(SQLiteDatabase db) {
@@ -4052,8 +4029,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 String selectionWithId = (Data.RAW_CONTACT_ID + "=" + rawContactId + " ")
                     + (selection == null ? "" : " AND " + selection);
 
-                count = updateData(uri, values, selectionWithId, selectionArgs, callerIsSyncAdapter,
-                        /* callerIsMetadataSyncAdapter =*/false);
+                count = updateData(uri, values, selectionWithId, selectionArgs, callerIsSyncAdapter);
                 break;
             }
 
@@ -4061,8 +4037,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PROFILE_DATA: {
                 invalidateFastScrollingIndexCache();
                 count = updateData(uri, values, appendAccountToSelection(uri, selection),
-                        selectionArgs, callerIsSyncAdapter,
-                        /* callerIsMetadataSyncAdapter =*/false);
+                        selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
                     mSyncToNetwork |= !callerIsSyncAdapter;
                 }
@@ -4075,8 +4050,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case CALLABLES_ID:
             case POSTALS_ID: {
                 invalidateFastScrollingIndexCache();
-                count = updateData(uri, values, selection, selectionArgs, callerIsSyncAdapter,
-                        /* callerIsMetadataSyncAdapter =*/false);
+                count = updateData(uri, values, selection, selectionArgs, callerIsSyncAdapter);
                 if (count > 0) {
                     mSyncToNetwork |= !callerIsSyncAdapter;
                 }
@@ -4129,8 +4103,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case AGGREGATION_EXCEPTIONS: {
-                count = updateAggregationException(db, values,
-                        /* callerIsMetadataSyncAdapter =*/false);
+                count = updateAggregationException(db, values);
                 invalidateFastScrollingIndexCache();
                 break;
             }
@@ -4456,8 +4429,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         try {
             while (cursor.moveToNext()) {
                 long rawContactId = cursor.getLong(0);
-                updateRawContact(db, rawContactId, values, callerIsSyncAdapter,
-                        /* callerIsMetadataSyncAdapter =*/false);
+                updateRawContact(db, rawContactId, values, callerIsSyncAdapter);
                 count++;
             }
         } finally {
@@ -4490,7 +4462,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int updateRawContact(SQLiteDatabase db, long rawContactId, ContentValues values,
-            boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
+            boolean callerIsSyncAdapter) {
         final String selection = RawContactsColumns.CONCRETE_ID + " = ?";
         mSelectionArgs1[0] = Long.toString(rawContactId);
 
@@ -4621,8 +4593,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int updateData(Uri uri, ContentValues inputValues, String selection,
-            String[] selectionArgs, boolean callerIsSyncAdapter,
-            boolean callerIsMetadataSyncAdapter) {
+            String[] selectionArgs, boolean callerIsSyncAdapter) {
 
         final ContentValues values = new ContentValues(inputValues);
         values.remove(Data._ID);
@@ -4648,7 +4619,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 selection, selectionArgs, null, -1 /* directory ID */, null);
         try {
             while(c.moveToNext()) {
-                count += updateData(values, c, callerIsSyncAdapter, callerIsMetadataSyncAdapter);
+                count += updateData(values, c, callerIsSyncAdapter);
             }
         } finally {
             c.close();
@@ -4664,8 +4635,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private int updateData(ContentValues values, Cursor c, boolean callerIsSyncAdapter,
-            boolean callerIsMetadataSyncAdapter) {
+    private int updateData(ContentValues values, Cursor c, boolean callerIsSyncAdapter) {
         if (values.size() == 0) {
             return 0;
         }
@@ -4680,7 +4650,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         DataRowHandler rowHandler = getDataRowHandler(mimeType);
         boolean updated =
                 rowHandler.update(db, mTransactionContext.get(), values, c,
-                        callerIsSyncAdapter, callerIsMetadataSyncAdapter);
+                        callerIsSyncAdapter);
         if (Photo.CONTENT_ITEM_TYPE.equals(mimeType)) {
             scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_PHOTOS);
         }
@@ -4798,8 +4768,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return rslt;
     }
 
-    private int updateAggregationException(SQLiteDatabase db, ContentValues values,
-            boolean callerIsMetadataSyncAdapter) {
+    private int updateAggregationException(SQLiteDatabase db, ContentValues values) {
         Integer exceptionType = values.getAsInteger(AggregationExceptions.TYPE);
         Long rcId1 = values.getAsLong(AggregationExceptions.RAW_CONTACT_ID1);
         Long rcId2 = values.getAsLong(AggregationExceptions.RAW_CONTACT_ID2);
@@ -4922,27 +4891,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return result;
     }
 
-    private long searchRawContactIdForRawContactInfo(SQLiteDatabase db,
-            RawContactInfo rawContactInfo) {
-        if (rawContactInfo == null) {
-            return 0;
-        }
-        final String backupId = rawContactInfo.mBackupId;
-        final String accountType = rawContactInfo.mAccountType;
-        final String accountName = rawContactInfo.mAccountName;
-        final String dataSet = rawContactInfo.mDataSet;
-        ContentValues values = new ContentValues();
-        values.put(AccountsColumns.ACCOUNT_TYPE, accountType);
-        values.put(AccountsColumns.ACCOUNT_NAME, accountName);
-        if (dataSet != null) {
-            values.put(AccountsColumns.DATA_SET, dataSet);
-        }
-
-        final long accountId = replaceAccountInfoByAccountId(RawContacts.CONTENT_URI, values);
-        final long rawContactId = queryRawContactId(db, backupId, accountId);
-        return rawContactId;
-    }
-
     interface AggregationExceptionQuery {
         String TABLE = Tables.AGGREGATION_EXCEPTIONS;
         String[] COLUMNS = new String[] {
@@ -4977,80 +4925,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             c.close();
         }
         return aggregationRawContactIds;
-    }
-
-    /**
-     * Update RawContact, Data, DataUsageStats, AggregationException tables from MetadataEntry.
-     */
-    @NeededForTesting
-    void updateFromMetaDataEntry(SQLiteDatabase db, MetadataEntry metadataEntry) {
-        final RawContactInfo rawContactInfo =  metadataEntry.mRawContactInfo;
-        final long rawContactId = searchRawContactIdForRawContactInfo(db, rawContactInfo);
-        if (rawContactId == 0) {
-            return;
-        }
-
-        ContentValues rawContactValues = new ContentValues();
-        rawContactValues.put(RawContacts.SEND_TO_VOICEMAIL, metadataEntry.mSendToVoicemail);
-        rawContactValues.put(RawContacts.STARRED, metadataEntry.mStarred);
-        rawContactValues.put(RawContacts.PINNED, metadataEntry.mPinned);
-        updateRawContact(db, rawContactId, rawContactValues, /* callerIsSyncAdapter =*/true,
-                /* callerIsMetadataSyncAdapter =*/true);
-
-        // Update Data and DataUsageStats table.
-        for (int i = 0; i < metadataEntry.mFieldDatas.size(); i++) {
-            final FieldData fieldData = metadataEntry.mFieldDatas.get(i);
-            final String dataHashId = fieldData.mDataHashId;
-            final ArrayList<Long> dataIds = queryDataId(db, rawContactId, dataHashId);
-
-            for (long dataId : dataIds) {
-                // Update is_primary and is_super_primary.
-                ContentValues dataValues = new ContentValues();
-                dataValues.put(Data.IS_PRIMARY, fieldData.mIsPrimary ? 1 : 0);
-                dataValues.put(Data.IS_SUPER_PRIMARY, fieldData.mIsSuperPrimary ? 1 : 0);
-                updateData(ContentUris.withAppendedId(Data.CONTENT_URI, dataId),
-                        dataValues, null, null, /* callerIsSyncAdapter =*/true,
-                        /* callerIsMetadataSyncAdapter =*/true);
-
-            }
-        }
-
-        // Update AggregationException table.
-        final Set<Long> aggregationRawContactIdsInServer = new ArraySet<>();
-        for (int i = 0; i < metadataEntry.mAggregationDatas.size(); i++) {
-            final AggregationData aggregationData = metadataEntry.mAggregationDatas.get(i);
-            final int typeInt = getAggregationType(aggregationData.mType, null);
-            final RawContactInfo aggregationContact1 = aggregationData.mRawContactInfo1;
-            final RawContactInfo aggregationContact2 = aggregationData.mRawContactInfo2;
-            final long rawContactId1 = searchRawContactIdForRawContactInfo(db, aggregationContact1);
-            final long rawContactId2 = searchRawContactIdForRawContactInfo(db, aggregationContact2);
-            if (rawContactId1 == 0 || rawContactId2 == 0) {
-                continue;
-            }
-            ContentValues values = new ContentValues();
-            values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId1);
-            values.put(AggregationExceptions.RAW_CONTACT_ID2, rawContactId2);
-            values.put(AggregationExceptions.TYPE, typeInt);
-            updateAggregationException(db, values, /* callerIsMetadataSyncAdapter =*/true);
-            if (rawContactId1 != rawContactId) {
-                aggregationRawContactIdsInServer.add(rawContactId1);
-            }
-            if (rawContactId2 != rawContactId) {
-                aggregationRawContactIdsInServer.add(rawContactId2);
-            }
-        }
-
-        // Delete AggregationExceptions from CP2 if it doesn't exist in server side.
-        Set<Long> aggregationRawContactIdsInLocal = queryAggregationRawContactIds(db, rawContactId);
-        Set<Long> rawContactIdsToBeDeleted = com.google.common.collect.Sets.difference(
-                aggregationRawContactIdsInLocal, aggregationRawContactIdsInServer);
-        for (Long deleteRawContactId : rawContactIdsToBeDeleted) {
-            ContentValues values = new ContentValues();
-            values.put(AggregationExceptions.RAW_CONTACT_ID1, rawContactId);
-            values.put(AggregationExceptions.RAW_CONTACT_ID2, deleteRawContactId);
-            values.put(AggregationExceptions.TYPE, AggregationExceptions.TYPE_AUTOMATIC);
-            updateAggregationException(db, values, /* callerIsMetadataSyncAdapter =*/true);
-        }
     }
 
     /** return serialized version of {@code accounts} */
@@ -5195,14 +5069,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                         " FROM " + Tables.RAW_CONTACTS +
                                         " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?)",
                                         accountIdParams);
-                        db.execSQL(
-                                "DELETE FROM " + Tables.METADATA_SYNC +
-                                        " WHERE " + MetadataSyncColumns.ACCOUNT_ID + " = ?",
-                                accountIdParams);
-                        db.execSQL(
-                                "DELETE FROM " + Tables.METADATA_SYNC_STATE +
-                                        " WHERE " + MetadataSyncStateColumns.ACCOUNT_ID + " = ?",
-                                accountIdParams);
 
                         // Delta API is only needed for regular contacts.
                         if (!inProfileMode()) {

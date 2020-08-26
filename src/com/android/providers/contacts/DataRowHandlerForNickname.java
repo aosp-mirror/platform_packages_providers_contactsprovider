@@ -52,11 +52,11 @@ public class DataRowHandlerForNickname extends DataRowHandlerForCommonDataKind {
 
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
-            Cursor c, boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
+            Cursor c, boolean callerIsSyncAdapter) {
         long dataId = c.getLong(DataUpdateQuery._ID);
         long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
-        if (!super.update(db, txContext, values, c, callerIsSyncAdapter, callerIsMetadataSyncAdapter)) {
+        if (!super.update(db, txContext, values, c, callerIsSyncAdapter)) {
             return false;
         }
 
