@@ -313,6 +313,7 @@ public class CallLogProvider extends ContentProvider {
             Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
@@ -480,7 +481,8 @@ public class CallLogProvider extends ContentProvider {
     private Uri insertInternal(Uri uri, ContentValues values) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "insert: uri=" + uri + "  values=[" + values + "]" +
-                    " CPID=" + Binder.getCallingPid());
+                    " CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid());
         }
         waitForAccess(mReadAccessLatch);
         checkForSupportedColumns(sCallsProjectionMap, values);
@@ -513,6 +515,7 @@ public class CallLogProvider extends ContentProvider {
             Log.v(TAG, "update: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     "  values=[" + values + "] CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
         waitForAccess(mReadAccessLatch);
@@ -549,6 +552,7 @@ public class CallLogProvider extends ContentProvider {
             Log.v(TAG, "delete: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     " CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
         waitForAccess(mReadAccessLatch);
