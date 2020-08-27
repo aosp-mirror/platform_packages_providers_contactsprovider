@@ -77,12 +77,6 @@
             android:exported="true">
         </provider>
 
-        <provider android:name="ContactMetadataProvider"
-                  android:authorities="com.android.contacts.metadata"
-                  android:multiprocess="false"
-                  android:exported="true">
-        </provider>
-
         <!-- Handles database upgrades after OTAs, then disables itself -->
         <receiver android:name="ContactsUpgradeReceiver"
             android:exported="true">
