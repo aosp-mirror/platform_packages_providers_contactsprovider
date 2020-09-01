@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import android.telecom.CallerInfo;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
+import com.android.providers.contacts.util.ContactsPermissions;
 
 import android.content.ComponentName;
 import android.content.ContentProvider;
@@ -59,7 +60,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.DIRTY,
             Voicemails.DELETED};
     /** Total number of columns exposed by call_log provider. */
-    private static final int NUM_CALLLOG_FIELDS = 34;
+    private static final int NUM_CALLLOG_FIELDS = 35;
 
     private static final int MIN_MATCH = 7;
 
@@ -194,9 +195,12 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         PhoneAccountHandle subscription = new PhoneAccountHandle(
                 sComponentName, "sub0");
 
+        // Allow self-calls in order to add the call
+        ContactsPermissions.ALLOW_SELF_CALL = true;
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
                 Calls.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 0, subscription, 2000,
                 40, null);
+        ContactsPermissions.ALLOW_SELF_CALL = false;
         assertNotNull(uri);
         assertEquals("0@" + CallLog.AUTHORITY, uri.getAuthority());
 
