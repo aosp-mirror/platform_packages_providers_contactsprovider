@@ -26,7 +26,7 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"その他"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"受信ボイスメール: "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"連絡先データベースをコピー"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"1）すべての連絡先関連情報とすべての通話履歴を格納したデータベースを内部ストレージにコピーし、2）メールで送信しようとしています。端末からのコピーが完了した時点またはメールが受信された時点ですぐにコピーを削除してください。"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"1）すべての連絡先関連情報とすべての通話履歴を格納したデータベースを内部ストレージにコピーし、2）メールで送信しようとしています。デバイスからのコピーが完了した時点またはメールが受信された時点ですぐにコピーを削除してください。"</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"今すぐ削除"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"開始"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"ファイルを送信するプログラムを選択"</string>
