@@ -60,8 +60,11 @@ public class MetadataEntryParser {
 
     @NeededForTesting
     public static class UsageStats {
+        @NeededForTesting
         final String mUsageType;
+        @NeededForTesting
         final long mLastTimeUsed;
+        @NeededForTesting
         final int mTimesUsed;
 
         @NeededForTesting
@@ -74,9 +77,13 @@ public class MetadataEntryParser {
 
     @NeededForTesting
     public static class FieldData {
+        @NeededForTesting
         final String mDataHashId;
+        @NeededForTesting
         final boolean mIsPrimary;
+        @NeededForTesting
         final boolean mIsSuperPrimary;
+        @NeededForTesting
         final ArrayList<UsageStats> mUsageStatsList;
 
         @NeededForTesting
@@ -91,9 +98,13 @@ public class MetadataEntryParser {
 
     @NeededForTesting
     public static class RawContactInfo {
+        @NeededForTesting
         final String mBackupId;
+        @NeededForTesting
         final String mAccountType;
+        @NeededForTesting
         final String mAccountName;
+        @NeededForTesting
         final String mDataSet;
 
         @NeededForTesting
@@ -108,8 +119,11 @@ public class MetadataEntryParser {
 
     @NeededForTesting
     public static class AggregationData {
+        @NeededForTesting
         final RawContactInfo mRawContactInfo1;
+        @NeededForTesting
         final RawContactInfo mRawContactInfo2;
+        @NeededForTesting
         final String mType;
 
         @NeededForTesting
@@ -123,11 +137,17 @@ public class MetadataEntryParser {
 
     @NeededForTesting
     public static class MetadataEntry {
+        @NeededForTesting
         final RawContactInfo mRawContactInfo;
+        @NeededForTesting
         final int mSendToVoicemail;
+        @NeededForTesting
         final int mStarred;
+        @NeededForTesting
         final int mPinned;
+        @NeededForTesting
         final ArrayList<FieldData> mFieldDatas;
+        @NeededForTesting
         final ArrayList<AggregationData> mAggregationDatas;
 
         @NeededForTesting
