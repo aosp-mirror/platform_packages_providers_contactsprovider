@@ -138,6 +138,7 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.FEATURES, Calls.FEATURES);
         sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME, Calls.PHONE_ACCOUNT_COMPONENT_NAME);
         sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_ID, Calls.PHONE_ACCOUNT_ID);
+        sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_HIDDEN, Calls.PHONE_ACCOUNT_HIDDEN);
         sCallsProjectionMap.put(Calls.PHONE_ACCOUNT_ADDRESS, Calls.PHONE_ACCOUNT_ADDRESS);
         sCallsProjectionMap.put(Calls.NEW, Calls.NEW);
         sCallsProjectionMap.put(Calls.VOICEMAIL_URI, Calls.VOICEMAIL_URI);
@@ -313,6 +314,7 @@ public class CallLogProvider extends ContentProvider {
             Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
@@ -323,6 +325,13 @@ public class CallLogProvider extends ContentProvider {
         qb.setTables(Tables.CALLS);
         qb.setProjectionMap(sCallsProjectionMap);
         qb.setStrict(true);
+        // If the caller doesn't have READ_VOICEMAIL, make sure they can't
+        // do any SQL shenanigans to get access to the voicemails. If the caller does have the
+        // READ_VOICEMAIL permission, then they have sufficient permissions to access any data in
+        // the database, so the strict check is unnecessary.
+        if (!mVoicemailPermissions.callerHasReadAccess(getCallingPackage())) {
+            qb.setStrictGrammar(true);
+        }
 
         final SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder, true /*isQuery*/);
@@ -480,7 +489,8 @@ public class CallLogProvider extends ContentProvider {
     private Uri insertInternal(Uri uri, ContentValues values) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "insert: uri=" + uri + "  values=[" + values + "]" +
-                    " CPID=" + Binder.getCallingPid());
+                    " CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid());
         }
         waitForAccess(mReadAccessLatch);
         checkForSupportedColumns(sCallsProjectionMap, values);
@@ -513,6 +523,7 @@ public class CallLogProvider extends ContentProvider {
             Log.v(TAG, "update: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     "  values=[" + values + "] CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
         waitForAccess(mReadAccessLatch);
@@ -525,6 +536,18 @@ public class CallLogProvider extends ContentProvider {
 
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder, false /*isQuery*/);
+
+        final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+        qb.setTables(Tables.CALLS);
+        qb.setProjectionMap(sCallsProjectionMap);
+        qb.setStrict(true);
+        // If the caller doesn't have READ_VOICEMAIL, make sure they can't
+        // do any SQL shenanigans to get access to the voicemails. If the caller does have the
+        // READ_VOICEMAIL permission, then they have sufficient permissions to access any data in
+        // the database, so the strict check is unnecessary.
+        if (!mVoicemailPermissions.callerHasReadAccess(getCallingPackage())) {
+            qb.setStrictGrammar(true);
+        }
 
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         final int matchedUriId = sURIMatcher.match(uri);
@@ -540,8 +563,7 @@ public class CallLogProvider extends ContentProvider {
                 throw new UnsupportedOperationException("Cannot update URL: " + uri);
         }
 
-        return createDatabaseModifier(db).update(uri, Tables.CALLS, values, selectionBuilder.build(),
-                selectionArgs);
+        return qb.update(db, values, selectionBuilder.build(), selectionArgs);
     }
 
     private int deleteInternal(Uri uri, String selection, String[] selectionArgs) {
@@ -549,11 +571,24 @@ public class CallLogProvider extends ContentProvider {
             Log.v(TAG, "delete: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     " CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
         waitForAccess(mReadAccessLatch);
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder, false /*isQuery*/);
+
+        final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+        qb.setTables(Tables.CALLS);
+        qb.setProjectionMap(sCallsProjectionMap);
+        qb.setStrict(true);
+        // If the caller doesn't have READ_VOICEMAIL, make sure they can't
+        // do any SQL shenanigans to get access to the voicemails. If the caller does have the
+        // READ_VOICEMAIL permission, then they have sufficient permissions to access any data in
+        // the database, so the strict check is unnecessary.
+        if (!mVoicemailPermissions.callerHasReadAccess(getCallingPackage())) {
+            qb.setStrictGrammar(true);
+        }
 
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         final int matchedUriId = sURIMatcher.match(uri);
@@ -561,8 +596,7 @@ public class CallLogProvider extends ContentProvider {
             case CALLS:
                 // TODO: Special case - We may want to forward the delete request on user 0 to the
                 // shadow provider too.
-                return createDatabaseModifier(db).delete(Tables.CALLS,
-                        selectionBuilder.build(), selectionArgs);
+                return qb.delete(db, selectionBuilder.build(), selectionArgs);
             default:
                 throw new UnsupportedOperationException("Cannot delete that URL: " + uri);
         }
