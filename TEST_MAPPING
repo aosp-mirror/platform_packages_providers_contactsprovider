@@ -1,0 +1,15 @@
+{
+    "presubmit": [
+        {
+            "name": "ContactsProviderTests"
+        },
+        {
+            "name": "CtsProviderTestCases",
+            "options": [
+                {
+                    "include-filter": "android.provider.cts.contacts."
+                }
+            ]
+        }
+    ]
+}

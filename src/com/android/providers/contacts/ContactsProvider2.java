@@ -16,6 +16,10 @@
 
 package com.android.providers.contacts;
 
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import static android.Manifest.permission.INTERACT_ACROSS_USERS;
+import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
+
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
@@ -214,7 +218,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String READ_PERMISSION = "android.permission.READ_CONTACTS";
     private static final String WRITE_PERMISSION = "android.permission.WRITE_CONTACTS";
-    private static final String INTERACT_ACROSS_USERS = "android.permission.INTERACT_ACROSS_USERS";
 
 
     /* package */ static final String PHONEBOOK_COLLATOR_NAME = "PHONEBOOK";
@@ -531,23 +534,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             "UPDATE " + Tables.RAW_CONTACTS +
             " SET " + RawContacts.DIRTY + "=1" +
             " WHERE " + RawContacts._ID + " IN (";
-
-    /** Sql for updating METADATA_DIRTY flag on multiple raw contacts */
-    private static final String UPDATE_RAW_CONTACT_SET_METADATA_DIRTY_SQL =
-            "UPDATE " + Tables.RAW_CONTACTS +
-                    " SET " + RawContacts.METADATA_DIRTY + "=1" +
-                    " WHERE " + RawContacts._ID + " IN (";
-
-    // Sql for updating MetadataSync.DELETED flag on multiple raw contacts.
-    // When using this sql, add comma separated raw contacts ids and "))".
-    private static final String UPDATE_METADATASYNC_SET_DELETED_SQL =
-            "UPDATE " + Tables.METADATA_SYNC
-                    + " SET " + MetadataSync.DELETED + "=1"
-                    + " WHERE " + MetadataSync._ID + " IN "
-                            + "(SELECT " + MetadataSyncColumns.CONCRETE_ID
-                            + " FROM " + Tables.RAW_CONTACTS_JOIN_METADATA_SYNC
-                            + " WHERE " + RawContactsColumns.CONCRETE_DELETED + "=1 AND "
-                            + RawContactsColumns.CONCRETE_ID + " IN (";
 
     /** Sql for updating VERSION on multiple raw contacts */
     private static final String UPDATE_RAW_CONTACT_SET_VERSION_SQL =
@@ -2433,14 +2419,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         for (long rawContactId : mTransactionContext.get().getInsertedRawContactIds()) {
             mDbHelper.get().updateRawContactDisplayName(db, rawContactId);
             mAggregator.get().onRawContactInsert(mTransactionContext.get(), db, rawContactId);
-            if (mMetadataSyncEnabled) {
-                updateMetadataOnRawContactInsert(db, rawContactId);
-            }
-        }
-        if (mMetadataSyncEnabled) {
-            for (long rawContactId : mTransactionContext.get().getBackupIdChangedRawContacts()) {
-                updateMetadataOnRawContactInsert(db, rawContactId);
-            }
         }
 
         final Set<Long> dirtyRawContacts = mTransactionContext.get().getDirtyRawContactIds();
@@ -2461,29 +2439,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             db.execSQL(mSb.toString());
         }
 
-        final Set<Long> metadataDirtyRawContacts =
-                mTransactionContext.get().getMetadataDirtyRawContactIds();
-        if (!metadataDirtyRawContacts.isEmpty() && mMetadataSyncEnabled) {
-            mSb.setLength(0);
-            mSb.append(UPDATE_RAW_CONTACT_SET_METADATA_DIRTY_SQL);
-            appendIds(mSb, metadataDirtyRawContacts);
-            mSb.append(")");
-            db.execSQL(mSb.toString());
-            mSyncToMetadataNetWork = true;
-        }
-
         final Set<Long> changedRawContacts = mTransactionContext.get().getChangedRawContactIds();
         ContactsTableUtil.updateContactLastUpdateByRawContactId(db, changedRawContacts);
-        if (!changedRawContacts.isEmpty() && mMetadataSyncEnabled) {
-            // For the deleted raw contact, set related metadata as deleted
-            // if metadata flag is enabled.
-            mSb.setLength(0);
-            mSb.append(UPDATE_METADATASYNC_SET_DELETED_SQL);
-            appendIds(mSb, changedRawContacts);
-            mSb.append("))");
-            db.execSQL(mSb.toString());
-            mSyncToMetadataNetWork = true;
-        }
 
         // Update sync states.
         for (Map.Entry<Long, Object> entry : mTransactionContext.get().getUpdatedSyncStates()) {
@@ -2500,49 +2457,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     void setMetadataSyncForTest(boolean enabled) {
         mMetadataSyncEnabled = enabled;
-    }
-
-    interface MetadataSyncQuery {
-        String TABLE = Tables.RAW_CONTACTS_JOIN_METADATA_SYNC;
-        String[] COLUMNS = new String[] {
-                MetadataSyncColumns.CONCRETE_ID,
-                MetadataSync.DATA
-        };
-        int METADATA_SYNC_ID = 0;
-        int METADATA_SYNC_DATA = 1;
-        String SELECTION = MetadataSyncColumns.CONCRETE_DELETED + "=0 AND " +
-                RawContactsColumns.CONCRETE_ID + "=?";
-    }
-
-    /**
-     * Fetch the related metadataSync data column for the raw contact id.
-     * Returns null if there's no metadata for the raw contact.
-     */
-    private String queryMetadataSyncData(SQLiteDatabase db, long rawContactId) {
-        String metadataSyncData = null;
-        mSelectionArgs1[0] = String.valueOf(rawContactId);
-        final Cursor cursor = db.query(MetadataSyncQuery.TABLE,
-                MetadataSyncQuery.COLUMNS, MetadataSyncQuery.SELECTION,
-                mSelectionArgs1, null, null, null);
-        try {
-            if (cursor.moveToFirst()) {
-                metadataSyncData = cursor.getString(MetadataSyncQuery.METADATA_SYNC_DATA);
-            }
-        } finally {
-            cursor.close();
-        }
-        return metadataSyncData;
-    }
-
-    private void updateMetadataOnRawContactInsert(SQLiteDatabase db, long rawContactId) {
-        // Read metadata from MetadataSync table for the raw contact, and update.
-        final String metadataSyncData = queryMetadataSyncData(db, rawContactId);
-        if (TextUtils.isEmpty(metadataSyncData)) {
-            return;
-        }
-        final MetadataEntry metadataEntry = MetadataEntryParser.parseDataToMetaDataEntry(
-                metadataSyncData);
-        updateFromMetaDataEntry(db, metadataEntry);
     }
 
     /**
@@ -2566,10 +2480,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     protected void notifyChange(boolean syncToNetwork, boolean syncToMetadataNetwork) {
         getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null,
-                syncToNetwork || syncToMetadataNetwork);
-
-        getContext().getContentResolver().notifyChange(MetadataSync.METADATA_AUTHORITY_URI,
-                null, syncToMetadataNetwork);
+                syncToNetwork);
     }
 
     protected void setProviderStatus(int status) {
@@ -2606,7 +2517,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     protected Uri insertInTransaction(Uri uri, ContentValues values) {
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "insertInTransaction: uri=" + uri + "  values=[" + values + "]" +
-                    " CPID=" + Binder.getCallingPid());
+                    " CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid());
         }
 
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
@@ -2836,7 +2748,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             values.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
         }
 
-        final boolean needToUpdateMetadata = shouldMarkMetadataDirtyForRawContact(values);
         // Databases that were created prior to the 906 upgrade have a default of Int.MAX_VALUE
         // for RawContacts.PINNED. Manually set the value to the correct default (0) if it is not
         // set.
@@ -2847,14 +2758,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // Insert the new entry.
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         final long rawContactId = db.insert(Tables.RAW_CONTACTS, RawContacts.CONTACT_ID, values);
-
-        if (needToUpdateMetadata) {
-            mTransactionContext.get().markRawContactMetadataDirty(rawContactId,
-                    /* isMetadataSyncAdapter =*/false);
-        }
-        // If the new raw contact is inserted by a sync adapter, mark mSyncToMetadataNetWork as true
-        // so that it can trigger the metadata syncing from the server.
-        mSyncToMetadataNetWork |= callerIsSyncAdapter;
 
         final int aggregationMode = getIntValue(values, RawContacts.AGGREGATION_MODE,
                 RawContacts.AGGREGATION_MODE_DEFAULT);
@@ -3550,6 +3453,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Log.v(TAG, "deleteInTransaction: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     " CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
@@ -3802,15 +3706,25 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int deleteContact(long contactId, boolean callerIsSyncAdapter) {
+        ArrayList<Long> localRawContactIds = new ArrayList();
+
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         mSelectionArgs1[0] = Long.toString(contactId);
         Cursor c = db.query(Tables.RAW_CONTACTS, new String[] {RawContacts._ID},
                 RawContacts.CONTACT_ID + "=?", mSelectionArgs1,
                 null, null, null);
+
+        // Raw contacts need to be deleted after the contact so just loop through and mark
+        // non-local raw contacts as deleted and collect the local raw contacts that will be
+        // deleted after the contact is deleted.
         try {
             while (c.moveToNext()) {
                 long rawContactId = c.getLong(0);
-                markRawContactAsDeleted(db, rawContactId, callerIsSyncAdapter);
+                if (rawContactIsLocal(rawContactId)) {
+                    localRawContactIds.add(rawContactId);
+                } else {
+                    markRawContactAsDeleted(db, rawContactId, callerIsSyncAdapter);
+                }
             }
         } finally {
             c.close();
@@ -3819,6 +3733,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mProviderStatusUpdateNeeded = true;
 
         int result = ContactsTableUtil.deleteContact(db, contactId);
+
+        // Now purge the local raw contacts
+        deleteRawContactsImmediately(db, localRawContactIds);
+
         scheduleBackgroundTask(BACKGROUND_TASK_CLEAN_DELETE_LOG);
         return result;
     }
@@ -3842,19 +3760,19 @@ public class ContactsProvider2 extends AbstractContactsProvider
             c.close();
         }
 
+        // When a raw contact is deleted, a sqlite trigger deletes the parent contact.
+        // TODO: all contact deletes was consolidated into ContactTableUtil but this one can't
+        // because it's in a trigger.  Consider removing trigger and replacing with java code.
+        // This has to happen before the raw contact is deleted since it relies on the number
+        // of raw contacts.
         final boolean contactIsSingleton =
                 ContactsTableUtil.deleteContactIfSingleton(db, rawContactId) == 1;
         final int count;
 
         if (callerIsSyncAdapter || rawContactIsLocal(rawContactId)) {
-            // When a raw contact is deleted, a SQLite trigger deletes the parent contact.
-            // TODO: all contact deletes was consolidated into ContactTableUtil but this one can't
-            // because it's in a trigger.  Consider removing trigger and replacing with java code.
-            // This has to happen before the raw contact is deleted since it relies on the number
-            // of raw contacts.
-            db.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=" + rawContactId, null);
-            count = db.delete(Tables.RAW_CONTACTS, RawContacts._ID + "=" + rawContactId, null);
-            mTransactionContext.get().markRawContactChangedOrDeletedOrInserted(rawContactId);
+            ArrayList<Long> rawContactsIds = new ArrayList<>();
+            rawContactsIds.add(rawContactId);
+            count = deleteRawContactsImmediately(db, rawContactsIds);
         } else {
             count = markRawContactAsDeleted(db, rawContactId, callerIsSyncAdapter);
         }
@@ -3862,6 +3780,43 @@ public class ContactsProvider2 extends AbstractContactsProvider
             mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
         }
         return count;
+    }
+
+    /**
+     * Returns the number of raw contacts that were deleted immediately -- we don't merely set
+     * the DELETED column to 1, the entire raw contact row is deleted straightaway.
+     */
+    private int deleteRawContactsImmediately(SQLiteDatabase db, List<Long> rawContactIds) {
+        if (rawContactIds == null || rawContactIds.isEmpty()) {
+            return 0;
+        }
+
+        // Build the where clause for the raw contacts to be deleted
+        ArrayList<String> whereArgs = new ArrayList<>();
+        StringBuilder whereClause = new StringBuilder(rawContactIds.size() * 2 - 1);
+        whereClause.append(" IN (?");
+        whereArgs.add(String.valueOf(rawContactIds.get(0)));
+        for (int i = 1; i < rawContactIds.size(); i++) {
+            whereClause.append(",?");
+            whereArgs.add(String.valueOf(rawContactIds.get(i)));
+        }
+        whereClause.append(")");
+
+        // Remove presence rows
+        db.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + whereClause.toString(),
+                whereArgs.toArray(new String[0]));
+
+        // Remove raw contact rows
+        int result = db.delete(Tables.RAW_CONTACTS, RawContacts._ID + whereClause.toString(),
+                whereArgs.toArray(new String[0]));
+
+        if (result > 0) {
+            for (Long rawContactId : rawContactIds) {
+                mTransactionContext.get().markRawContactChangedOrDeletedOrInserted(rawContactId);
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -3964,6 +3919,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Log.v(TAG, "updateInTransaction: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     "  values=[" + values + "] CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
@@ -4498,7 +4454,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final boolean isDataSetChanging = values.containsKey(RawContacts.DATA_SET);
         final boolean isAccountChanging =
                 isAccountNameChanging || isAccountTypeChanging || isDataSetChanging;
-        final boolean isBackupIdChanging = values.containsKey(RawContacts.BACKUP_ID);
 
         int previousDeleted = 0;
         long accountId = 0;
@@ -4560,32 +4515,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // to DEFAULT should not trigger aggregation
             if (aggregationMode != RawContacts.AGGREGATION_MODE_DEFAULT) {
                 aggregator.markForAggregation(rawContactId, aggregationMode, false);
-            }
-            if (shouldMarkMetadataDirtyForRawContact(values)) {
-                mTransactionContext.get().markRawContactMetadataDirty(
-                        rawContactId, callerIsMetadataSyncAdapter);
-            }
-            if (isBackupIdChanging) {
-                Cursor cursor = db.query(Tables.RAW_CONTACTS,
-                        new String[] {RawContactsColumns.CONCRETE_METADATA_DIRTY},
-                        selection, mSelectionArgs1, null, null, null);
-                int metadataDirty = 0;
-                try {
-                    if (cursor.moveToFirst()) {
-                        metadataDirty = cursor.getInt(0);
-                    }
-                } finally {
-                    cursor.close();
-                }
-
-                if (metadataDirty == 1) {
-                    // Re-notify metadata network if backup_id is updated and metadata is dirty.
-                    mTransactionContext.get().markRawContactMetadataDirty(
-                            rawContactId, callerIsMetadataSyncAdapter);
-                } else {
-                    // Merge from metadata sync table if backup_id is updated and no dirty change.
-                    mTransactionContext.get().markBackupIdChangedRawContact(rawContactId);
-                }
             }
             if (flagExists(values, RawContacts.STARRED)) {
                 if (!callerIsSyncAdapter) {
@@ -4760,10 +4689,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // Mark dirty when changing starred to trigger sync.
             values.put(RawContacts.DIRTY, 1);
         }
-        if (mMetadataSyncEnabled && (hasStarredValue || hasPinnedValue || hasVoiceMailValue)) {
-            // Mark dirty to trigger metadata syncing.
-            values.put(RawContacts.METADATA_DIRTY, 1);
-        }
 
         mSelectionArgs1[0] = String.valueOf(contactId);
         db.update(Tables.RAW_CONTACTS, values, RawContacts.CONTACT_ID + "=?"
@@ -4780,11 +4705,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         updateFavoritesMembership(rawContactId,
                                 flagIsSet(values, RawContacts.STARRED));
                         mSyncToNetwork |= !callerIsSyncAdapter;
-                    }
-
-                    if (hasStarredValue || hasPinnedValue || hasVoiceMailValue) {
-                        mTransactionContext.get().markRawContactMetadataDirty(rawContactId,
-                                false /*callerIsMetadataSyncAdapter*/);
                     }
                 }
             } finally {
@@ -4863,19 +4783,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         aggregator.aggregateContact(mTransactionContext.get(), db, rawContactId1);
         aggregator.aggregateContact(mTransactionContext.get(), db, rawContactId2);
-        mTransactionContext.get().markRawContactMetadataDirty(rawContactId1,
-                callerIsMetadataSyncAdapter);
-        mTransactionContext.get().markRawContactMetadataDirty(rawContactId2,
-                callerIsMetadataSyncAdapter);
 
         // The return value is fake - we just confirm that we made a change, not count actual
         // rows changed.
         return 1;
-    }
-
-    private boolean shouldMarkMetadataDirtyForRawContact(ContentValues values) {
-        return (flagExists(values, RawContacts.STARRED) || flagExists(values, RawContacts.PINNED)
-                || flagExists(values, RawContacts.SEND_TO_VOICEMAIL));
     }
 
     @Override
@@ -5441,6 +5352,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Log.v(TAG, "query: uri=" + uri + "  projection=" + Arrays.toString(projection) +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
                     "  order=[" + sortOrder + "] CPID=" + Binder.getCallingPid() +
+                    " CUID=" + Binder.getCallingUid() +
                     " User=" + UserUtils.getCurrentUserHandle(getContext()));
         }
 
@@ -5454,10 +5366,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return null;
         }
 
-        // Check enterprise policy if caller does not come from same profile
-        if (!(isCallerFromSameUser() || mEnterprisePolicyGuard.isCrossProfileAllowed(uri))) {
-            return createEmptyCursor(uri, projection);
+        // If caller does not come from same profile, Check if it's privileged or allowed by
+        // enterprise policy
+        if (!queryAllowedByEnterprisePolicy(uri)) {
+            return null;
         }
+
         // Query the profile DB if appropriate.
         if (mapsToProfileDb(uri)) {
             switchToProfileMode();
@@ -5477,9 +5391,46 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
+    private boolean queryAllowedByEnterprisePolicy(Uri uri) {
+        if (isCallerFromSameUser()) {
+            // Caller is on the same user; query allowed.
+            return true;
+        }
+        if (!doesCallerHoldInteractAcrossUserPermission()) {
+            // Cross-user and the caller has no INTERACT_ACROSS_USERS; don't allow query.
+            // Technically, in a cross-profile sharing case, this would be a valid query.
+            // But for now we don't allow it. (We never allowe it and no one complained about it.)
+            return false;
+        }
+        if (isCallerAnotherSelf()) {
+            // The caller is the other CP2 (which has INTERACT_ACROSS_USERS), meaning the reuest
+            // is on behalf of a "real" client app.
+            // Consult the enterprise policy.
+            return mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
+        }
+        return true;
+    }
+
     private boolean isCallerFromSameUser() {
-        return Binder.getCallingUserHandle().getIdentifier() == UserUtils
-                .getCurrentUserHandle(getContext());
+        return UserHandle.getUserId(Binder.getCallingUid()) == UserHandle.myUserId();
+    }
+
+    /**
+     * Returns true if called by a different user's CP2.
+     */
+    private boolean isCallerAnotherSelf() {
+        // Note normally myUid is always different from the callerUid in the code path where
+        // this method is used, except during unit tests, where the caller is always the same
+        // process.
+        final int myUid = android.os.Process.myUid();
+        final int callingUid = Binder.getCallingUid();
+        return (myUid != callingUid) && UserHandle.isSameApp(myUid, callingUid);
+    }
+
+    private boolean doesCallerHoldInteractAcrossUserPermission() {
+        final Context context = getContext();
+        return context.checkCallingPermission(INTERACT_ACROSS_USERS_FULL) == PERMISSION_GRANTED
+                || context.checkCallingPermission(INTERACT_ACROSS_USERS) == PERMISSION_GRANTED;
     }
 
     private Cursor queryDirectoryIfNecessary(Uri uri, String[] projection, String selection,
@@ -5526,7 +5477,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private String getRealCallerPackageName(Uri queryUri) {
         // If called by another CP2, then the URI should contain the original package name.
-        if (calledByAnotherSelf()) {
+        if (isCallerAnotherSelf()) {
             final String passedPackage = queryUri.getQueryParameter(
                     Directory.CALLER_PACKAGE_PARAM_KEY);
             if (TextUtils.isEmpty(passedPackage)) {
@@ -5539,18 +5490,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // Otherwise, just return the real calling package name.
             return getCallingPackage();
         }
-    }
-
-    /**
-     * Returns true if called by a different user's CP2.
-     */
-    private boolean calledByAnotherSelf() {
-        // Note normally myUid is always different from the callerUid in the code path where
-        // this method is used, except during unit tests, where the caller is always the same
-        // process.
-        final int myUid = android.os.Process.myUid();
-        final int callerUid = Binder.getCallingUid();
-        return (myUid != callerUid) && UserHandle.isSameApp(myUid, callerUid);
     }
 
     private Cursor queryDirectoryAuthority(Uri uri, String[] projection, String selection,
@@ -5607,6 +5546,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
         } catch (RuntimeException e) {
             Log.w(TAG, "Directory query failed", e);
             return null;
+        }
+
+        if (cursor.getCount() > 0) {
+            final int callingUid = Binder.getCallingUid();
+            final String directoryAuthority = directoryInfo.authority;
+            if (VERBOSE_LOGGING) {
+                Log.v(TAG, "Making authority " + directoryAuthority
+                        + " visible to UID " + callingUid);
+            }
+            getContext().getPackageManager().grantImplicitAccess(
+                    callingUid, directoryAuthority);
         }
 
         // Load the cursor contents into a memory cursor (backed by a cursor window) and close the
@@ -8525,9 +8475,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (!isDirectoryParamValid(uri)){
                 return null;
             }
-            if (!isCallerFromSameUser() /* From differnt user */
-                    && !mEnterprisePolicyGuard.isCrossProfileAllowed(uri)
-                    /* Policy not allowed */){
+            if (!queryAllowedByEnterprisePolicy(uri)) {
                 return null;
             }
             waitForAccess(mode.equals("r") ? mReadAccessLatch : mWriteAccessLatch);
@@ -8545,6 +8493,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (VERBOSE_LOGGING) {
                 Log.v(TAG, "openAssetFile uri=" + uri + " mode=" + mode + " success=" + success +
                         " CPID=" + Binder.getCallingPid() +
+                        " CUID=" + Binder.getCallingUid() +
                         " User=" + UserUtils.getCurrentUserHandle(getContext()));
             }
         }

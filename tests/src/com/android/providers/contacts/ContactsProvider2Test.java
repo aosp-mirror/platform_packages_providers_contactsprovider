@@ -3061,16 +3061,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId = RawContactUtil.createRawContactWithBackupId(mResolver, backupId,
                 account);
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
-        // Check if the raw contact is updated.
+        // Check if the raw contact is not updated since Lychee is removed.
         assertStoredValue(rawContactUri, RawContacts._ID, rawContactId);
         assertStoredValue(rawContactUri, RawContacts.ACCOUNT_TYPE, accountType);
         assertStoredValue(rawContactUri, RawContacts.ACCOUNT_NAME, accountName);
         assertStoredValue(rawContactUri, RawContacts.BACKUP_ID, backupId);
-        assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, "1");
-        assertStoredValue(rawContactUri, RawContacts.STARRED, "1");
-        assertStoredValue(rawContactUri, RawContacts.PINNED, "1");
-        // Notify metadata network on raw contact insertion
-        assertMetadataNetworkNotified(true);
+        assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, "0");
+        assertStoredValue(rawContactUri, RawContacts.STARRED, "0");
+        assertStoredValue(rawContactUri, RawContacts.PINNED, "0");
+        // No metadata network notify.
+        assertMetadataNetworkNotified(false);
     }
 
     public void testUpdateMetadataOnRawContactBackupIdChange() throws Exception {
@@ -3128,15 +3128,15 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues updatedValues = new ContentValues();
         updatedValues.put(RawContacts.BACKUP_ID, backupId);
         mResolver.update(RawContacts.CONTENT_URI, updatedValues, null, null);
-        // Check if the raw contact is updated because of backup_id change.
+        // Check if the raw contact is still not updated.
         assertStoredValue(rawContactUri, RawContacts._ID, rawContactId);
         assertStoredValue(rawContactUri, RawContacts.ACCOUNT_TYPE, accountType);
         assertStoredValue(rawContactUri, RawContacts.ACCOUNT_NAME, accountName);
-        assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, "1");
-        assertStoredValue(rawContactUri, RawContacts.STARRED, "1");
-        assertStoredValue(rawContactUri, RawContacts.PINNED, "1");
-        // Notify metadata network because of the changed raw contact.
-        assertMetadataNetworkNotified(true);
+        assertStoredValue(rawContactUri, RawContacts.SEND_TO_VOICEMAIL, "0");
+        assertStoredValue(rawContactUri, RawContacts.STARRED, "0");
+        assertStoredValue(rawContactUri, RawContacts.PINNED, "0");
+        // No metadata network notify.
+        assertMetadataNetworkNotified(false);
     }
 
     public void testDeleteMetadataOnRawContactDelete() throws Exception {
@@ -3186,12 +3186,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Delete raw contact.
         mResolver.delete(rawContactUri, null, null);
-        // Check if the metadata is deleted.
-        assertStoredValue(metadataUri, MetadataSync.DELETED, "1");
+        // Check if the metadata is not deleted.
+        assertStoredValue(metadataUri, MetadataSync.DELETED, "0");
         // check raw contact metadata_dirty column is not changed on raw contact deletion
         assertMetadataDirty(rawContactUri, false);
-        // Notify metadata network on raw contact deletion
-        assertMetadataNetworkNotified(true);
+        // Lychee removed. Will not notify it.
+        assertMetadataNetworkNotified(false);
 
         // Add another rawcontact and metadata, and don't delete them.
         // Insert a raw contact.
@@ -3215,10 +3215,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Check if the metadata is not marked as deleted.
         assertStoredValue(metadataUri2, MetadataSync.DELETED, "0");
-        // check raw contact metadata_dirty column is changed on raw contact update
-        assertMetadataDirty(rawContactUri2, true);
-        // Notify metadata network on raw contact update
-        assertMetadataNetworkNotified(true);
+        // Will not set metadata_dirty since Lychee is removed.
+        assertMetadataDirty(rawContactUri2, false);
+        // Will not notify Lychee since it's removed.
+        assertMetadataNetworkNotified(false);
     }
 
     public void testPostalsQuery() {
@@ -5210,16 +5210,16 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         updateSendToVoicemailAndRingtone(contactId, true, "foo");
         assertSendToVoicemailAndRingtone(contactId, true, "foo");
         assertNetworkNotified(false);
-        assertMetadataNetworkNotified(true);
+        assertMetadataNetworkNotified(false);
         assertDirty(rawContactUri, false);
-        assertMetadataDirty(rawContactUri, true);
+        assertMetadataDirty(rawContactUri, false);
 
         updateSendToVoicemailAndRingtoneWithSelection(contactId, false, "bar");
         assertSendToVoicemailAndRingtone(contactId, false, "bar");
         assertNetworkNotified(false);
-        assertMetadataNetworkNotified(true);
+        assertMetadataNetworkNotified(false);
         assertDirty(rawContactUri, false);
-        assertMetadataDirty(rawContactUri, true);
+        assertMetadataDirty(rawContactUri, false);
     }
 
     public void testSendToVoicemailAndRingtoneAfterAggregation() {
@@ -5297,10 +5297,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         assertDirty(rawContactUri1, false);
         assertDirty(rawContactUri2, false);
-        assertMetadataDirty(rawContactUri1, true);
-        assertMetadataDirty(rawContactUri2, true);
+        assertMetadataDirty(rawContactUri1, false);
+        assertMetadataDirty(rawContactUri2, false);
         assertNetworkNotified(false);
-        assertMetadataNetworkNotified(true);
+        assertMetadataNetworkNotified(false);
     }
 
     public void testStatusUpdateInsert() {
@@ -6901,7 +6901,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertDirty(rawContactUri, false);
         assertMetadataDirty(rawContactUri, false);
         assertNetworkNotified(true);
-        assertMetadataNetworkNotified(true);
+        assertMetadataNetworkNotified(false);
 
         // When inserting a rawcontact with metadata.
         ContentValues values = new ContentValues();
@@ -6910,9 +6910,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         values.put(ContactsContract.RawContacts.ACCOUNT_TYPE, mAccount.type);
         Uri rawContactId2Uri = mResolver.insert(RawContacts.CONTENT_URI, values);
         assertDirty(rawContactId2Uri, false);
-        assertMetadataDirty(rawContactId2Uri, true);
+        assertMetadataDirty(rawContactId2Uri, false);
         assertNetworkNotified(true);
-        assertMetadataNetworkNotified(true);
+        assertMetadataNetworkNotified(false);
     }
 
     public void testRawContactDirtyAndVersion() {
@@ -6934,8 +6934,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         assertDirty(uri, false);
         assertNetworkNotified(false);
-        assertMetadataDirty(uri, true);
-        assertMetadataNetworkNotified(true);
+        assertMetadataDirty(uri, false);
+        assertMetadataNetworkNotified(false);
 
         Uri emailUri = insertEmail(rawContactId, "goo@woo.com");
         assertDirty(uri, true);
@@ -7005,9 +7005,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         long rawContactId = ContentUris.parseId(mResolver.insert(uri, new ContentValues()));
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
         assertMetadataDirty(rawContactUri, false);
-        // If the raw contact is inserted by sync adapter, it will notify metadata change no matter
-        // if there is any metadata change.
-        assertMetadataNetworkNotified(true);
+        // Will not notify Lychee since it's removed.
+        assertMetadataNetworkNotified(false);
     }
 
     public void testMarkAsMetadataDirtyForRawContactMetadataChange() {
@@ -7025,8 +7024,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(contactUri, Contacts.STARRED, 1);
 
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
-        assertMetadataDirty(rawContactUri, true);
-        assertMetadataNetworkNotified(true);
+        assertMetadataDirty(rawContactUri, false);
+        assertMetadataNetworkNotified(false);
 
         clearMetadataDirty(rawContactUri);
         values = new ContentValues();
@@ -7034,8 +7033,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.update(contactUri, values, null, null);
         assertStoredValue(contactUri, Contacts.PINNED, 1);
 
-        assertMetadataDirty(rawContactUri, true);
-        assertMetadataNetworkNotified(true);
+        assertMetadataDirty(rawContactUri, false);
+        assertMetadataNetworkNotified(false);
 
         clearMetadataDirty(rawContactUri);
         values = new ContentValues();
@@ -7043,8 +7042,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.update(contactUri, values, null, null);
         assertStoredValue(contactUri, Contacts.SEND_TO_VOICEMAIL, 1);
 
-        assertMetadataDirty(rawContactUri, true);
-        assertMetadataNetworkNotified(true);
+        assertMetadataDirty(rawContactUri, false);
+        assertMetadataNetworkNotified(false);
     }
 
     public void testMarkAsMetadataDirtyForRawContactBackupIdChange() {
@@ -7059,15 +7058,15 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         ContentValues values = new ContentValues();
         values.put(RawContacts.SEND_TO_VOICEMAIL, "1");
         mResolver.update(rawContactUri, values, null, null);
-        assertMetadataDirty(rawContactUri, true);
+        assertMetadataDirty(rawContactUri, false);
 
         // Update the backup_id and check metadata network should be notified.
         values = new ContentValues();
         values.put(RawContacts.BACKUP_ID, "newBackupId");
         mResolver.update(rawContactUri, values, null, null);
         assertStoredValue(rawContactUri, RawContacts.BACKUP_ID, "newBackupId");
-        assertMetadataDirty(rawContactUri, true);
-        assertMetadataNetworkNotified(true);
+        assertMetadataDirty(rawContactUri, false);
+        assertMetadataNetworkNotified(false);
     }
 
     public void testMarkAsMetadataDirtyForAggregationExceptionChange() {
@@ -7082,10 +7081,10 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 rawContactId1, rawContactId2);
 
         assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1),
-                true);
+                false);
         assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId2),
-                true);
-        assertMetadataNetworkNotified(true);
+                false);
+        assertMetadataNetworkNotified(false);
     }
 
     public void testMarkAsMetadataNotDirtyForUsageStatsChange() {
@@ -7113,8 +7112,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(mailUri11, Data.IS_PRIMARY, 1);
         assertStoredValue(mailUri11, Data.IS_SUPER_PRIMARY, 1);
         assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1),
-                true);
-        assertMetadataNetworkNotified(true);
+                false);
+        assertMetadataNetworkNotified(false);
     }
 
     public void testMarkAsMetadataDirtyForDataPrimarySettingUpdate() {
@@ -7133,8 +7132,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.update(mailUri1, values, null, null);
 
         assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
-                true);
-        assertMetadataNetworkNotified(true);
+                false);
+        assertMetadataNetworkNotified(false);
     }
 
     public void testMarkAsMetadataDirtyForDataDelete() {
@@ -7148,8 +7147,8 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.delete(mailUri1, null, null);
 
         assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
-                true);
-        assertMetadataNetworkNotified(true);
+                false);
+        assertMetadataNetworkNotified(false);
     }
 
     public void testDeleteContactWithoutName() {
@@ -7188,6 +7187,98 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
         Uri lookupUri = Contacts.getLookupUri(mResolver, contactUri);
         assertEquals(1, mResolver.delete(lookupUri, null, null));
+    }
+
+    public void testDeleteContactComposedOfSingleLocalRawContact() {
+        // Create a raw contact in the local (null) account
+        long rawContactId = RawContactUtil.createRawContact(mResolver, null);
+        DataUtil.insertStructuredName(mResolver, rawContactId, "John", "Smith");
+
+        // Delete the contact
+        long contactId = queryContactId(rawContactId);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        assertEquals(1, mResolver.delete(contactUri, null, null));
+
+        // Assert that the raw contact was removed
+        Cursor c1 = queryRawContact(rawContactId);
+        assertEquals(0, c1.getCount());
+        c1.close();
+
+        // Assert that the contact was removed
+        Cursor c2 = mResolver.query(contactUri, null, null, null, "");
+        assertEquals(0, c2.getCount());
+        c2.close();
+    }
+
+    public void testDeleteContactComposedOfTwoLocalRawContacts() {
+        // Create a raw contact in the local (null) account
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, null);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "John", "Smith");
+
+        // Create another local raw contact with the same name
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, null);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "John", "Smith");
+
+        // Join the two raw contacts explicitly
+        setAggregationException(AggregationExceptions.TYPE_KEEP_TOGETHER,
+                rawContactId1, rawContactId2);
+
+        // Check that the two raw contacts are aggregated together
+        assertAggregated(rawContactId1, rawContactId2, "John Smith");
+
+        // Delete the aggregate contact
+        long contactId = queryContactId(rawContactId1);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        assertEquals(1, mResolver.delete(contactUri, null, null));
+
+        // Assert that both of the local raw contacts were removed completely
+        Cursor c1 = queryRawContact(rawContactId1);
+        assertEquals(0, c1.getCount());
+        c1.close();
+
+        Cursor c2 = queryRawContact(rawContactId2);
+        assertEquals(0, c2.getCount());
+        c2.close();
+
+        // Assert that the contact was removed
+        Cursor c3 = queryContact(contactId);
+        assertEquals(0, c3.getCount());
+        c3.close();
+    }
+
+    public void testDeleteContactComposedOfSomeLocalRawContacts() {
+        // Create a raw contact in the local (null) account
+        long rawContactId1 = RawContactUtil.createRawContact(mResolver, null);
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "John", "Smith");
+
+        // Create another one in a non-local account with the same name
+        long rawContactId2 = RawContactUtil.createRawContact(mResolver, mAccount);
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "John", "Smith");
+
+        // Check that the two new raw contacts are aggregated together
+        assertAggregated(rawContactId1, rawContactId2, "John Smith");
+
+        // Delete the aggregate contact
+        long contactId = queryContactId(rawContactId1);
+        Uri contactUri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId);
+        assertEquals(1, mResolver.delete(contactUri, null, null));
+
+        // Assert that the local raw contact was removed completely
+        Cursor c1 = queryRawContact(rawContactId1);
+        assertEquals(0, c1.getCount());
+        c1.close();
+
+        // Assert that the non-local raw contact is still present just marked as deleted
+        Cursor c2 = queryRawContact(rawContactId2);
+        assertEquals(1, c2.getCount());
+        assertTrue(c2.moveToFirst());
+        assertEquals(1, c2.getInt(c2.getColumnIndex(RawContacts.DELETED)));
+        c2.close();
+
+        // Assert that the contact was removed
+        Cursor c3 = queryContact(contactId);
+        assertEquals(0, c3.getCount());
+        c3.close();
     }
 
     public void testQueryContactWithEscapedUri() {
@@ -8889,7 +8980,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testContactDelete_marksRawContactsForDeletion() {
-        DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete();
+        DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete(mAccount);
 
         String[] projection = new String[]{ContactsContract.RawContacts.DIRTY,
                 ContactsContract.RawContacts.DELETED};
@@ -8903,7 +8994,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testContactDelete_checkRawContactContactId() {
-        DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete();
+        DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete(mAccount);
 
         String[] projection = new String[]{ContactsContract.RawContacts.CONTACT_ID};
         String[] record = RawContactUtil.queryByRawContactId(mResolver, ids.mRawContactId,
@@ -8929,9 +9020,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         ContactUtil.update(mResolver, ids.mContactId, values);
         assertDirty(rawContactUri, false);
-        assertMetadataDirty(rawContactUri, true);
+        assertMetadataDirty(rawContactUri, false);
         assertNetworkNotified(false);
-        assertMetadataNetworkNotified(true);
+        assertMetadataNetworkNotified(false);
     }
 
     public void testContactUpdate_updatesContactUpdatedTimestamp() {
@@ -9144,13 +9235,23 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     /**
-     * Create a contact. Assert it's not present in the delete log. Delete it.
-     * And assert that the contact record is no longer present.
+     * Creates a contact in the local account. Assert it's not present in the delete log.
+     * Delete it. And assert that the contact record is no longer present.
      *
      * @return The contact id and raw contact id that was created.
      */
     private DatabaseAsserts.ContactIdPair assertContactCreateDelete() {
-        DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
+        return assertContactCreateDelete(null);
+    }
+
+    /**
+     * Creates a contact in the given account. Assert it's not present in the delete log.
+     * Delete it. And assert that the contact record is no longer present.
+     * @return The contact id and raw contact id that was created.
+     */
+    private DatabaseAsserts.ContactIdPair assertContactCreateDelete(Account account) {
+        DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver,
+                account);
 
         assertEquals(CommonDatabaseUtils.NOT_FOUND,
                 DeletedContactUtil.queryDeletedTimestampForContactId(mResolver, ids.mContactId));
