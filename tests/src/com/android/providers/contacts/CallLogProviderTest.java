@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import static android.provider.CallLog.Calls.MISSED_REASON_NOT_MISSED;
+
 import android.telecom.CallerInfo;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 import com.android.providers.contacts.util.ContactsPermissions;
@@ -60,7 +62,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.DIRTY,
             Voicemails.DELETED};
     /** Total number of columns exposed by call_log provider. */
-    private static final int NUM_CALLLOG_FIELDS = 35;
+    private static final int NUM_CALLLOG_FIELDS = 36;
 
     private static final int MIN_MATCH = 7;
 
@@ -199,7 +201,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         ContactsPermissions.ALLOW_SELF_CALL = true;
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
                 Calls.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 0, subscription, 2000,
-                40, null);
+                40, null, MISSED_REASON_NOT_MISSED);
         ContactsPermissions.ALLOW_SELF_CALL = false;
         assertNotNull(uri);
         assertEquals("0@" + CallLog.AUTHORITY, uri.getAuthority());
@@ -222,6 +224,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         // Casting null to Long as there are many forms of "put" which have nullable second
         // parameters and the compiler needs a hint as to which form is correct.
         values.put(Calls.DATA_USAGE, (Long) null);
+        values.put(Calls.MISSED_REASON, 0);
         assertStoredValues(uri, values);
     }
 
