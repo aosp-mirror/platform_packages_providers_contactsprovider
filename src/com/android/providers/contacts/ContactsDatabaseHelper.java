@@ -144,7 +144,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1500-1599 S
      * </pre>
      */
-    static final int DATABASE_VERSION = 1500;
+    static final int DATABASE_VERSION = 1501;
     private static final int MINIMUM_SUPPORTED_VERSION = 700;
 
     @VisibleForTesting
@@ -700,6 +700,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String ACCOUNT_NAME = RawContacts.ACCOUNT_NAME;
         String ACCOUNT_TYPE = RawContacts.ACCOUNT_TYPE;
         String DATA_SET = RawContacts.DATA_SET;
+        String SIM_SLOT_INDEX = "sim_slot_index";
+        String SIM_EF_TYPE = "sim_ef_type";
 
         String CONCRETE_ACCOUNT_NAME = Tables.ACCOUNTS + "." + ACCOUNT_NAME;
         String CONCRETE_ACCOUNT_TYPE = Tables.ACCOUNTS + "." + ACCOUNT_TYPE;
@@ -1219,8 +1221,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 AccountsColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 AccountsColumns.ACCOUNT_NAME + " TEXT, " +
                 AccountsColumns.ACCOUNT_TYPE + " TEXT, " +
-                AccountsColumns.DATA_SET + " TEXT" +
-        ");");
+                AccountsColumns.DATA_SET + " TEXT, " +
+                AccountsColumns.SIM_SLOT_INDEX + " INTEGER, " +
+                AccountsColumns.SIM_EF_TYPE + " INTEGER" +
+                ");");
 
         // Note, there are two sets of the usage stat columns: LR_* and RAW_*.
         // RAW_* contain the real values, which clients can't access.  The column names start
@@ -2583,6 +2587,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1500;
         }
 
+        if (isUpgradeRequired(oldVersion, newVersion, 1501)) {
+            upgradeToVersion1501(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1501;
+        }
+
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
         // yet, until CallLogDatabaseHelper moves the data.
 
@@ -3353,6 +3363,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     + "TEXT;");
             db.execSQL("ALTER TABLE data ADD preferred_phone_account_id TEXT;");
         } catch (SQLiteException ignore) {
+        }
+    }
+
+    private void upgradeToVersion1501(SQLiteDatabase db) {
+        try {
+            db.execSQL("ALTER TABLE accounts ADD sim_slot_index INTEGER;");
+            db.execSQL("ALTER TABLE accounts ADD sim_ef_type INTEGER;");
+        } catch (SQLException ignore) {
         }
     }
 
