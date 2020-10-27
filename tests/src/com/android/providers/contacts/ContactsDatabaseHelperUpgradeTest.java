@@ -59,7 +59,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.testutil.TestUtil;
 import com.android.providers.contacts.util.PropertyUtils;
 
 /**
@@ -221,6 +220,8 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableColumn(AccountsColumns.ACCOUNT_NAME, TEXT, false, null),
             new TableColumn(AccountsColumns.ACCOUNT_TYPE, TEXT, false, null),
             new TableColumn(AccountsColumns.DATA_SET, TEXT, false, null),
+            new TableColumn(AccountsColumns.SIM_SLOT_INDEX, INTEGER, false, null),
+            new TableColumn(AccountsColumns.SIM_EF_TYPE, INTEGER, false, null),
     };
 
     private static final TableColumn[] CONTACTS_COLUMNS = new TableColumn[] {
