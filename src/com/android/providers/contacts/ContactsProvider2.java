@@ -5548,6 +5548,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return null;
         }
 
+        if (cursor.getCount() > 0) {
+            final int callingUid = Binder.getCallingUid();
+            final String directoryAuthority = directoryInfo.authority;
+            if (VERBOSE_LOGGING) {
+                Log.v(TAG, "Making authority " + directoryAuthority
+                        + " visible to UID " + callingUid);
+            }
+            getContext().getPackageManager().grantImplicitAccess(
+                    callingUid, directoryAuthority);
+        }
+
         // Load the cursor contents into a memory cursor (backed by a cursor window) and close the
         // underlying cursor.
         try {
@@ -8628,7 +8639,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case RAW_CONTACTS_ID_DISPLAY_PHOTO: {
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
-                boolean writeable = !mode.equals("r");
+                boolean writeable = mode.contains("w");
 
                 // Find the primary photo data record for this raw contact.
                 SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
