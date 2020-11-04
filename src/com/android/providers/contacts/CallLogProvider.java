@@ -162,6 +162,7 @@ public class CallLogProvider extends ContentProvider {
             .put(Calls.CALL_SCREENING_COMPONENT_NAME, Calls.CALL_SCREENING_COMPONENT_NAME);
         sCallsProjectionMap.put(Calls.CALL_SCREENING_APP_NAME, Calls.CALL_SCREENING_APP_NAME);
         sCallsProjectionMap.put(Calls.BLOCK_REASON, Calls.BLOCK_REASON);
+        sCallsProjectionMap.put(Calls.MISSED_REASON, Calls.MISSED_REASON);
     }
 
     private static final String ALLOWED_PACKAGE_FOR_TESTING = "com.android.providers.contacts";
