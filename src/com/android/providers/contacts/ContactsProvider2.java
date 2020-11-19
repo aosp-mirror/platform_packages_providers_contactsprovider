@@ -16,9 +16,9 @@
 
 package com.android.providers.contacts;
 
-import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
@@ -34,6 +34,7 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.IContentService;
+import android.content.Intent;
 import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
@@ -103,6 +104,8 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.RawContactsEntity;
 import android.provider.ContactsContract.SearchSnippets;
 import android.provider.ContactsContract.Settings;
+import android.provider.ContactsContract.SimAccount;
+import android.provider.ContactsContract.SimContacts;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
@@ -164,9 +167,9 @@ import com.android.providers.contacts.enterprise.EnterprisePolicyGuard;
 import com.android.providers.contacts.util.Clock;
 import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.DbQueryUtils;
-import com.android.providers.contacts.util.NeededForTesting;
 import com.android.providers.contacts.util.LogFields;
 import com.android.providers.contacts.util.LogUtils;
+import com.android.providers.contacts.util.NeededForTesting;
 import com.android.providers.contacts.util.UserUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
@@ -212,6 +215,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private static final String READ_PERMISSION = "android.permission.READ_CONTACTS";
     private static final String WRITE_PERMISSION = "android.permission.WRITE_CONTACTS";
+    private static final String MANAGE_SIM_ACCOUNTS_PERMISSION =
+            "android.contacts.permission.MANAGE_SIM_ACCOUNTS";
 
 
     /* package */ static final String PHONEBOOK_COLLATOR_NAME = "PHONEBOOK";
@@ -2274,6 +2279,64 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
             undemoteContact(mDbHelper.get().getWritableDatabase(), id);
             return null;
+        } else if (SimContacts.ADD_SIM_ACCOUNT_METHOD.equals(method)) {
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                    MANAGE_SIM_ACCOUNTS_PERMISSION);
+
+            final String accountName = extras.getString(SimContacts.KEY_ACCOUNT_NAME);
+            final String accountType = extras.getString(SimContacts.KEY_ACCOUNT_TYPE);
+            final int simSlot = extras.getInt(SimContacts.KEY_SIM_SLOT_INDEX, -1);
+            final int efType = extras.getInt(SimContacts.KEY_SIM_EF_TYPE, -1);
+            if (simSlot < 0) {
+                throw new IllegalArgumentException("Sim slot is negative");
+            }
+            if (!SimAccount.getValidEfTypes().contains(efType)) {
+                throw new IllegalArgumentException("Invalid EF type");
+            }
+            if (TextUtils.isEmpty(accountName) || TextUtils.isEmpty(accountType)) {
+                throw new IllegalArgumentException("Account name or type is empty");
+            }
+
+            final Bundle response = new Bundle();
+            final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+            db.beginTransaction();
+            try {
+                mDbHelper.get().createSimAccountIdInTransaction(
+                        AccountWithDataSet.get(accountName, accountType, null), simSlot, efType);
+                getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
+                db.setTransactionSuccessful();
+                return response;
+            } finally {
+                db.endTransaction();
+            }
+        } else if (SimContacts.REMOVE_SIM_ACCOUNT_METHOD.equals(method)) {
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                    MANAGE_SIM_ACCOUNTS_PERMISSION);
+
+            final int simSlot = extras.getInt(SimContacts.KEY_SIM_SLOT_INDEX, -1);
+            if (simSlot < 0) {
+                throw new IllegalArgumentException("Sim slot is negative");
+            }
+            final Bundle response = new Bundle();
+            final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+            db.beginTransaction();
+            try {
+                mDbHelper.get().removeSimAccounts(simSlot);
+                getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
+                scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
+                db.setTransactionSuccessful();
+                return response;
+            } finally {
+                db.endTransaction();
+            }
+        } else if (SimContacts.QUERY_SIM_ACCOUNTS_METHOD.equals(method)) {
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
+            final Bundle response = new Bundle();
+
+            final List<SimAccount> simAccounts = mDbHelper.get().getAllSimAccounts();
+            response.putParcelableList(SimContacts.KEY_SIM_ACCOUNTS, simAccounts);
+
+            return response;
         }
         return null;
     }
@@ -5021,12 +5084,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // All accounts that are used in raw_contacts and/or groups.
             final Set<AccountWithDataSet> knownAccountsWithDataSets
                     = dbHelper.getAllAccountsWithDataSets();
-
+            // All known SIM accounts
+            final List<SimAccount> simAccounts = getDatabaseHelper().getAllSimAccounts();
             // Find the accounts that have been removed.
             final List<AccountWithDataSet> accountsWithDataSetsToDelete = Lists.newArrayList();
             for (AccountWithDataSet knownAccountWithDataSet : knownAccountsWithDataSets) {
                 if (knownAccountWithDataSet.isLocalAccount()
-                        || knownAccountWithDataSet.inSystemAccounts(systemAccounts)) {
+                        || knownAccountWithDataSet.inSystemAccounts(systemAccounts)
+                        || knownAccountWithDataSet.inSimAccounts(simAccounts)) {
                     continue;
                 }
                 accountsWithDataSetsToDelete.add(knownAccountWithDataSet);
@@ -5036,7 +5101,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 for (AccountWithDataSet accountWithDataSet : accountsWithDataSetsToDelete) {
                     final Long accountIdOrNull = dbHelper.getAccountIdOrNull(accountWithDataSet);
 
-                    // getAccountIdOrNull() really shouldn't return null here, but just in case...
                     if (accountIdOrNull != null) {
                         final String accountId = Long.toString(accountIdOrNull);
                         final String[] accountIdParams =
