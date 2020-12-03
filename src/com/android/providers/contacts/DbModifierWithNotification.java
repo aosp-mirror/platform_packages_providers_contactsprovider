@@ -109,7 +109,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
                     packagesModified);
         }
         if (rowId > 0 && mIsCallsTable) {
-            notifyCallLogChange();
+            notifyCallLogChange(mContext);
         }
         return rowId;
     }
@@ -126,20 +126,20 @@ public class DbModifierWithNotification implements DatabaseModifier {
                     ContentUris.withAppendedId(mBaseUri, rowId), packagesModified);
         }
         if (rowId > 0 && mIsCallsTable) {
-            notifyCallLogChange();
+            notifyCallLogChange(mContext);
         }
         return rowId;
     }
 
-    private void notifyCallLogChange() {
-        mContext.getContentResolver().notifyChange(Calls.CONTENT_URI, null, false);
+    public static void notifyCallLogChange(Context context) {
+        context.getContentResolver().notifyChange(Calls.CONTENT_URI, null, false);
 
         Intent intent = new Intent("com.android.internal.action.CALL_LOG_CHANGE");
         intent.setComponent(new ComponentName("com.android.calllogbackup",
                 "com.android.calllogbackup.CallLogChangeReceiver"));
 
-        if (!mContext.getPackageManager().queryBroadcastReceivers(intent, 0).isEmpty()) {
-            mContext.sendBroadcast(intent);
+        if (!context.getPackageManager().queryBroadcastReceivers(intent, 0).isEmpty()) {
+            context.sendBroadcast(intent);
         }
     }
 
@@ -201,7 +201,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
             notifyVoicemailChange(mBaseUri, packagesModified);
         }
         if (count > 0 && mIsCallsTable) {
-            notifyCallLogChange();
+            notifyCallLogChange(mContext);
         }
         if (hasMarkedRead) {
             // A "New" voicemail has been marked as read by the server. This voicemail is no longer
@@ -283,7 +283,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
             notifyVoicemailChange(mBaseUri, packagesModified);
         }
         if (count > 0 && mIsCallsTable) {
-            notifyCallLogChange();
+            notifyCallLogChange(mContext);
         }
         return count;
     }
