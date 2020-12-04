@@ -20,6 +20,8 @@ import static com.android.providers.contacts.util.DbQueryUtils.checkForSupported
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 import static com.android.providers.contacts.util.DbQueryUtils.getInequalityClause;
 
+import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.app.AppOpsManager;
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
@@ -36,6 +38,9 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.ParcelFileDescriptor;
+import android.os.ParcelableException;
+import android.os.StatFs;
 import android.os.UserHandle;
 import android.os.UserManager;
 import android.provider.CallLog;
@@ -43,6 +48,7 @@ import android.provider.CallLog.Calls;
 import android.telecom.PhoneAccount;
 import android.telecom.PhoneAccountHandle;
 import android.telecom.TelecomManager;
+import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.Log;
@@ -55,10 +61,16 @@ import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.UserUtils;
 
 import java.io.FileDescriptor;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -80,6 +92,8 @@ public class CallLogProvider extends ContentProvider {
     /** Selection clause to exclude hidden records. */
     private static final String EXCLUDE_HIDDEN_SELECTION = getEqualityClause(
             Calls.PHONE_ACCOUNT_HIDDEN, 0);
+
+    private static final String CALL_COMPOSER_PICTURE_DIRECTORY_NAME = "call_composer_pics";
 
     @VisibleForTesting
     static final String[] CALL_LOG_SYNC_PROJECTION = new String[] {
@@ -103,6 +117,10 @@ public class CallLogProvider extends ContentProvider {
 
     private static final int CALLS_FILTER = 3;
 
+    private static final int CALL_COMPOSER_NEW_PICTURE = 4;
+
+    private static final int CALL_COMPOSER_PICTURE = 5;
+
     private static final String UNHIDE_BY_PHONE_ACCOUNT_QUERY =
             "UPDATE " + Tables.CALLS + " SET " + Calls.PHONE_ACCOUNT_HIDDEN + "=0 WHERE " +
             Calls.PHONE_ACCOUNT_COMPONENT_NAME + "=? AND " + Calls.PHONE_ACCOUNT_ID + "=?;";
@@ -116,9 +134,17 @@ public class CallLogProvider extends ContentProvider {
         sURIMatcher.addURI(CallLog.AUTHORITY, "calls", CALLS);
         sURIMatcher.addURI(CallLog.AUTHORITY, "calls/#", CALLS_ID);
         sURIMatcher.addURI(CallLog.AUTHORITY, "calls/filter/*", CALLS_FILTER);
+        sURIMatcher.addURI(CallLog.AUTHORITY, CallLog.CALL_COMPOSER_SEGMENT,
+                CALL_COMPOSER_NEW_PICTURE);
+        sURIMatcher.addURI(CallLog.AUTHORITY, CallLog.CALL_COMPOSER_SEGMENT + "/*",
+                CALL_COMPOSER_PICTURE);
 
-        // Shadow provider only supports "/calls".
+        // Shadow provider only supports "/calls" and "/call_composer".
         sURIMatcher.addURI(CallLog.SHADOW_AUTHORITY, "calls", CALLS);
+        sURIMatcher.addURI(CallLog.SHADOW_AUTHORITY, CallLog.CALL_COMPOSER_SEGMENT,
+                CALL_COMPOSER_NEW_PICTURE);
+        sURIMatcher.addURI(CallLog.SHADOW_AUTHORITY, CallLog.CALL_COMPOSER_SEGMENT + "/*",
+                CALL_COMPOSER_PICTURE);
     }
 
     private static final ArrayMap<String, String> sCallsProjectionMap;
@@ -443,6 +469,11 @@ public class CallLogProvider extends ContentProvider {
                 return Calls.CONTENT_ITEM_TYPE;
             case CALLS_FILTER:
                 return Calls.CONTENT_TYPE;
+            case CALL_COMPOSER_NEW_PICTURE:
+                return null; // No type for newly created files
+            case CALL_COMPOSER_PICTURE:
+                // We don't know the exact image format, so this is as specific as we can be.
+                return "application/octet-stream";
             default:
                 throw new IllegalArgumentException("Unknown URI: " + uri);
         }
@@ -494,6 +525,22 @@ public class CallLogProvider extends ContentProvider {
                     " CUID=" + Binder.getCallingUid());
         }
         waitForAccess(mReadAccessLatch);
+        int match = sURIMatcher.match(uri);
+        switch (match) {
+            case CALL_COMPOSER_PICTURE:
+                throw new IllegalArgumentException(
+                        "Use CallLog#storeCallComposerPicture to insert a new picture.");
+            case CALL_COMPOSER_NEW_PICTURE:
+                try {
+                    return allocateNewCallComposerPicture(
+                            CallLog.SHADOW_AUTHORITY.equals(uri.getAuthority()));
+                } catch (IOException e) {
+                    throw new ParcelableException(e);
+                }
+            default:
+                // Fall through and execute the rest of the method for ordinary call log insertions.
+        }
+
         checkForSupportedColumns(sCallsProjectionMap, values);
         // Inserting a voicemail record through call_log requires the voicemail
         // permission and also requires the additional voicemail param set.
@@ -516,6 +563,89 @@ public class CallLogProvider extends ContentProvider {
             return ContentUris.withAppendedId(uri, rowId);
         }
         return null;
+    }
+
+    @Override
+    public ParcelFileDescriptor openFile(@NonNull Uri uri, @NonNull String mode)
+            throws FileNotFoundException {
+        int match = sURIMatcher.match(uri);
+        if (match != CALL_COMPOSER_PICTURE) {
+            throw new UnsupportedOperationException("The call log provider only supports opening"
+                    + " call composer pictures.");
+        }
+        int modeInt;
+        switch (mode) {
+            case "r":
+                modeInt = ParcelFileDescriptor.MODE_READ_ONLY;
+                break;
+            case "w":
+                modeInt = ParcelFileDescriptor.MODE_WRITE_ONLY;
+                break;
+            default:
+                throw new UnsupportedOperationException("The call log does not support opening"
+                        + " a call composer picture with mode " + mode);
+        }
+
+        try {
+            Path callComposerDir = getCallComposerPictureDirectory(getContext(), uri);
+            Path pictureFile = callComposerDir.resolve(uri.getLastPathSegment());
+            if (Files.notExists(pictureFile)) {
+                throw new FileNotFoundException(uri.toString()
+                        + " does not correspond to a valid file.");
+            }
+            return ParcelFileDescriptor.open(pictureFile.toFile(), modeInt);
+        } catch (IOException e) {
+            Log.e(TAG, "IOException while opening call composer file: " + e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static @NonNull Path getCallComposerPictureDirectory(Context context, Uri uri)
+            throws IOException {
+        boolean isShadow = CallLog.SHADOW_AUTHORITY.equals(uri.getAuthority());
+        return getCallComposerPictureDirectory(context, isShadow);
+    }
+
+    private static @NonNull Path getCallComposerPictureDirectory(Context context, boolean isShadow)
+            throws IOException {
+        if (isShadow) {
+            context = context.createDeviceProtectedStorageContext();
+        }
+        Path path = context.getFilesDir().toPath().resolve(CALL_COMPOSER_PICTURE_DIRECTORY_NAME);
+        if (!Files.isDirectory(path)) {
+            Files.createDirectory(path);
+        }
+        return path;
+    }
+
+    private Uri allocateNewCallComposerPicture(boolean isShadow) throws IOException {
+        Uri baseUri = isShadow ?
+                CallLog.CALL_COMPOSER_PICTURE_URI.buildUpon()
+                        .authority(CallLog.SHADOW_AUTHORITY).build()
+                : CallLog.CALL_COMPOSER_PICTURE_URI;
+
+        Path pathToCallComposerDir = getCallComposerPictureDirectory(getContext(), isShadow);
+
+        if (new StatFs(pathToCallComposerDir.toString()).getAvailableBytes()
+                < TelephonyManager.getMaximumCallComposerPictureSize()) {
+            return null;
+        }
+        String fileName = UUID.randomUUID().toString();
+        Files.createFile(pathToCallComposerDir.resolve(fileName));
+        return baseUri.buildUpon().appendPath(fileName).build();
+    }
+
+    private int deleteCallComposerPicture(Uri uri) {
+        try {
+            Path pathToCallComposerDir = getCallComposerPictureDirectory(getContext(), uri);
+            String fileName = uri.getLastPathSegment();
+            boolean successfulDelete =
+                    Files.deleteIfExists(pathToCallComposerDir.resolve(fileName));
+            return successfulDelete ? 1 : 0;
+        } catch (IOException e) {
+            Log.e(TAG, "IOException encountered deleting the call composer pics dir " + e);
+            return 0;
+        }
     }
 
     private int updateInternal(Uri uri, ContentValues values,
@@ -606,6 +736,10 @@ public class CallLogProvider extends ContentProvider {
                     DbModifierWithNotification.notifyCallLogChange(getContext());
                 }
                 return deletedCount;
+            case CALL_COMPOSER_PICTURE:
+                // TODO(hallliu): implement deletion of file when the corresponding calllog entry
+                // gets deleted as well.
+                return deleteCallComposerPicture(uri);
             default:
                 throw new UnsupportedOperationException("Cannot delete that URL: " + uri);
         }
