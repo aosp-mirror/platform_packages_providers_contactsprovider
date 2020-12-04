@@ -22,7 +22,7 @@ import android.util.StatsLog;
 
 public class LogUtils {
     // Keep in sync with ContactsProviderStatus#ResultType in
-    // frameworks/base/cmds/statsd/src/atoms.proto file.
+    // frameworks/proto_logging/stats/atoms.proto file.
     public interface ResultType {
         int SUCCESS = 1;
         int FAIL = 2;
@@ -31,7 +31,7 @@ public class LogUtils {
     }
 
     // Keep in sync with ContactsProviderStatus#ApiType in
-    // frameworks/base/cmds/statsd/src/atoms.proto file.
+    // frameworks/proto_logging/stats/atoms.proto file.
     public interface ApiType {
         int QUERY = 1;
         int INSERT = 2;
@@ -40,7 +40,7 @@ public class LogUtils {
     }
 
     // Keep in sync with ContactsProviderStatus#CallerType in
-    // frameworks/base/cmds/statsd/src/atoms.proto file.
+    // frameworks/proto_logging/stats/atoms.proto file.
     public interface CallerType {
         int CALLER_IS_SYNC_ADAPTER = 1;
         int CALLER_IS_NOT_SYNC_ADAPTER = 2;
