@@ -16,12 +16,6 @@
 
 package com.android.providers.contacts;
 
-import com.android.internal.R.bool;
-import com.android.providers.contacts.sqlite.DatabaseAnalyzer;
-import com.android.providers.contacts.sqlite.SqlChecker;
-import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
-import com.android.providers.contacts.util.PropertyUtils;
-
 import android.app.ActivityManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -79,6 +73,7 @@ import android.provider.ContactsContract.PinnedPositions;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
+import android.provider.ContactsContract.SimAccount;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
@@ -96,17 +91,23 @@ import android.util.Log;
 import android.util.Slog;
 
 import com.android.common.content.SyncStateContentProviderHelper;
+import com.android.internal.R.bool;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
+import com.android.providers.contacts.sqlite.DatabaseAnalyzer;
+import com.android.providers.contacts.sqlite.SqlChecker;
+import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
 import com.android.providers.contacts.util.NeededForTesting;
+import com.android.providers.contacts.util.PropertyUtils;
 
 import java.io.PrintWriter;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.Executor;
@@ -3909,6 +3910,37 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Gets all SIM accounts in the accounts table.
+     */
+    public List<SimAccount> getAllSimAccounts() {
+        final List<SimAccount> result = new ArrayList<>();
+        final Cursor c = getReadableDatabase().rawQuery(
+                "SELECT DISTINCT " + AccountsColumns._ID + ","
+                        + AccountsColumns.ACCOUNT_NAME + ","
+                        + AccountsColumns.ACCOUNT_TYPE + ","
+                        + AccountsColumns.SIM_SLOT_INDEX + ","
+                        + AccountsColumns.SIM_EF_TYPE + " FROM " + Tables.ACCOUNTS, null);
+        try {
+            while (c.moveToNext()) {
+                if (c.isNull(3) || c.isNull(4)) {
+                    // Invalid slot index or ef type
+                    continue;
+                }
+                final int simSlot = c.getInt(3);
+                final int efType = c.getInt(4);
+                if (simSlot < 0 || !SimAccount.getValidEfTypes().contains(efType)) {
+                    // Invalid slot index or ef type
+                    continue;
+                }
+                result.add(new SimAccount(c.getString(1), c.getString(2), simSlot, efType));
+            }
+        } finally {
+            c.close();
+        }
+        return result;
+    }
+
+    /**
      * @return ID of the specified account, or null if the account doesn't exist.
      */
     public Long getAccountIdOrNull(AccountWithDataSet accountWithDataSet) {
@@ -3968,6 +4000,69 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
 
         return id;
+    }
+
+    /**
+     * This method will create a record in the accounts table.
+     *
+     * This must be used in a transaction, so there's no need for synchronization.
+     *
+     * @param simSlot Sim slot index of the account. Must be 0 or greater
+     * @param efType  EF type of the account. Must be a value contained in {@link
+     *                SimAccount#getValidEfTypes()}
+     * @throws IllegalArgumentException if the account name/type pair is already within the table.
+     *                                  SIM accounts should have distinct names and types.
+     *                                  And if simSlot is negative, or efType is not in {@link
+     *                                  SimAccount#getValidEfTypes()}
+     */
+    public long createSimAccountIdInTransaction(AccountWithDataSet accountWithDataSet,
+            int simSlot, int efType) {
+        if (simSlot < 0) {
+            throw new IllegalArgumentException("Sim slot is negative");
+        }
+        if (!SimAccount.getValidEfTypes().contains(efType)) {
+            throw new IllegalArgumentException("Invalid EF type");
+        }
+        if (accountWithDataSet == null || TextUtils.isEmpty(accountWithDataSet.getAccountName())
+                || TextUtils.isEmpty(accountWithDataSet.getAccountType())) {
+            throw new IllegalArgumentException("Account is null or the name/type is empty");
+        }
+
+        Long id = getAccountIdOrNull(accountWithDataSet);
+        if (id != null) {
+            throw new IllegalArgumentException("Account already exists in the table");
+        }
+        final SQLiteStatement insert = getWritableDatabase().compileStatement(
+                "INSERT INTO " + Tables.ACCOUNTS +
+                        " (" + AccountsColumns.ACCOUNT_NAME + ", " +
+                        AccountsColumns.ACCOUNT_TYPE + ", " +
+                        AccountsColumns.DATA_SET + ", " +
+                        AccountsColumns.SIM_SLOT_INDEX + ", " +
+                        AccountsColumns.SIM_EF_TYPE + ") VALUES (?, ?, ?, ?, ?)");
+        try {
+            DatabaseUtils.bindObjectToProgram(insert, 1, accountWithDataSet.getAccountName());
+            DatabaseUtils.bindObjectToProgram(insert, 2, accountWithDataSet.getAccountType());
+            DatabaseUtils.bindObjectToProgram(insert, 3, accountWithDataSet.getDataSet());
+            DatabaseUtils.bindObjectToProgram(insert, 4, simSlot);
+            DatabaseUtils.bindObjectToProgram(insert, 5, efType);
+            id = insert.executeInsert();
+        } finally {
+            insert.close();
+        }
+
+        return id;
+    }
+
+    /**
+     * Deletes all rows in the accounts table with the given sim slot index
+     *
+     * @param simSlot Sim slot to remove accounts
+     * @return how many rows were deleted
+     */
+    public int removeSimAccounts(int simSlot) {
+        final SQLiteDatabase db = getWritableDatabase();
+        return db.delete(Tables.ACCOUNTS, AccountsColumns.SIM_SLOT_INDEX + "=?",
+                new String[]{String.valueOf(simSlot)});
     }
 
     /**
