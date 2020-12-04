@@ -24,6 +24,11 @@
             android:label="Broadcast that a change happened to the call log."
             android:protectionLevel="signature|system"/>
 
+    <permission
+        android:name="android.contacts.permission.MANAGE_SIM_ACCOUNTS"
+        android:label="Change known SIM accounts in ContactsProvider."
+        android:protectionLevel="signature"/>
+
     <application android:process="android.process.acore"
         android:label="@string/app_label"
         android:allowBackup="false"
