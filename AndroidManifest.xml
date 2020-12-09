@@ -4,6 +4,8 @@
         android:sharedUserLabel="@string/sharedUserLabel">
 
     <uses-permission android:name="android.permission.BIND_DIRECTORY_SEARCH" />
+    <!-- For sending voicemail intents -->
+    <uses-permission android:name="android.permission.CHANGE_DEVICE_IDLE_TEMP_WHITELIST" />
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <uses-permission android:name="android.permission.GET_ACCOUNTS_PRIVILEGED" />
     <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS" />
