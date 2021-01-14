@@ -139,16 +139,20 @@ public class CallLogProvider extends ContentProvider {
 
     @VisibleForTesting
     static final String[] CALL_LOG_SYNC_PROJECTION = new String[] {
-        Calls.NUMBER,
-        Calls.NUMBER_PRESENTATION,
-        Calls.TYPE,
-        Calls.FEATURES,
-        Calls.DATE,
-        Calls.DURATION,
-        Calls.DATA_USAGE,
-        Calls.PHONE_ACCOUNT_COMPONENT_NAME,
-        Calls.PHONE_ACCOUNT_ID,
-        Calls.ADD_FOR_ALL_USERS
+            Calls.NUMBER,
+            Calls.NUMBER_PRESENTATION,
+            Calls.TYPE,
+            Calls.FEATURES,
+            Calls.DATE,
+            Calls.DURATION,
+            Calls.DATA_USAGE,
+            Calls.PHONE_ACCOUNT_COMPONENT_NAME,
+            Calls.PHONE_ACCOUNT_ID,
+            Calls.PRIORITY,
+            Calls.SUBJECT,
+            Calls.COMPOSER_PHOTO_URI,
+            // Location is deliberately omitted
+            Calls.ADD_FOR_ALL_USERS
     };
 
     static final String[] MINIMAL_PROJECTION = new String[] { Calls._ID };
@@ -231,6 +235,10 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.CALL_SCREENING_APP_NAME, Calls.CALL_SCREENING_APP_NAME);
         sCallsProjectionMap.put(Calls.BLOCK_REASON, Calls.BLOCK_REASON);
         sCallsProjectionMap.put(Calls.MISSED_REASON, Calls.MISSED_REASON);
+        sCallsProjectionMap.put(Calls.PRIORITY, Calls.PRIORITY);
+        sCallsProjectionMap.put(Calls.COMPOSER_PHOTO_URI, Calls.COMPOSER_PHOTO_URI);
+        sCallsProjectionMap.put(Calls.SUBJECT, Calls.SUBJECT);
+        sCallsProjectionMap.put(Calls.LOCATION, Calls.LOCATION);
     }
 
     private static final String ALLOWED_PACKAGE_FOR_TESTING = "com.android.providers.contacts";

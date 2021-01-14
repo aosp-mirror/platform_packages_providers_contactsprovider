@@ -39,7 +39,7 @@ import com.android.providers.contacts.util.PropertyUtils;
 public class CallLogDatabaseHelper {
     private static final String TAG = "CallLogDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 9;
+    private static final int DATABASE_VERSION = 10;
 
     private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
@@ -153,6 +153,10 @@ public class CallLogDatabaseHelper {
                     Calls.CALL_SCREENING_APP_NAME + " TEXT," +
                     Calls.BLOCK_REASON + " INTEGER NOT NULL DEFAULT 0," +
                     Calls.MISSED_REASON + " INTEGER NOT NULL DEFAULT 0," +
+                    Calls.PRIORITY + " INTEGER NOT NULL DEFAULT 0," +
+                    Calls.SUBJECT + " TEXT," +
+                    Calls.LOCATION + " TEXT," +
+                    Calls.COMPOSER_PHOTO_URI + " TEXT," +
 
                     Voicemails._DATA + " TEXT," +
                     Voicemails.HAS_CONTENT + " INTEGER," +
@@ -224,6 +228,10 @@ public class CallLogDatabaseHelper {
 
             if (oldVersion < 9) {
                 upgradeToVersion9(db);
+            }
+
+            if (oldVersion < 10) {
+                upgradeToVersion10(db);
             }
         }
     }
@@ -459,6 +467,12 @@ public class CallLogDatabaseHelper {
         db.execSQL("ALTER TABLE calls ADD missed_reason INTEGER NOT NULL DEFAULT 0");
     }
 
+    private void upgradeToVersion10(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD priority INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("ALTER TABLE calls ADD subject TEXT");
+        db.execSQL("ALTER TABLE calls ADD location TEXT");
+        db.execSQL("ALTER TABLE calls ADD composer_photo_uri TEXT");
+    }
     /**
      * Perform the migration from the contacts2.db (of the latest version) to the current calllog/
      * voicemail status tables.
