@@ -67,6 +67,17 @@
             android:writePermission="android.permission.WRITE_CALL_LOG">
         </provider>
 
+        <!-- Separate provider for the locations stored in call provider.
+             Uses a different db in order to prevent SQL injection attacks from bypassing
+             location permission requirements -->
+        <provider android:name="CallComposerLocationProvider"
+            android:authorities="call_composer_locations"
+            android:syncable="false" android:multiprocess="false"
+            android:exported="true"
+            android:readPermission="android.permission.READ_CALL_LOG"
+            android:writePermission="android.permission.WRITE_CALL_LOG">
+        </provider>
+
         <provider android:name="ShadowCallLogProvider"
                   android:authorities="call_log_shadow"
                   android:syncable="false" android:multiprocess="false"
