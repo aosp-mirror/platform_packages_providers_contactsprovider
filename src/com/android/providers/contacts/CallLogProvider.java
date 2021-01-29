@@ -162,6 +162,7 @@ public class CallLogProvider extends ContentProvider {
             .put(Calls.CALL_SCREENING_COMPONENT_NAME, Calls.CALL_SCREENING_COMPONENT_NAME);
         sCallsProjectionMap.put(Calls.CALL_SCREENING_APP_NAME, Calls.CALL_SCREENING_APP_NAME);
         sCallsProjectionMap.put(Calls.BLOCK_REASON, Calls.BLOCK_REASON);
+        sCallsProjectionMap.put(Calls.MISSED_REASON, Calls.MISSED_REASON);
     }
 
     private static final String ALLOWED_PACKAGE_FOR_TESTING = "com.android.providers.contacts";
@@ -563,7 +564,11 @@ public class CallLogProvider extends ContentProvider {
                 throw new UnsupportedOperationException("Cannot update URL: " + uri);
         }
 
-        return qb.update(db, values, selectionBuilder.build(), selectionArgs);
+        int rowsUpdated = qb.update(db, values, selectionBuilder.build(), selectionArgs);
+        if (rowsUpdated > 0) {
+            DbModifierWithNotification.notifyCallLogChange(getContext());
+        }
+        return rowsUpdated;
     }
 
     private int deleteInternal(Uri uri, String selection, String[] selectionArgs) {
@@ -596,7 +601,11 @@ public class CallLogProvider extends ContentProvider {
             case CALLS:
                 // TODO: Special case - We may want to forward the delete request on user 0 to the
                 // shadow provider too.
-                return qb.delete(db, selectionBuilder.build(), selectionArgs);
+                int deletedCount = qb.delete(db, selectionBuilder.build(), selectionArgs);
+                if (deletedCount > 0) {
+                    DbModifierWithNotification.notifyCallLogChange(getContext());
+                }
+                return deletedCount;
             default:
                 throw new UnsupportedOperationException("Cannot delete that URL: " + uri);
         }

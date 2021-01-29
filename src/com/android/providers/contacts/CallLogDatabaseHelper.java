@@ -39,7 +39,7 @@ import com.android.providers.contacts.util.PropertyUtils;
 public class CallLogDatabaseHelper {
     private static final String TAG = "CallLogDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 8;
+    private static final int DATABASE_VERSION = 9;
 
     private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
@@ -152,6 +152,7 @@ public class CallLogDatabaseHelper {
                     Calls.CALL_SCREENING_COMPONENT_NAME + " TEXT," +
                     Calls.CALL_SCREENING_APP_NAME + " TEXT," +
                     Calls.BLOCK_REASON + " INTEGER NOT NULL DEFAULT 0," +
+                    Calls.MISSED_REASON + " INTEGER NOT NULL DEFAULT 0," +
 
                     Voicemails._DATA + " TEXT," +
                     Voicemails.HAS_CONTENT + " INTEGER," +
@@ -219,6 +220,10 @@ public class CallLogDatabaseHelper {
 
             if (oldVersion < 8) {
                 upgradetoVersion8(db);
+            }
+
+            if (oldVersion < 9) {
+                upgradeToVersion9(db);
             }
         }
     }
@@ -448,6 +453,10 @@ public class CallLogDatabaseHelper {
         } finally {
             db.endTransaction();
         }
+    }
+
+    private void upgradeToVersion9(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE calls ADD missed_reason INTEGER NOT NULL DEFAULT 0");
     }
 
     /**
