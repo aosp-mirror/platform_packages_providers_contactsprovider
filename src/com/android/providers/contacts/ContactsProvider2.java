@@ -121,6 +121,7 @@ import android.util.Log;
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.common.io.MoreCloseables;
+import com.android.i18n.phonenumbers.Phonenumber;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
@@ -6707,11 +6708,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     boolean foundResult = false;
                     Cursor cursor = doQuery(db, qb, projectionWithNumber, selection, selectionArgs,
                             sortOrder, groupBy, null, limit, cancellationSignal);
+
                     try {
                         if (cursor.getCount() > 0) {
                             foundResult = true;
-                            return PhoneLookupWithStarPrefix
+                            cursor = PhoneLookupWithStarPrefix
                                     .removeNonStarMatchesFromCursor(number, cursor);
+                            if (!mDbHelper.get().getUseStrictPhoneNumberComparisonForTest()) {
+                                cursor = PhoneLookupWithStarPrefix.removeNoMatchPhoneNumber(number,
+                                        cursor, mDbHelper.get().getCurrentCountryIso());
+                            }
+                            return cursor;
                         }
 
                         // Use the fall-back lookup method.
@@ -6724,11 +6731,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         // numbers
                         mDbHelper.get().buildFallbackPhoneLookupAndContactQuery(qb, number);
 
-                        final Cursor fallbackCursor = doQuery(db, qb, projectionWithNumber,
+                        Cursor fallbackCursor = doQuery(db, qb, projectionWithNumber,
                                 selection, selectionArgs, sortOrder, groupBy, having, limit,
                                 cancellationSignal);
-                        return PhoneLookupWithStarPrefix.removeNonStarMatchesFromCursor(
+                        fallbackCursor = PhoneLookupWithStarPrefix.removeNonStarMatchesFromCursor(
                                 number, fallbackCursor);
+                        return PhoneLookupWithStarPrefix.removeNoMatchPhoneNumber(number,
+                                fallbackCursor, mDbHelper.get().getCurrentCountryIso());
                     } finally {
                         if (!foundResult) {
                             // We'll be returning a different cursor, so close this one.
@@ -8639,7 +8648,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case RAW_CONTACTS_ID_DISPLAY_PHOTO: {
                 long rawContactId = Long.parseLong(uri.getPathSegments().get(1));
-                boolean writeable = !mode.equals("r");
+                boolean writeable = mode.contains("w");
 
                 // Find the primary photo data record for this raw contact.
                 SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
