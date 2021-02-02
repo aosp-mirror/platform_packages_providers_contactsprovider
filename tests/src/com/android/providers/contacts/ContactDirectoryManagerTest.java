@@ -624,7 +624,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
      */
     public void testGetDirectoryProviderPackages() {
         final PackageManager pm = getContext().getPackageManager();
-        final String googleSync = "com.google.android.syncadapters.contacts";
+        final String googleSync = "com.google.android.gms";
 
         // Skip if the package is not installed.
         try {
