@@ -83,8 +83,8 @@
                   android:syncable="false" android:multiprocess="false"
                   android:exported="true"
                   android:directBootAware="true"
-                  android:readPermission="android.permission.MANAGE_USERS"
-                  android:writePermission="android.permission.MANAGE_USERS">
+                  android:readPermission="android.permission.INTERACT_ACROSS_USERS"
+                  android:writePermission="android.permission.INTERACT_ACROSS_USERS">
         </provider>
 
         <!-- Note: While this provider does not declare a permission explicitly, it enforces that
