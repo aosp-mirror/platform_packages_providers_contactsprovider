@@ -31,11 +31,17 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
+import android.os.Binder;
+import android.os.Process;
 import android.provider.CallLog;
+import android.telecom.TelecomManager;
+import android.text.TextUtils;
 import android.util.Log;
 
 
 import com.android.providers.contacts.util.SelectionBuilder;
+
+import java.util.Objects;
 
 public class CallComposerLocationProvider extends ContentProvider {
     private static final String TAG = CallComposerLocationProvider.class.getSimpleName();
@@ -85,8 +91,7 @@ public class CallComposerLocationProvider extends ContentProvider {
     @Override
     public Cursor query(@NonNull Uri uri, @Nullable String[] projection, @Nullable String selection,
             @Nullable String[] selectionArgs, @Nullable String sortOrder) {
-        getContext().enforceCallingPermission(Manifest.permission.ACCESS_FINE_LOCATION,
-                "Must have ACCESS_FINE_PERMISSION to access call composer locations.");
+        enforceAccessRestrictions();
         final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
         qb.setTables(TABLE_NAME);
         qb.setStrict(true);
@@ -126,8 +131,7 @@ public class CallComposerLocationProvider extends ContentProvider {
     @Nullable
     @Override
     public Uri insert(@NonNull Uri uri, @Nullable ContentValues values) {
-        getContext().enforceCallingPermission(Manifest.permission.ACCESS_FINE_LOCATION,
-                "Must have ACCESS_FINE_PERMISSION to access call composer locations.");
+        enforceAccessRestrictions();
         long id = mOpenHelper.getWritableDatabase().insert(TABLE_NAME, null, values);
         return ContentUris.withAppendedId(CallLog.Locations.CONTENT_URI, id);
     }
@@ -135,8 +139,7 @@ public class CallComposerLocationProvider extends ContentProvider {
     @Override
     public int delete(@NonNull Uri uri, @Nullable String selection,
             @Nullable String[] selectionArgs) {
-        getContext().enforceCallingPermission(Manifest.permission.ACCESS_FINE_LOCATION,
-                "Must have ACCESS_FINE_PERMISSION to access call composer locations.");
+        enforceAccessRestrictions();
         final int match = sURIMatcher.match(uri);
         switch (match) {
             case LOCATION_ID:
@@ -155,8 +158,7 @@ public class CallComposerLocationProvider extends ContentProvider {
     @Override
     public int update(@NonNull Uri uri, @Nullable ContentValues values, @Nullable String selection,
             @Nullable String[] selectionArgs) {
-        getContext().enforceCallingPermission(Manifest.permission.ACCESS_FINE_LOCATION,
-                "Must have ACCESS_FINE_PERMISSION to access call composer locations.");
+        enforceAccessRestrictions();
         throw new UnsupportedOperationException(
                 "Call composer location db does not support updates");
     }
@@ -167,5 +169,26 @@ public class CallComposerLocationProvider extends ContentProvider {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid location id in uri: " + uri, e);
         }
+    }
+
+    private void enforceAccessRestrictions() {
+        int uid = Binder.getCallingUid();
+        if (uid == Process.SYSTEM_UID || uid == Process.myUid() || uid == Process.PHONE_UID) {
+            return;
+        }
+        String defaultDialerPackageName = getContext().getSystemService(TelecomManager.class)
+                .getDefaultDialerPackage();
+        if (TextUtils.isEmpty(defaultDialerPackageName)) {
+            throw new SecurityException("Access to call composer locations is only allowed for the"
+                    + " default dialer, but the default dialer is unset");
+        }
+        String[] callingPackageCandidates = getContext().getPackageManager().getPackagesForUid(uid);
+        for (String packageCandidate : callingPackageCandidates) {
+            if (Objects.equals(packageCandidate, defaultDialerPackageName)) {
+                return;
+            }
+        }
+        throw new SecurityException("Access to call composer locations is only allowed for the "
+                + "default dialer: " + defaultDialerPackageName);
     }
 }
