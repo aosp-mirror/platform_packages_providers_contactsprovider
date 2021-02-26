@@ -7329,6 +7329,55 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     }
 
+    public void testCleanupDanglingContacts_noDanglingContacts() throws Exception {
+        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
+        RawContactUtil.createRawContactWithName(mResolver, "A", "B");
+        RawContactUtil.createRawContactWithName(mResolver, "C", "D");
+
+        provider.cleanupDanglingContacts();
+
+        Cursor contactCursor = mResolver.query(Contacts.CONTENT_URI, null, null, null, null);
+        Cursor rawContactCursor = mResolver.query(RawContacts.CONTENT_URI, null, null, null, null);
+
+        // No contacts should be deleted
+        assertEquals(2, contactCursor.getCount());
+        assertEquals(2, rawContactCursor.getCount());
+    }
+
+    public void testCleanupDanglingContacts_singleDanglingContacts() throws Exception {
+        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "A", "B");
+
+        // Change the contact_id to create dangling contact.
+        SQLiteDatabase db = provider.getDatabaseHelper().getWritableDatabase();
+        db.execSQL("UPDATE raw_contacts SET contact_id = 99999 WHERE _id = " + rawContactId + ";");
+
+        provider.cleanupDanglingContacts();
+
+        // Dangling contact should be deleted from contacts table.
+        assertEquals(0, mResolver.query(Contacts.CONTENT_URI, null, null, null, null).getCount());
+    }
+
+    public void testCleanupDanglingContacts_multipleDanglingContacts() throws Exception {
+        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "A", "B");
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "C", "D");
+        RawContactUtil.createRawContactWithName(mResolver, "E", "F");
+
+        final ContactsDatabaseHelper helper = provider.getDatabaseHelper();
+        SQLiteDatabase db = helper.getWritableDatabase();
+
+        // Change contact_id of RawContact1 and RawContact2 to create dangling contacts.
+        db.execSQL("UPDATE raw_contacts SET contact_id = 99998 WHERE _id = " + rawContactId1 + ";");
+        db.execSQL("UPDATE raw_contacts SET contact_id = 99999 WHERE _id = " + rawContactId2 + ";");
+
+        provider.cleanupDanglingContacts();
+
+        // Should only be one contact left in the contacts table.
+        // RawContact1 and RawContact2 should be deleted from the contacts table.
+        assertEquals(1, mResolver.query(Contacts.CONTENT_URI, null, null, null, null).getCount());
+    }
+
     public void testOverwritePhotoWithThumbnail() throws IOException {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
