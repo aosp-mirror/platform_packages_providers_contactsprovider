@@ -27,7 +27,7 @@
     <string name="voicemail_from_column" msgid="435732568832121444">"Келген үнкат "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Байланыштар корун көчүрүү"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Сиз буларды кылайын деп жатасыз: 1) Ичинде бардык байланыштарга тийиштүү маалыматтар жана чалуу тизмелери бар берилиштер корун тышкы сактагычка  көчүрмөлөө, 2) жана аны эмейлге жөнөтүү. Көчүрмөнү, түзмөктөн ийгиликтүү көчүрүп же эмейлден алаарыңыз менен, жок кылууну унутпаңыз."</string>
-    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Өчүрүү"</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Азыр жок кылуу"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Баштоо"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Сиздин файлыңызды жөнөтүүчү програмды тандаңыз"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"Байланыштар кору тиркелди"</string>
