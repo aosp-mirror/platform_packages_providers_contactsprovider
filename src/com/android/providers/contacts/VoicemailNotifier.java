@@ -1,5 +1,6 @@
 package com.android.providers.contacts;
 
+import android.app.BroadcastOptions;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -26,6 +27,12 @@ import java.util.Set;
 public class VoicemailNotifier {
 
     private final String TAG = "VoicemailNotifier";
+
+    /**
+     * Grant recipients of new voicemail broadcasts a 10sec allowlist so they can start a background
+     * service to do VVM processing.
+     */
+    private final long VOICEMAIL_ALLOW_LIST_DURATION_MILLIS = 10000;
 
     private final Context mContext;
     private final Uri mBaseUri;
@@ -85,7 +92,17 @@ public class VoicemailNotifier {
                     intent.putExtra(VoicemailContract.EXTRA_SELF_CHANGE,
                             callingPackages.contains(component.getPackageName()));
                 }
-                mContext.sendBroadcast(intent);
+                if (intentAction.equals(VoicemailContract.ACTION_NEW_VOICEMAIL)) {
+                    BroadcastOptions bopts = BroadcastOptions.makeBasic();
+                    bopts.setTemporaryAppWhitelistDuration(VOICEMAIL_ALLOW_LIST_DURATION_MILLIS);
+                    Log.i(TAG, String.format("sendNotification: allowMillis=%d, pkg=%s",
+                            VOICEMAIL_ALLOW_LIST_DURATION_MILLIS, component.getPackageName()));
+                    mContext.sendBroadcast(intent, android.Manifest.permission.READ_VOICEMAIL,
+                            bopts.toBundle());
+                } else {
+                    mContext.sendBroadcast(intent);
+                }
+
                 Log.v(TAG, String.format("Sent intent. act:%s, url:%s, comp:%s," +
                                 " self_change:%s", intent.getAction(), intent.getData(),
                         component.getClassName(),
