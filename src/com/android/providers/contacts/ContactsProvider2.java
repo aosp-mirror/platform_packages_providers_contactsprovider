@@ -246,6 +246,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int BACKGROUND_TASK_CLEANUP_PHOTOS = 10;
     private static final int BACKGROUND_TASK_CLEAN_DELETE_LOG = 11;
     private static final int BACKGROUND_TASK_RESCAN_DIRECTORY = 12;
+    private static final int BACKGROUND_TASK_CLEANUP_DANGLING_CONTACTS = 13;
 
     protected static final int STATUS_NORMAL = 0;
     protected static final int STATUS_UPGRADING = 1;
@@ -260,6 +261,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     /** Rate limit (in milliseconds) for photo cleanup.  Do it at most once per day. */
     private static final int PHOTO_CLEANUP_RATE_LIMIT = 24 * 60 * 60 * 1000;
+
+    /** Rate limit (in milliseconds) for dangling contacts cleanup.  Do it at most once per day. */
+    private static final int DANGLING_CONTACTS_CLEANUP_RATE_LIMIT = 24 * 60 * 60 * 1000;
 
     /** Maximum length of a phone number that can be inserted into the database */
     private static final int PHONE_NUMBER_LENGTH_LIMIT = 1000;
@@ -1460,6 +1464,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private long mLastPhotoCleanup = 0;
 
+    private long mLastDanglingContactsCleanup = 0;
+
     private FastScrollingIndexCache mFastScrollingIndexCache;
 
     // Stats about FastScrollingIndex.
@@ -1551,6 +1557,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         scheduleBackgroundTask(BACKGROUND_TASK_OPEN_WRITE_ACCESS);
         scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_PHOTOS);
         scheduleBackgroundTask(BACKGROUND_TASK_CLEAN_DELETE_LOG);
+        scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_DANGLING_CONTACTS);
 
         ContactsPackageMonitor.start(getContext());
 
@@ -1754,6 +1761,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case BACKGROUND_TASK_CLEAN_DELETE_LOG: {
                 final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
                 DeletedContactsTableUtil.deleteOldLogs(db);
+                break;
+            }
+
+            case BACKGROUND_TASK_CLEANUP_DANGLING_CONTACTS: {
+                // Check rate limit.
+                long now = System.currentTimeMillis();
+                if (now - mLastDanglingContactsCleanup > DANGLING_CONTACTS_CLEANUP_RATE_LIMIT) {
+                    mLastDanglingContactsCleanup = now;
+
+                    cleanupDanglingContacts();
+                }
                 break;
             }
         }
@@ -1981,6 +1999,28 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 db.endTransaction();
             }
         }
+    }
+
+
+    @VisibleForTesting
+    protected void cleanupDanglingContacts() {
+        // Dangling contacts are the contacts whose _id doesn't have a raw_contact_id linked with.
+        String danglingContactsSelection =
+                Contacts._ID
+                        + " NOT IN (SELECT "
+                        + RawContacts.CONTACT_ID
+                        + " FROM "
+                        + Tables.RAW_CONTACTS
+                        + " WHERE "
+                        + RawContacts.DELETED
+                        + " = 0)";
+        int danglingContactsCount =
+                mDbHelper
+                        .get()
+                        .getWritableDatabase()
+                        .delete(Tables.CONTACTS, danglingContactsSelection,
+                                /* selectionArgs= */null);
+        Log.v(TAG, danglingContactsCount + " Dangling Contacts have been cleaned up.");
     }
 
     @Override
