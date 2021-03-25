@@ -65,6 +65,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 
 import java.util.Locale;
 
@@ -1246,7 +1247,7 @@ public class LegacyApiSupport {
                     + ContactsContract.Settings.ACCOUNT_NAME + ","
                     + ContactsContract.Settings.ACCOUNT_TYPE + ","
                     + ContactsContract.Settings.SHOULD_SYNC +
-            " FROM " + Tables.SETTINGS + " LEFT OUTER JOIN " + LegacyTables.SETTINGS +
+            " FROM " + Views.SETTINGS + " LEFT OUTER JOIN " + LegacyTables.SETTINGS +
             " ON (" + ContactsContract.Settings.ACCOUNT_NAME + "="
                               + android.provider.Contacts.Settings._SYNC_ACCOUNT +
                       " AND " + ContactsContract.Settings.ACCOUNT_TYPE + "="

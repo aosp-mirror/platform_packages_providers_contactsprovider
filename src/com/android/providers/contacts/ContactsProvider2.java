@@ -123,7 +123,6 @@ import android.util.Log;
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.common.io.MoreCloseables;
-import com.android.i18n.phonenumbers.Phonenumber;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
@@ -146,12 +145,11 @@ import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Projections;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SearchIndexColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.SettingsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemPhotosColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.ContactsDatabaseHelper.ViewGroupsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ViewSettingsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 import com.android.providers.contacts.SearchIndexManager.FtsQueryBuilder;
 import com.android.providers.contacts.aggregation.AbstractContactAggregator;
@@ -1010,15 +1008,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                 + " THEN 1"
                                 + " ELSE MIN(" + Groups.SHOULD_SYNC + ")"
                                 + " END)"
-                            + " FROM " + Views.GROUPS
-                            + " WHERE " + ViewGroupsColumns.CONCRETE_ACCOUNT_NAME + "="
-                                    + SettingsColumns.CONCRETE_ACCOUNT_NAME
-                                + " AND " + ViewGroupsColumns.CONCRETE_ACCOUNT_TYPE + "="
-                                    + SettingsColumns.CONCRETE_ACCOUNT_TYPE
-                                + " AND ((" + ViewGroupsColumns.CONCRETE_DATA_SET + " IS NULL AND "
-                                    + SettingsColumns.CONCRETE_DATA_SET + " IS NULL) OR ("
-                                    + ViewGroupsColumns.CONCRETE_DATA_SET + "="
-                                    + SettingsColumns.CONCRETE_DATA_SET + "))))=0"
+                            + " FROM " + Tables.GROUPS
+                            + " WHERE " + GroupsColumns.CONCRETE_ACCOUNT_ID + "="
+                                + ViewSettingsColumns.CONCRETE_ACCOUNT_ID
+                        + "))=0"
                     + " THEN 1"
                     + " ELSE 0"
                     + " END)")
@@ -2723,9 +2716,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case SETTINGS: {
-                id = insertSettings(values);
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                break;
+                // Settings rows are referenced by the account instead of their ID.
+                return insertSettings(uri, values);
             }
 
             case STATUS_UPDATES:
@@ -3283,55 +3276,35 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return groupId;
     }
 
-    private long insertSettings(ContentValues values) {
-        // Before inserting, ensure that no settings record already exists for the
-        // values being inserted (this used to be enforced by a primary key, but that no
-        // longer works with the nullable data_set field added).
-        String accountName = values.getAsString(Settings.ACCOUNT_NAME);
-        String accountType = values.getAsString(Settings.ACCOUNT_TYPE);
-        String dataSet = values.getAsString(Settings.DATA_SET);
-        Uri.Builder settingsUri = Settings.CONTENT_URI.buildUpon();
-        if (accountName != null) {
-            settingsUri.appendQueryParameter(Settings.ACCOUNT_NAME, accountName);
-        }
-        if (accountType != null) {
-            settingsUri.appendQueryParameter(Settings.ACCOUNT_TYPE, accountType);
-        }
-        if (dataSet != null) {
-            settingsUri.appendQueryParameter(Settings.DATA_SET, dataSet);
-        }
-        Cursor c = queryLocal(settingsUri.build(), null, null, null, null, 0, null);
-        try {
-            if (c.getCount() > 0) {
-                // If a record was found, replace it with the new values.
-                String selection = null;
-                String[] selectionArgs = null;
-                if (accountName != null && accountType != null) {
-                    selection = Settings.ACCOUNT_NAME + "=? AND " + Settings.ACCOUNT_TYPE + "=?";
-                    if (dataSet == null) {
-                        selection += " AND " + Settings.DATA_SET + " IS NULL";
-                        selectionArgs = new String[] {accountName, accountType};
-                    } else {
-                        selection += " AND " + Settings.DATA_SET + "=?";
-                        selectionArgs = new String[] {accountName, accountType, dataSet};
-                    }
-                }
-                return updateSettings(values, selection, selectionArgs);
-            }
-        } finally {
-            c.close();
-        }
+    private Uri insertSettings(Uri uri, ContentValues values) {
+        final AccountWithDataSet account = resolveAccountWithDataSet(uri, values);
 
+        // Note that the following check means the local account settings cannot be created with
+        // an insert because resolveAccountWithDataSet returns null for it. However, the settings
+        // for it can be updated once it is created automatically by a raw contact or group insert.
+        if (account == null) {
+            return null;
+        }
+        final ContactsDatabaseHelper dbHelper = mDbHelper.get();
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
 
-        // If we didn't find a duplicate, we're fine to insert.
-        final long id = db.insert(Tables.SETTINGS, null, values);
+        long accountId = dbHelper.getOrCreateAccountIdInTransaction(account);
+        mSelectionArgs1[0] = String.valueOf(accountId);
+
+        int count = db.update(Views.SETTINGS, values,
+                ViewSettingsColumns.ACCOUNT_ID + "= ?", mSelectionArgs1);
 
         if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
             mVisibleTouched = true;
         }
 
-        return id;
+        Uri.Builder builder = Settings.CONTENT_URI.buildUpon()
+                .appendQueryParameter(Settings.ACCOUNT_NAME, account.getAccountName())
+                .appendQueryParameter(Settings.ACCOUNT_TYPE, account.getAccountType());
+        if (account.getDataSet() != null) {
+            builder.appendQueryParameter(Settings.DATA_SET, account.getDataSet());
+        }
+        return builder.build();
     }
 
     /**
@@ -3758,7 +3731,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case SETTINGS: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                return deleteSettings(appendAccountToSelection(uri, selection), selectionArgs);
+                return deleteSettings(appendAccountIdToSelection(uri, selection), selectionArgs);
             }
 
             case STATUS_UPDATES:
@@ -3835,9 +3808,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private int deleteSettings(String selection, String[] selectionArgs) {
+    private int deleteSettings(String initialSelection, String[] selectionArgs) {
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-        final int count = db.delete(Tables.SETTINGS, selection, selectionArgs);
+
+        int count = 0;
+        final String selection = DbQueryUtils.concatenateClauses(
+                initialSelection, Clauses.DELETABLE_SETTINGS);
+        try (Cursor cursor = db.query(Views.SETTINGS,
+                new String[] { ViewSettingsColumns.ACCOUNT_ID },
+                selection, selectionArgs, null, null, null)) {
+            while (cursor.moveToNext()) {
+                mSelectionArgs1[0] = cursor.getString(0);
+                db.delete(Tables.ACCOUNTS, AccountsColumns._ID + "=?", mSelectionArgs1);
+                count++;
+            }
+        }
         mVisibleTouched = true;
         return count;
     }
@@ -4506,7 +4491,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private int updateSettings(ContentValues values, String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-        final int count = db.update(Tables.SETTINGS, values, selection, selectionArgs);
+
+        int count = 0;
+        // We have to query for the count because the update is using a trigger and triggers
+        // don't return a count of modified rows.
+        try (Cursor cursor = db.query(Views.SETTINGS,
+                new String[] { "COUNT(*)" },
+                selection, selectionArgs, null, null, null)) {
+            if (cursor.moveToFirst()) {
+                count = cursor.getInt(0);
+            }
+        }
+        if (count > 0) {
+            db.update(Views.SETTINGS, values, selection, selectionArgs);
+        }
         if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
             mVisibleTouched = true;
         }
@@ -5287,9 +5285,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
             }
 
-            // Second, remove stale rows from Tables.SETTINGS and Tables.DIRECTORIES
-            removeStaleAccountRows(
-                    Tables.SETTINGS, Settings.ACCOUNT_NAME, Settings.ACCOUNT_TYPE, systemAccounts);
+            // Second, remove stale rows from Tables.DIRECTORIES
             removeStaleAccountRows(Tables.DIRECTORIES, Directory.ACCOUNT_NAME,
                     Directory.ACCOUNT_TYPE, systemAccounts);
 
@@ -6871,9 +6867,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case SETTINGS: {
-                qb.setTables(Tables.SETTINGS);
+                qb.setTables(Views.SETTINGS);
                 qb.setProjectionMap(sSettingsProjectionMap);
-                appendAccountFromParameter(qb, uri);
+                appendAccountIdFromParameter(qb, uri);
 
                 // When requesting specific columns, this query requires
                 // late-binding of the GroupMembership MIME-type.

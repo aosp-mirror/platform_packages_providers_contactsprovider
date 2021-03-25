@@ -219,12 +219,12 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         return ContentUris.parseId(mResolver.insert(uri, values));
     }
 
-    protected void createSettings(Account account, String shouldSync, String ungroupedVisible) {
-        createSettings(new AccountWithDataSet(account.name, account.type, null),
+    protected Uri createSettings(Account account, String shouldSync, String ungroupedVisible) {
+        return createSettings(new AccountWithDataSet(account.name, account.type, null),
                 shouldSync, ungroupedVisible);
     }
 
-    protected void createSettings(AccountWithDataSet account, String shouldSync,
+    protected Uri createSettings(AccountWithDataSet account, String shouldSync,
             String ungroupedVisible) {
         ContentValues values = new ContentValues();
         values.put(Settings.ACCOUNT_NAME, account.getAccountName());
@@ -234,7 +234,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         }
         values.put(Settings.SHOULD_SYNC, shouldSync);
         values.put(Settings.UNGROUPED_VISIBLE, ungroupedVisible);
-        mResolver.insert(Settings.CONTENT_URI, values);
+        return mResolver.insert(Settings.CONTENT_URI, values);
     }
 
     protected Uri insertOrganization(long rawContactId, ContentValues values) {
