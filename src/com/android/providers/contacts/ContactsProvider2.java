@@ -2001,26 +2001,29 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-
     @VisibleForTesting
     protected void cleanupDanglingContacts() {
-        // Dangling contacts are the contacts whose _id doesn't have a raw_contact_id linked with.
-        String danglingContactsSelection =
-                Contacts._ID
-                        + " NOT IN (SELECT "
-                        + RawContacts.CONTACT_ID
-                        + " FROM "
-                        + Tables.RAW_CONTACTS
-                        + " WHERE "
-                        + RawContacts.DELETED
-                        + " = 0)";
-        int danglingContactsCount =
-                mDbHelper
-                        .get()
-                        .getWritableDatabase()
-                        .delete(Tables.CONTACTS, danglingContactsSelection,
-                                /* selectionArgs= */null);
-        Log.v(TAG, danglingContactsCount + " Dangling Contacts have been cleaned up.");
+      // Dangling contacts are the contacts whose _id doesn't have a raw_contact_id linked with.
+      String danglingContactsSelection =
+          Contacts._ID
+              + " NOT IN (SELECT "
+              + RawContacts.CONTACT_ID
+              + " FROM "
+              + Tables.RAW_CONTACTS
+              + " WHERE "
+              + RawContacts.DELETED
+              + " = 0)";
+      int danglingContactsCount =
+          mDbHelper
+              .get()
+              .getWritableDatabase()
+              .delete(Tables.CONTACTS, danglingContactsSelection, /* selectionArgs= */ null);
+      LogFields.Builder logBuilder =
+          LogFields.Builder.aLogFields()
+              .setTaskType(LogUtils.TaskType.DANGLING_CONTACTS_CLEANUP_TASK)
+              .setResultCount(danglingContactsCount);
+      LogUtils.log(logBuilder.build());
+      Log.v(TAG, danglingContactsCount + " Dangling Contacts have been cleaned up.");
     }
 
     @Override
