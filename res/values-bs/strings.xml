@@ -26,7 +26,7 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Ostalo"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Govorna pošta od "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopiraj bazu podataka kontakata"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"Upravo ćete 1) napraviti kopiju svoje baze podataka koja sadrži sve informacije o kontaktima i sve popise poziva u unutrašnjoj pohrani i 2) poslati tu kopiju e-poštom. Ne zaboravite izbrisati kopiju čim je uspješno kopirate s uređaja ili čim primite e-poruku."</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Upravo ćete 1) napraviti kopiju svoje baze podataka koja sadrži sve informacije o kontaktima i sve zapisnike poziva u unutrašnjoj pohrani i 2) poslati tu kopiju e-poštom. Ne zaboravite izbrisati kopiju čim je uspješno kopirate s uređaja ili čim primite e-poruku."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Izbriši sada"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Započni"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Odaberite program za slanje fajla"</string>
