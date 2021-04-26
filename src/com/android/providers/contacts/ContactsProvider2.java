@@ -20,6 +20,7 @@ import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
+import android.os.Looper;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
@@ -62,6 +63,7 @@ import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.CancellationSignal;
+import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor.AutoCloseInputStream;
 import android.os.RemoteException;
@@ -256,6 +258,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     /** Limit for the maximum number of social stream items to store under a raw contact. */
     private static final int MAX_STREAM_ITEMS_PER_RAW_CONTACT = 5;
+
+    /** Rate limit (in milliseconds) for notify change.  Do it as most once every 5 seconds. */
+    private static final int NOTIFY_CHANGE_RATE_LIMIT = 5 * 1000;
 
     /** Rate limit (in milliseconds) for photo cleanup.  Do it at most once per day. */
     private static final int PHOTO_CLEANUP_RATE_LIMIT = 24 * 60 * 60 * 1000;
@@ -1455,6 +1460,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private ContactsTaskScheduler mTaskScheduler;
 
+    private long mLastNotifyChange = 0;
+
     private long mLastPhotoCleanup = 0;
 
     private long mLastDanglingContactsCleanup = 0;
@@ -2611,9 +2618,34 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mSyncToNetwork = false;
     }
 
-    protected void notifyChange(boolean syncToNetwork) {
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
+    private final Runnable mChangeNotifier = () -> {
+        Log.v(TAG, "Scheduled notifyChange started.");
+        mLastNotifyChange = System.currentTimeMillis();
         getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null,
+                false);
+    };
+
+    protected void notifyChange(boolean syncToNetwork) {
+        if (syncToNetwork) {
+            // Changes to sync to network won't be rate limited.
+            getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null,
                 syncToNetwork);
+        } else {
+            // Rate limit the changes which are not to sync to network.
+            long uptimeMillis = System.currentTimeMillis();
+
+            mHandler.removeCallbacks(mChangeNotifier);
+            if (uptimeMillis > mLastNotifyChange + NOTIFY_CHANGE_RATE_LIMIT) {
+                // Notify change immediately, since it has been a while since last notify.
+                mLastNotifyChange = uptimeMillis;
+                getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null,
+                   false);
+            } else {
+                // Schedule a deleyed notify, to ensure the very last notifyChange will be executed.
+                mHandler.postDelayed(mChangeNotifier, NOTIFY_CHANGE_RATE_LIMIT * 2);
+            }
+         }
     }
 
     protected void setProviderStatus(int status) {
