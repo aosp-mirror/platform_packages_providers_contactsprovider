@@ -2633,16 +2633,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 syncToNetwork);
         } else {
             // Rate limit the changes which are not to sync to network.
-            long uptimeMillis = System.currentTimeMillis();
+            long currentTimeMillis = System.currentTimeMillis();
 
             mHandler.removeCallbacks(mChangeNotifier);
-            if (uptimeMillis > mLastNotifyChange + NOTIFY_CHANGE_RATE_LIMIT) {
+            if (currentTimeMillis > mLastNotifyChange + NOTIFY_CHANGE_RATE_LIMIT) {
                 // Notify change immediately, since it has been a while since last notify.
-                mLastNotifyChange = uptimeMillis;
+                mLastNotifyChange = currentTimeMillis;
                 getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null,
                    false);
             } else {
-                // Schedule a deleyed notify, to ensure the very last notifyChange will be executed.
+                // Schedule a delayed notification, to ensure the very last notifyChange will be
+                // executed.
+                // Delay is set to two-fold of rate limit, and the subsequent notifyChange called
+                // (if ever) between the (NOTIFY_CHANGE_RATE_LIMIT, 2 * NOTIFY_CHANGE_RATE_LIMIT)
+                // time window, will cancel this delayed notification.
+                // The delayed notification is only expected to run if notifyChange is not invoked
+                // between the above time window.
                 mHandler.postDelayed(mChangeNotifier, NOTIFY_CHANGE_RATE_LIMIT * 2);
             }
          }
