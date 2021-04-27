@@ -39,6 +39,12 @@ public class LogUtils {
         int DELETE = 4;
     }
 
+    // Keep in sync with ContactsProviderStatus#TaskType in
+    // frameworks/proto_logging/stats/atoms.proto file.
+    public interface TaskType {
+        int DANGLING_CONTACTS_CLEANUP_TASK = 1;
+    }
+
     // Keep in sync with ContactsProviderStatus#CallerType in
     // frameworks/proto_logging/stats/atoms.proto file.
     public interface CallerType {
@@ -55,6 +61,7 @@ public class LogUtils {
                 .writeInt(logFields.getUriType())
                 .writeInt(getCallerType(logFields.isCallerIsSyncAdapter()))
                 .writeInt(getResultType(logFields.getException()))
+                .writeInt(logFields.getTaskType())
                 .writeInt(logFields.getResultCount())
                 .writeLong(getLatencyMicros(logFields.getStartNanos()))
                 .usePooledBuffer()
