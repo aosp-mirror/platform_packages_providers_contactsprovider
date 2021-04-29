@@ -60,6 +60,7 @@ import android.net.Uri;
 import android.net.Uri.Builder;
 import android.os.AsyncTask;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.ParcelFileDescriptor;
@@ -1475,6 +1476,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "onCreate user="
                     + android.os.Process.myUserHandle().getIdentifier());
+        }
+        if (Build.IS_DEBUGGABLE) {
+            StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder()
+                    .detectLeakedSqlLiteObjects()  // for SqlLiteCursor
+                    .detectLeakedClosableObjects() // for any Cursor
+                    .penaltyLog()
+                    .build());
         }
 
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
