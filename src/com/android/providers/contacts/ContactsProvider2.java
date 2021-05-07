@@ -61,6 +61,7 @@ import android.net.Uri;
 import android.net.Uri.Builder;
 import android.os.AsyncTask;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Handler;
@@ -1483,6 +1484,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Log.v(TAG, "onCreate user="
                     + android.os.Process.myUserHandle().getIdentifier());
         }
+        if (Build.IS_DEBUGGABLE) {
+            StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder()
+                    .detectLeakedSqlLiteObjects()  // for SqlLiteCursor
+                    .detectLeakedClosableObjects() // for any Cursor
+                    .penaltyLog()
+                    .build());
+        }
 
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
             Log.d(Constants.PERFORMANCE_TAG, "ContactsProvider2.onCreate start");
@@ -2597,16 +2605,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 syncToNetwork);
         } else {
             // Rate limit the changes which are not to sync to network.
-            long uptimeMillis = System.currentTimeMillis();
+            long currentTimeMillis = System.currentTimeMillis();
 
             mHandler.removeCallbacks(mChangeNotifier);
-            if (uptimeMillis > mLastNotifyChange + NOTIFY_CHANGE_RATE_LIMIT) {
+            if (currentTimeMillis > mLastNotifyChange + NOTIFY_CHANGE_RATE_LIMIT) {
                 // Notify change immediately, since it has been a while since last notify.
-                mLastNotifyChange = uptimeMillis;
+                mLastNotifyChange = currentTimeMillis;
                 getContext().getContentResolver().notifyChange(ContactsContract.AUTHORITY_URI, null,
                    false);
             } else {
-                // Schedule a deleyed notify, to ensure the very last notifyChange will be executed.
+                // Schedule a delayed notification, to ensure the very last notifyChange will be
+                // executed.
+                // Delay is set to two-fold of rate limit, and the subsequent notifyChange called
+                // (if ever) between the (NOTIFY_CHANGE_RATE_LIMIT, 2 * NOTIFY_CHANGE_RATE_LIMIT)
+                // time window, will cancel this delayed notification.
+                // The delayed notification is only expected to run if notifyChange is not invoked
+                // between the above time window.
                 mHandler.postDelayed(mChangeNotifier, NOTIFY_CHANGE_RATE_LIMIT * 2);
             }
          }
