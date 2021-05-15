@@ -26,7 +26,7 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Andre"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Telefonsvarerbesked fra "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopiér database med kontakter"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"Du er ved at 1) lave en kopi af din database, som indeholder alle oplysninger om dine kontakter og al opkaldshistorik, til det interne lager, og 2) sende den som mail. Husk at slette kopien, så snart du har kopieret den fra enheden, eller mailen er modtaget."</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Du er ved at 1) lave en kopi af din database, som indeholder alle oplysninger om dine kontakter og alle opkaldslister, til det interne lager, og 2) sende den som mail. Husk at slette kopien, så snart du har kopieret den fra enheden, eller mailen er modtaget."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Slet nu"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Start"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Vælg et program, for at sende din fil"</string>
