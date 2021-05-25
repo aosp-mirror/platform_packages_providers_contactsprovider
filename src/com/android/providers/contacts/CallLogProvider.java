@@ -121,7 +121,7 @@ public class CallLogProvider extends ContentProvider {
         sURIMatcher.addURI(CallLog.SHADOW_AUTHORITY, "calls", CALLS);
     }
 
-    private static final ArrayMap<String, String> sCallsProjectionMap;
+    public static final ArrayMap<String, String> sCallsProjectionMap;
     static {
 
         // Calls projection map
@@ -536,19 +536,8 @@ public class CallLogProvider extends ContentProvider {
 
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder, false /*isQuery*/);
-
-        final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-        qb.setTables(Tables.CALLS);
-        qb.setProjectionMap(sCallsProjectionMap);
-        qb.setStrict(true);
-        // If the caller doesn't have READ_VOICEMAIL, make sure they can't
-        // do any SQL shenanigans to get access to the voicemails. If the caller does have the
-        // READ_VOICEMAIL permission, then they have sufficient permissions to access any data in
-        // the database, so the strict check is unnecessary.
-        if (!mVoicemailPermissions.callerHasReadAccess(getCallingPackage())) {
-            qb.setStrictGrammar(true);
-        }
-
+        boolean hasReadVoicemailPermission = mVoicemailPermissions.callerHasReadAccess(
+                getCallingPackage());
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         final int matchedUriId = sURIMatcher.match(uri);
         switch (matchedUriId) {
@@ -563,11 +552,8 @@ public class CallLogProvider extends ContentProvider {
                 throw new UnsupportedOperationException("Cannot update URL: " + uri);
         }
 
-        int rowsUpdated = qb.update(db, values, selectionBuilder.build(), selectionArgs);
-        if (rowsUpdated > 0) {
-            DbModifierWithNotification.notifyCallLogChange(getContext());
-        }
-        return rowsUpdated;
+        return createDatabaseModifier(db, hasReadVoicemailPermission).update(uri, Tables.CALLS,
+                values, selectionBuilder.build(), selectionArgs);
     }
 
     private int deleteInternal(Uri uri, String selection, String[] selectionArgs) {
@@ -582,29 +568,14 @@ public class CallLogProvider extends ContentProvider {
         SelectionBuilder selectionBuilder = new SelectionBuilder(selection);
         checkVoicemailPermissionAndAddRestriction(uri, selectionBuilder, false /*isQuery*/);
 
-        final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
-        qb.setTables(Tables.CALLS);
-        qb.setProjectionMap(sCallsProjectionMap);
-        qb.setStrict(true);
-        // If the caller doesn't have READ_VOICEMAIL, make sure they can't
-        // do any SQL shenanigans to get access to the voicemails. If the caller does have the
-        // READ_VOICEMAIL permission, then they have sufficient permissions to access any data in
-        // the database, so the strict check is unnecessary.
-        if (!mVoicemailPermissions.callerHasReadAccess(getCallingPackage())) {
-            qb.setStrictGrammar(true);
-        }
-
+        boolean hasReadVoicemailPermission =
+                mVoicemailPermissions.callerHasReadAccess(getCallingPackage());
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         final int matchedUriId = sURIMatcher.match(uri);
         switch (matchedUriId) {
             case CALLS:
-                // TODO: Special case - We may want to forward the delete request on user 0 to the
-                // shadow provider too.
-                int deletedCount = qb.delete(db, selectionBuilder.build(), selectionArgs);
-                if (deletedCount > 0) {
-                    DbModifierWithNotification.notifyCallLogChange(getContext());
-                }
-                return deletedCount;
+                return createDatabaseModifier(db, hasReadVoicemailPermission).delete(Tables.CALLS,
+                    selectionBuilder.build(), selectionArgs);
             default:
                 throw new UnsupportedOperationException("Cannot delete that URL: " + uri);
         }
@@ -618,8 +589,9 @@ public class CallLogProvider extends ContentProvider {
      * Returns a {@link DatabaseModifier} that takes care of sending necessary notifications
      * after the operation is performed.
      */
-    private DatabaseModifier createDatabaseModifier(SQLiteDatabase db) {
-        return new DbModifierWithNotification(Tables.CALLS, db, getContext());
+    private DatabaseModifier createDatabaseModifier(SQLiteDatabase db, boolean hasReadVoicemail) {
+        return new DbModifierWithNotification(Tables.CALLS, db, null, hasReadVoicemail,
+                getContext());
     }
 
     /**
