@@ -2319,12 +2319,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
             try {
                 mDbHelper.get().createSimAccountIdInTransaction(
                         AccountWithDataSet.get(accountName, accountType, null), simSlot, efType);
-                getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
                 db.setTransactionSuccessful();
-                return response;
             } finally {
                 db.endTransaction();
             }
+            getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
+            return response;
         } else if (SimContacts.REMOVE_SIM_ACCOUNT_METHOD.equals(method)) {
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
                     MANAGE_SIM_ACCOUNTS_PERMISSION);
@@ -2338,13 +2338,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
             db.beginTransaction();
             try {
                 mDbHelper.get().removeSimAccounts(simSlot);
-                getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
                 scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
                 db.setTransactionSuccessful();
-                return response;
             } finally {
                 db.endTransaction();
             }
+            getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
+            return response;
         } else if (SimContacts.QUERY_SIM_ACCOUNTS_METHOD.equals(method)) {
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
             final Bundle response = new Bundle();
