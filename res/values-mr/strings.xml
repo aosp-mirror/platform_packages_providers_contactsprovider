@@ -28,8 +28,8 @@
     <string name="debug_dump_title" msgid="4916885724165570279">"संपर्क डेटाबेस कॉपी करा"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"तुम्ही 1) आपल्‍या डेटाबेसची प्रत बनवणार आहात जिच्‍यामध्‍ये सर्व संपर्कांसंबंधी माहिती आणि अंतर्गत संचयनावरील कॉल लॉग समाविष्‍ट असतात आणि 2) ती ईमेल करणार आहात. तुम्ही डिव्‍हाइसवरून यशस्‍वीरित्‍या प्रत कॉपी केल्‍यानंतर किंवा ईमेल प्राप्त केल्‍यानंतर लगेच ती हटविण्‍याचे लक्षात ठेवा."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"आता हटवा"</string>
-    <string name="debug_dump_start_button" msgid="2837506913757600001">"सुरू करा"</string>
-    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"तुमची फाइल पाठविण्‍यासाठी एक प्रोग्राम निवडा"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"प्रारंभ करा"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"तुमची फाईल पाठविण्‍यासाठी एक प्रोग्राम निवडा"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"संपर्क Db संलग्‍न केला"</string>
     <string name="debug_dump_email_body" msgid="4577749800871444318">"संलग्‍न केलेला माझ्‍या सर्व संपर्क माहितीसह माझा संपर्क डेटाबेस आहे. काळजीपूर्वक हाताळणी करा."</string>
 </resources>
