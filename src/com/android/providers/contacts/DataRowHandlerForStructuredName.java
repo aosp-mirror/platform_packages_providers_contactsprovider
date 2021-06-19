@@ -63,7 +63,7 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
 
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
-            Cursor c, boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
+            Cursor c, boolean callerIsSyncAdapter) {
         final long dataId = c.getLong(DataUpdateQuery._ID);
         final long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
@@ -74,7 +74,7 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
 
         fixStructuredNameComponents(augmented, values);
 
-        super.update(db, txContext, values, c, callerIsSyncAdapter, callerIsMetadataSyncAdapter);
+        super.update(db, txContext, values, c, callerIsSyncAdapter);
         if (values.containsKey(StructuredName.DISPLAY_NAME)) {
             augmented.putAll(values);
             String name = augmented.getAsString(StructuredName.DISPLAY_NAME);
