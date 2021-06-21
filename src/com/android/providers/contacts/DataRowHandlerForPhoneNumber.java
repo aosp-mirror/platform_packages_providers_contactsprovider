@@ -58,10 +58,10 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
 
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
-            Cursor c, boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
+            Cursor c, boolean callerIsSyncAdapter) {
         fillNormalizedNumber(values);
 
-        if (!super.update(db, txContext, values, c, callerIsSyncAdapter, callerIsMetadataSyncAdapter)) {
+        if (!super.update(db, txContext, values, c, callerIsSyncAdapter)) {
             return false;
         }
 
