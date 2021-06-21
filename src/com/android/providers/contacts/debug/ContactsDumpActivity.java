@@ -66,6 +66,13 @@ public class ContactsDumpActivity extends Activity implements OnClickListener {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        getWindow().addSystemFlags(android.view.WindowManager.LayoutParams
+                .SYSTEM_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS);
+    }
+
+    @Override
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.confirm:
