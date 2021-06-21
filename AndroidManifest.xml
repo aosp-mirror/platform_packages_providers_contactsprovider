@@ -4,6 +4,8 @@
         android:sharedUserLabel="@string/sharedUserLabel">
 
     <uses-permission android:name="android.permission.BIND_DIRECTORY_SEARCH" />
+    <!-- For sending voicemail intents -->
+    <uses-permission android:name="android.permission.CHANGE_DEVICE_IDLE_TEMP_WHITELIST" />
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <uses-permission android:name="android.permission.GET_ACCOUNTS_PRIVILEGED" />
     <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS" />
@@ -18,11 +20,17 @@
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <uses-permission android:name="android.permission.USE_RESERVED_DISK" />
     <uses-permission android:name="android.permission.READ_DEVICE_CONFIG" />
+    <uses-permission android:name="android.permission.HIDE_NON_SYSTEM_OVERLAY_WINDOWS" />
 
     <permission
             android:name="android.permission.SEND_CALL_LOG_CHANGE"
             android:label="Broadcast that a change happened to the call log."
             android:protectionLevel="signature|system"/>
+
+    <permission
+        android:name="android.contacts.permission.MANAGE_SIM_ACCOUNTS"
+        android:label="Change known SIM accounts in ContactsProvider."
+        android:protectionLevel="signature"/>
 
     <application android:process="android.process.acore"
         android:label="@string/app_label"
@@ -59,13 +67,24 @@
             android:writePermission="android.permission.WRITE_CALL_LOG">
         </provider>
 
+        <!-- Separate provider for the locations stored in call provider.
+             Uses a different db in order to prevent SQL injection attacks from bypassing
+             location permission requirements -->
+        <provider android:name="CallComposerLocationProvider"
+            android:authorities="call_composer_locations"
+            android:syncable="false" android:multiprocess="false"
+            android:exported="true"
+            android:readPermission="android.permission.READ_CALL_LOG"
+            android:writePermission="android.permission.WRITE_CALL_LOG">
+        </provider>
+
         <provider android:name="ShadowCallLogProvider"
                   android:authorities="call_log_shadow"
                   android:syncable="false" android:multiprocess="false"
                   android:exported="true"
                   android:directBootAware="true"
-                  android:readPermission="android.permission.MANAGE_USERS"
-                  android:writePermission="android.permission.MANAGE_USERS">
+                  android:readPermission="android.permission.INTERACT_ACROSS_USERS"
+                  android:writePermission="android.permission.INTERACT_ACROSS_USERS">
         </provider>
 
         <!-- Note: While this provider does not declare a permission explicitly, it enforces that
@@ -77,14 +96,9 @@
             android:exported="true">
         </provider>
 
-        <provider android:name="ContactMetadataProvider"
-                  android:authorities="com.android.contacts.metadata"
-                  android:multiprocess="false"
-                  android:exported="true">
-        </provider>
-
         <!-- Handles database upgrades after OTAs, then disables itself -->
-        <receiver android:name="ContactsUpgradeReceiver">
+        <receiver android:name="ContactsUpgradeReceiver"
+            android:exported="true">
             <!-- This broadcast is sent after the core system has finished
                  booting, before the home app is launched or BOOT_COMPLETED
                  is sent. -->
@@ -94,6 +108,7 @@
         </receiver>
 
         <receiver android:name="PhoneAccountRegistrationReceiver"
+                android:exported="true"
                 android:permission="android.permission.BROADCAST_PHONE_ACCOUNT_REGISTRATION">
             <!-- Broadcast sent after a phone account is registered in telecom. -->
             <intent-filter>
@@ -101,7 +116,8 @@
             </intent-filter>
         </receiver>
 
-        <receiver android:name="LocaleChangeReceiver">
+        <receiver android:name="LocaleChangeReceiver"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.LOCALE_CHANGED"/>
             </intent-filter>
@@ -110,6 +126,7 @@
         <activity android:name=".debug.ContactsDumpActivity"
                 android:label="@string/debug_dump_title"
                 android:theme="@android:style/Theme.Holo.Dialog"
+                android:exported="true"
                 >
             <intent-filter>
                 <action android:name="com.android.providers.contacts.DUMP_DATABASE"/>
