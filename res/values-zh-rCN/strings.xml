@@ -24,7 +24,7 @@
     <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"点按即可完成升级。"</string>
     <string name="default_directory" msgid="93961630309570294">"通讯录"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"其他"</string>
-    <string name="voicemail_from_column" msgid="435732568832121444">"语音信息发送人 "</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"语音邮件发件人 "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"复制通讯录数据库"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"您将要执行以下操作：1) 在内部存储设备中，创建包括通讯录相关信息和所有通话记录的数据库的副本；2) 通过电子邮件发送该副本。从设备中成功复制该副本或在电子邮件送达之后，请务必及时删除该副本。"</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"立即删除"</string>
