@@ -29,7 +29,7 @@
     <string name="debug_dump_database_message" msgid="406438635002392290">"Та 1) бүх харилцагчидтай холбоотой мэдээллүүд болон ярианы жагсаалтыг агуулсан өөрийн өгөгдлийн сангийн хуулбарыг дотоод санд хадгалах, мөн 2) имэйлдэх гэж байна. Та үүнийг төхөөрөмжөөсөө амжилттай хуулж дуусах буюу имэйлээр хүлээж авсны дараа устгах хэрэгтэйг санаарай."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Одоо устгах"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"Эхлэх"</string>
-    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Өөрийн файлийг илгээх програмыг сонгоно уу"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Өөрийн файлийг илгээх программыг сонгоно уу"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"Харилцагчдын Db-г хавсаргав"</string>
     <string name="debug_dump_email_body" msgid="4577749800871444318">"Хавсралтад миний бүх харилцагчийн мэдээлэл бүхий өгөгдлийн сан байгаа. Болгоомжтой харьцана уу."</string>
 </resources>
