@@ -30,8 +30,6 @@ import android.provider.ContactsContract.DeletedContacts;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.Groups;
-import android.provider.ContactsContract.MetadataSync;
-import android.provider.ContactsContract.MetadataSyncState;
 import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.PinnedPositions;
 import android.provider.ContactsContract.RawContacts;
@@ -51,8 +49,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DirectoryColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.MetadataSyncStateColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NicknameLookupColumns;
@@ -63,7 +59,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.testutil.TestUtil;
 import com.android.providers.contacts.util.PropertyUtils;
 
 /**
@@ -225,6 +220,8 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableColumn(AccountsColumns.ACCOUNT_NAME, TEXT, false, null),
             new TableColumn(AccountsColumns.ACCOUNT_TYPE, TEXT, false, null),
             new TableColumn(AccountsColumns.DATA_SET, TEXT, false, null),
+            new TableColumn(AccountsColumns.SIM_SLOT_INDEX, INTEGER, false, null),
+            new TableColumn(AccountsColumns.SIM_EF_TYPE, INTEGER, false, null),
     };
 
     private static final TableColumn[] CONTACTS_COLUMNS = new TableColumn[] {
@@ -529,24 +526,10 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableColumn(DataUsageStatColumns.LR_LAST_TIME_USED, INTEGER, true, "0"),
     };
 
-    private static final TableColumn[] METADATA_SYNC_COLUMNS = new TableColumn[] {
-            new TableColumn(MetadataSync._ID, INTEGER, false, null),
-            new TableColumn(MetadataSync.RAW_CONTACT_BACKUP_ID, TEXT, true, null),
-            new TableColumn(MetadataSyncColumns.ACCOUNT_ID, INTEGER, true, null),
-            new TableColumn(MetadataSync.DATA, TEXT, false, null),
-            new TableColumn(MetadataSync.DELETED, INTEGER, true, "0"),
-    };
-
     private static final TableColumn[] PRE_AUTHORIZED_URIS_COLUMNS = new TableColumn[] {
             new TableColumn(PreAuthorizedUris._ID, INTEGER, false, null),
             new TableColumn(PreAuthorizedUris.URI, STRING, true, null),
             new TableColumn(PreAuthorizedUris.EXPIRATION, INTEGER, true, "0"),
-    };
-
-    private static final TableColumn[] METADATA_SYNC_STATE_COLUMNS = new TableColumn[] {
-            new TableColumn(MetadataSyncState._ID, INTEGER, false, null),
-            new TableColumn(MetadataSyncStateColumns.ACCOUNT_ID, INTEGER, true, null),
-            new TableColumn(MetadataSyncState.STATE, BLOB, false, null),
     };
 
     private static final TableColumn[] PRESENCE_COLUMNS = new TableColumn[] {
@@ -592,9 +575,7 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableListEntry(Tables.STATUS_UPDATES, STATUS_UPDATES_COLUMNS),
             new TableListEntry(Tables.DIRECTORIES, DIRECTORIES_COLUMNS),
             new TableListEntry(Tables.DATA_USAGE_STAT, DATA_USAGE_STAT_COLUMNS),
-            new TableListEntry(Tables.METADATA_SYNC, METADATA_SYNC_COLUMNS),
             new TableListEntry(Tables.PRE_AUTHORIZED_URIS, PRE_AUTHORIZED_URIS_COLUMNS),
-            new TableListEntry(Tables.METADATA_SYNC_STATE, METADATA_SYNC_STATE_COLUMNS),
             new TableListEntry(Tables.PRESENCE, PRESENCE_COLUMNS),
             new TableListEntry(Tables.AGGREGATED_PRESENCE, AGGREGATED_PRESENCE_COLUMNS)
     };
