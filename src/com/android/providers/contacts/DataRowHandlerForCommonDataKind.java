@@ -49,15 +49,14 @@ public class DataRowHandlerForCommonDataKind extends DataRowHandler {
 
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
-            Cursor c, boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
+            Cursor c, boolean callerIsSyncAdapter) {
         final long dataId = c.getLong(DataUpdateQuery._ID);
         final ContentValues augmented = getAugmentedValues(db, dataId, values);
         if (augmented == null) {        // No change
             return false;
         }
         enforceTypeAndLabel(augmented);
-        return super.update(db, txContext, values, c, callerIsSyncAdapter,
-                callerIsMetadataSyncAdapter);
+        return super.update(db, txContext, values, c, callerIsSyncAdapter);
     }
 
     /**
