@@ -122,6 +122,7 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
         int oldVersion = 1108;
         oldVersion = upgradeTo1109(oldVersion);
         oldVersion = upgradeTo1600(oldVersion);
+        oldVersion = upgradeTo1601(oldVersion);
         oldVersion = upgrade(oldVersion, ContactsDatabaseHelper.DATABASE_VERSION);
         assertEquals(ContactsDatabaseHelper.DATABASE_VERSION, oldVersion);
         assertDatabaseStructureSameAsList(TABLE_LIST, /* isNewDatabase =*/ false);
@@ -243,6 +244,59 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
         return MY_VERSION;
     }
 
+    private int upgradeTo1601(int upgradeFrom) {
+        final int MY_VERSION = 1601;
+
+        mHelper.onUpgrade(mDb, upgradeFrom, MY_VERSION);
+
+        try (Cursor c = mDb.rawQuery("select "
+            + "_id, account_name, account_type, data_set, ungrouped_visible, should_sync, "
+            + "x_is_default from accounts order by _id", null)) {
+            BaseContactsProvider2Test.assertCursorValuesOrderly(c,
+                cv(Contacts._ID, 1,
+                    "account_name", null,
+                    "account_type", null,
+                    "data_set", null,
+                    "ungrouped_visible", 1,
+                    "should_sync", 0,
+                    "x_is_default", 0
+                ),
+                cv(Contacts._ID, 2,
+                    "account_name", "visible",
+                    "account_type", "type1",
+                    "data_set", null,
+                    "ungrouped_visible", 1,
+                    "should_sync", 1,
+                    "x_is_default", 0
+                ),
+                cv(Contacts._ID, 3,
+                    "account_name", "visible",
+                    "account_type", "type1",
+                    "data_set", "ds_not_visible",
+                    "ungrouped_visible", 0,
+                    "should_sync", 1,
+                    "x_is_default", 0
+                ),
+                cv(Contacts._ID, 4,
+                    "account_name", "not_syncable",
+                    "account_type", "type1",
+                    "data_set", null,
+                    "ungrouped_visible", 0,
+                    "should_sync", 0,
+                    "x_is_default", 0
+                ),
+                cv(Contacts._ID, 5,
+                    "account_name", "no_settings",
+                    "account_type", "type2",
+                    "data_set", null,
+                    "ungrouped_visible", 0,
+                    "should_sync", 1,
+                    "x_is_default", 0
+                ));
+        }
+        return MY_VERSION;
+    }
+
     private int upgrade(int upgradeFrom, int upgradeTo) {
         if (upgradeFrom < upgradeTo) {
             mHelper.onUpgrade(mDb, upgradeFrom, upgradeTo);
@@ -274,7 +328,8 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableColumn(AccountsColumns.SIM_SLOT_INDEX, INTEGER, false, null),
             new TableColumn(AccountsColumns.SIM_EF_TYPE, INTEGER, false, null),
             new TableColumn(AccountsColumns.UNGROUPED_VISIBLE, INTEGER, true, "0"),
-            new TableColumn(AccountsColumns.SHOULD_SYNC, INTEGER, true, "1")
+            new TableColumn(AccountsColumns.SHOULD_SYNC, INTEGER, true, "1"),
+            new TableColumn(AccountsColumns.IS_DEFAULT, INTEGER, true, "0")
     };
 
     private static final TableColumn[] CONTACTS_COLUMNS = new TableColumn[] {

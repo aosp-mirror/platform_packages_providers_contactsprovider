@@ -146,7 +146,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1600-1699 T
      * </pre>
      */
-    static final int DATABASE_VERSION = 1600;
+    static final int DATABASE_VERSION = 1601;
     private static final int MINIMUM_SUPPORTED_VERSION = 700;
 
     @VisibleForTesting
@@ -689,6 +689,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String SIM_EF_TYPE = "sim_ef_type";
         String UNGROUPED_VISIBLE = Settings.UNGROUPED_VISIBLE;
         String SHOULD_SYNC = Settings.SHOULD_SYNC;
+        String IS_DEFAULT = Settings.IS_DEFAULT;
 
         String CONCRETE_ACCOUNT_NAME = Tables.ACCOUNTS + "." + ACCOUNT_NAME;
         String CONCRETE_ACCOUNT_TYPE = Tables.ACCOUNTS + "." + ACCOUNT_TYPE;
@@ -1213,7 +1214,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 AccountsColumns.SIM_SLOT_INDEX + " INTEGER, " +
                 AccountsColumns.SIM_EF_TYPE + " INTEGER, " +
                 AccountsColumns.UNGROUPED_VISIBLE + " INTEGER NOT NULL DEFAULT 0," +
-                AccountsColumns.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1" + ");");
+                AccountsColumns.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1," +
+                AccountsColumns.IS_DEFAULT + " INTEGER NOT NULL DEFAULT 0" + ");");
 
         // Note, there are two sets of the usage stat columns: LR_* and RAW_*.
         // RAW_* contain the real values, which clients can't access.  The column names start
@@ -2614,6 +2616,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1600;
         }
 
+        if (isUpgradeRequired(oldVersion, newVersion, 1601)) {
+            upgradeToVersion1601(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1601;
+        }
+
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
         // yet, until CallLogDatabaseHelper moves the data.
 
@@ -3435,6 +3443,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "account_name IS NULL AND account_type IS NULL AND data_set IS NULL", null);
     }
 
+    private void upgradeToVersion1601(SQLiteDatabase db) {
+        try {
+            db.execSQL("ALTER TABLE accounts ADD x_is_default INTEGER NOT NULL DEFAULT 0;");
+        } catch (SQLException ignore) {
+            Log.v(TAG, "Version 1601: Columns already exist, skipping upgrade steps.");
+        }
+    }
 
     /**
      * This method is only used in upgradeToVersion1101 method, and should not be used in other
