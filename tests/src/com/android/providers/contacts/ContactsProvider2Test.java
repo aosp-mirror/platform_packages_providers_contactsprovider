@@ -9124,6 +9124,67 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         );
     }
 
+    public void testDefaultAccountSet_throwException() {
+        try {
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                    null, null);
+            fail();
+        } catch (SecurityException expected) {
+        }
+
+        mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
+        try {
+            Bundle bundle = new Bundle();
+            bundle.putString(Settings.ACCOUNT_NAME, "a"); // no account type specified
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                    null, bundle);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+
+        try {
+            Bundle bundle = new Bundle();
+            bundle.putString(Settings.ACCOUNT_NAME, "a");
+            bundle.putString(Settings.ACCOUNT_TYPE, "b");
+            bundle.putString(Settings.DATA_SET, "c");
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                    null, bundle);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    public void testDefaultAccountSetAndQuery() {
+        Bundle response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                Settings.QUERY_DEFAULT_ACCOUNT_METHOD, null, null);
+        Account account = response.getParcelable(Settings.KEY_DEFAULT_ACCOUNT);
+        assertNull(account);
+
+        mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
+        // Set (a, b) account as the default account.
+        Bundle bundle = new Bundle();
+        bundle.putString(Settings.ACCOUNT_NAME, "a");
+        bundle.putString(Settings.ACCOUNT_TYPE, "b");
+        mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                null, bundle);
+
+        response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                Settings.QUERY_DEFAULT_ACCOUNT_METHOD, null, null);
+        account = response.getParcelable(Settings.KEY_DEFAULT_ACCOUNT);
+        assertEquals("a", account.name);
+        assertEquals("b", account.type);
+
+        // Set NULL account as default account.
+        bundle = new Bundle();
+        mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+            null, bundle);
+
+        response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                Settings.QUERY_DEFAULT_ACCOUNT_METHOD, null, null);
+        account = response.getParcelable(Settings.KEY_DEFAULT_ACCOUNT);
+        assertNull(account);
+    }
+
     public void testPinnedPositionsDemoteIllegalArguments() {
         try {
             mResolver.call(ContactsContract.AUTHORITY_URI, PinnedPositions.UNDEMOTE_METHOD,

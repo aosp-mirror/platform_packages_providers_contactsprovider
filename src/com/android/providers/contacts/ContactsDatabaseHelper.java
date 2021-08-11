@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.accounts.Account;
 import android.app.ActivityManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -4135,6 +4136,50 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         final SQLiteDatabase db = getWritableDatabase();
         return db.delete(Tables.ACCOUNTS, AccountsColumns.SIM_SLOT_INDEX + "=?",
                 new String[]{String.valueOf(simSlot)});
+    }
+
+    /**
+     * Set is_default column for the given account name and account type.
+     *
+     * @param accountName The account name to be set to default.
+     * @param accountType The account type to be set to default.
+     */
+    public void setDefaultAccount(String accountName, String accountType) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.execSQL(
+            "UPDATE " + Tables.ACCOUNTS +
+                " SET " + AccountsColumns.IS_DEFAULT + "=0" +
+                " WHERE " + AccountsColumns.IS_DEFAULT + "=1");
+
+        ContentValues values = new ContentValues();
+        if (!TextUtils.isEmpty(accountName)) {
+            values.put(AccountsColumns.ACCOUNT_NAME, accountName);
+        }
+        if (!TextUtils.isEmpty(accountType)) {
+            values.put(AccountsColumns.ACCOUNT_TYPE, accountType);
+        }
+        values.put(AccountsColumns.IS_DEFAULT, 1);
+        db.insertWithOnConflict(Tables.ACCOUNTS, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    /**
+     * Return the default account from Accounts table.
+     */
+    public Account getDefaultAccount() {
+        Account defaultAccount = null;
+        try (Cursor c = getReadableDatabase().rawQuery(
+                "SELECT " + AccountsColumns.ACCOUNT_NAME + ","
+                + AccountsColumns.ACCOUNT_TYPE + " FROM " + Tables.ACCOUNTS + " WHERE "
+                + AccountsColumns.IS_DEFAULT + " = 1", null)) {
+            while (c.moveToNext()) {
+                String accountName = c.getString(0);
+                String accountType = c.getString(1);
+                if (!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
+                    defaultAccount = new Account(accountName, accountType);
+                }
+            }
+        }
+        return defaultAccount;
     }
 
     /**
