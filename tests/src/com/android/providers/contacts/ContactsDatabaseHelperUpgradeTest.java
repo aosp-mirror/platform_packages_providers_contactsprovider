@@ -19,7 +19,9 @@ package com.android.providers.contacts;
 import static com.android.providers.contacts.TestUtils.cv;
 import static com.android.providers.contacts.TestUtils.executeSqlFromAssetFile;
 
+import android.content.ContentValues;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.BaseColumns;
 import android.provider.CallLog.Calls;
@@ -59,6 +61,9 @@ import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.util.PropertyUtils;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Unit tests for database create/upgrade operations in  {@link ContactsDatabaseHelper}.
@@ -123,6 +128,7 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
         oldVersion = upgradeTo1109(oldVersion);
         oldVersion = upgradeTo1600(oldVersion);
         oldVersion = upgradeTo1601(oldVersion);
+        oldVersion = upgradeTo1602(oldVersion);
         oldVersion = upgrade(oldVersion, ContactsDatabaseHelper.DATABASE_VERSION);
         assertEquals(ContactsDatabaseHelper.DATABASE_VERSION, oldVersion);
         assertDatabaseStructureSameAsList(TABLE_LIST, /* isNewDatabase =*/ false);
@@ -294,6 +300,149 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
                     "x_is_default", 0
                 ));
         }
+        return MY_VERSION;
+    }
+
+    private int upgradeTo1602(int upgradeFrom) {
+        final int MY_VERSION = 1602;
+
+        mDb.beginTransaction();
+        try {
+            executeSqlFromAssetFile(getTestContext(), mDb, "upgradeTest/pre_upgrade1602.sql");
+            mHelper.setOriginalLocalAccount(
+                    new AccountWithDataSet("Phone", "LocalAccount", null));
+            mHelper.onUpgrade(mDb, upgradeFrom, MY_VERSION);
+
+            try (Cursor c = mDb.rawQuery("select "
+                    + "_id, account_name, account_type, data_set "
+                    + "from accounts order by _id", null)) {
+                BaseContactsProvider2Test.assertCursorValuesOrderly(c,
+                        cv(AccountsColumns._ID, 1,
+                                "account_name", null,
+                                "account_type", null,
+                                "data_set", null
+                        ),
+                        cv(AccountsColumns._ID, 2,
+                                "account_name", "Phone",
+                                "account_type", "LocalAccount",
+                                "data_set", "local_data_set"
+                        ),
+                        cv(AccountsColumns._ID, 3,
+                                "account_name", "Phone2",
+                                "account_type", "LocalAccount",
+                                "data_set", null
+                        ),
+                        cv(AccountsColumns._ID, 4,
+                                "account_name", "Phone",
+                                "account_type", "NonLocalAccount",
+                                "data_set", null
+                        ),
+                        cv(AccountsColumns._ID, 5,
+                                "account_name", "Other",
+                                "account_type", "NonLocalAccount",
+                                "data_set", null
+                        ));
+            }
+        } finally {
+            // Rollback so we can test the upgrade again with different before data
+            mDb.endTransaction();
+        }
+
+        mDb.beginTransaction();
+        try {
+            executeSqlFromAssetFile(
+                    getTestContext(), mDb, "upgradeTest/pre_upgrade1602_multiple_local.sql");
+            long nonLocalAccountId = 1;
+            long localAccountId = 2;
+            mHelper.setOriginalLocalAccount(
+                    new AccountWithDataSet("Phone", "LocalAccount", null));
+
+            mHelper.onUpgrade(mDb, upgradeFrom, MY_VERSION);
+
+            try (Cursor c = mDb.rawQuery("select "
+                    + "_id, account_name, account_type, data_set "
+                    + "from accounts order by _id", null)) {
+                // The local account with _id = 3 was removed.
+                assertEquals(c.getCount(), 2);
+                BaseContactsProvider2Test.assertCursorValuesOrderly(c,
+                        cv(AccountsColumns._ID, nonLocalAccountId,
+                                "account_name", "Other",
+                                "account_type", "NonLocalAccount",
+                                "data_set", null
+                        ),
+                        cv(AccountsColumns._ID, localAccountId,
+                                "account_name", null,
+                                "account_type", null,
+                                "data_set", null
+                        ));
+            }
+            try (Cursor c = mDb.rawQuery("select "
+                    + "_id, account_id "
+                    + "from raw_contacts " + " order by _id", null)) {
+                BaseContactsProvider2Test.assertCursorValuesOrderly(c,
+                        cv("_id", 1,
+                                "account_id", nonLocalAccountId
+                        ),
+                        cv("_id", 2,
+                                "account_id", localAccountId
+                        ),
+                        cv("_id", 3,
+                                "account_id", localAccountId
+                        ),
+                        cv("_id", 4,
+                                "account_id", localAccountId
+                        ),
+                        cv("_id", 5,
+                                "account_id", nonLocalAccountId
+                        ),
+                        cv("_id", 6,
+                                "account_id", localAccountId
+                        ));
+            }
+            try (Cursor c = mDb.rawQuery("select "
+                    + "_id, account_id "
+                    + "from groups " + " order by _id", null)) {
+                BaseContactsProvider2Test.assertCursorValuesOrderly(c,
+                        cv("_id", 1,
+                                "account_id", nonLocalAccountId
+                        ),
+                        cv("_id", 2,
+                                "account_id", localAccountId
+                        ));
+            }
+        } finally {
+            // Rollback so we can test the upgrade again with the AOSP local account.
+            mDb.endTransaction();
+        }
+
+        executeSqlFromAssetFile(getTestContext(), mDb, "upgradeTest/pre_upgrade1602.sql");
+        mHelper.setOriginalLocalAccount(AccountWithDataSet.LOCAL);
+        List<ContentValues> before = new ArrayList<>();
+        try (Cursor c = mDb.rawQuery("select "
+                + "_id, account_name, account_type, data_set "
+                + "from accounts order by _id", null)) {
+            while (c.moveToNext()) {
+                ContentValues values = new ContentValues();
+                DatabaseUtils.cursorRowToContentValues(c, values);
+                before.add(values);
+            }
+        }
+
+        mHelper.onUpgrade(mDb, upgradeFrom, MY_VERSION);
+
+        List<ContentValues> after = new ArrayList<>();
+        try (Cursor c = mDb.rawQuery("select "
+                + "_id, account_name, account_type, data_set "
+                + "from accounts order by _id", null)) {
+            while (c.moveToNext()) {
+                ContentValues values = new ContentValues();
+                DatabaseUtils.cursorRowToContentValues(c, values);
+                after.add(values);
+            }
+        }
+        // Upgrade is a no-op when the original local account is the AOSP local account.
+        assertEquals(before, after);
+
         return MY_VERSION;
     }
 
