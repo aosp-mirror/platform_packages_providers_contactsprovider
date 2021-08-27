@@ -16,8 +16,11 @@
 
 package com.android.providers.contacts;
 
+import static android.provider.CallLog.Calls.MISSED_REASON_NOT_MISSED;
+
 import android.telecom.CallerInfo;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
+import com.android.providers.contacts.util.ContactsPermissions;
 
 import android.content.ComponentName;
 import android.content.ContentProvider;
@@ -59,7 +62,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.DIRTY,
             Voicemails.DELETED};
     /** Total number of columns exposed by call_log provider. */
-    private static final int NUM_CALLLOG_FIELDS = 34;
+    private static final int NUM_CALLLOG_FIELDS = 40;
 
     private static final int MIN_MATCH = 7;
 
@@ -194,9 +197,12 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         PhoneAccountHandle subscription = new PhoneAccountHandle(
                 sComponentName, "sub0");
 
+        // Allow self-calls in order to add the call
+        ContactsPermissions.ALLOW_SELF_CALL = true;
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
                 Calls.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 0, subscription, 2000,
-                40, null);
+                40, null, MISSED_REASON_NOT_MISSED);
+        ContactsPermissions.ALLOW_SELF_CALL = false;
         assertNotNull(uri);
         assertEquals("0@" + CallLog.AUTHORITY, uri.getAuthority());
 
@@ -218,6 +224,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         // Casting null to Long as there are many forms of "put" which have nullable second
         // parameters and the compiler needs a hint as to which form is correct.
         values.put(Calls.DATA_USAGE, (Long) null);
+        values.put(Calls.MISSED_REASON, 0);
         assertStoredValues(uri, values);
     }
 
@@ -491,6 +498,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 values.put(Calls.DATA_USAGE, 1000);
                 values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME, (String) null);
                 values.put(Calls.PHONE_ACCOUNT_ID, (Long) null);
+                values.put(Calls.PRIORITY, Calls.PRIORITY_NORMAL);
                 break;
             case 1:
                 values.put(Calls.NUMBER, "654321");
@@ -502,6 +510,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 values.put(Calls.DATA_USAGE, 0);
                 values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME, (String) null);
                 values.put(Calls.PHONE_ACCOUNT_ID, (Long) null);
+                values.put(Calls.PRIORITY, Calls.PRIORITY_NORMAL);
                 break;
             case 2:
                 values.put(Calls.NUMBER, "123456");
@@ -513,6 +522,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 values.put(Calls.DATA_USAGE, 2000);
                 values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME, (String) null);
                 values.put(Calls.PHONE_ACCOUNT_ID, (Long) null);
+                values.put(Calls.PRIORITY, Calls.PRIORITY_URGENT);
                 break;
         }
         return values;
