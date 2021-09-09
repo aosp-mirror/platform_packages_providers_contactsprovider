@@ -30,6 +30,6 @@
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"ఇప్పుడే తొలగించు"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"ప్రారంభించు"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"మీ పైల్‌ను పంపడానికి ప్రోగ్రామ్‌ను ఎంచుకోండి"</string>
-    <string name="debug_dump_email_subject" msgid="108188398416385976">"పరిచయాల Db జోడించబడింది"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"కాంటాక్ట్‌ల Db జోడించబడింది"</string>
     <string name="debug_dump_email_body" msgid="4577749800871444318">"జోడింపు నా అన్ని పరిచయాల సమాచారాన్ని కలిగి ఉన్న నా పరిచయాల డేటాబేస్. జాగ్రత్తగా వ్యవహరించండి."</string>
 </resources>
