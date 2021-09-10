@@ -16,6 +16,7 @@
 
 package com.android.providers.contacts;
 
+import android.accounts.Account;
 import android.content.ContentUris;
 import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -163,6 +164,80 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
 
         Uri lookupUri = Uri.withAppendedPath(Contacts.CONTENT_LOOKUP_URI, lookupKey);
         assertStoredValue(lookupUri, Contacts._ID, largerContactId);
+    }
+
+    public void testRawContactLookupKeyOriginalLocalAccount() {
+        Account originalLocalAccount = new Account("Phone", "Local");
+        ContactsDatabaseHelper dbHelper = getContactsProvider().getContactsDatabaseHelperForTest();
+        dbHelper.setOriginalLocalAccount(
+                new AccountWithDataSet(originalLocalAccount.name, originalLocalAccount.type, null));
+        dbHelper.createLocalAccountCompatViews(dbHelper.getWritableDatabase());
+
+        long localRawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe");
+        storeValue(ContentUris.withAppendedId(RawContacts.CONTENT_URI, localRawContactId1),
+                RawContacts.SOURCE_ID, "sid_r1");
+        long localRawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "Jane", "Doe");
+        long nonLocalRawContactId = RawContactUtil.createRawContactWithName(
+                mResolver, "Jack", "Bean", new Account("foo", "bar"));
+
+        StringBuilder local1LookupKeyBuilder = new StringBuilder();
+        ContactLookupKey.appendToLookupKey(
+                local1LookupKeyBuilder, "Local", "Phone", localRawContactId1, "sid_r1", null);
+        StringBuilder local2LookupKeyBuilder = new StringBuilder();
+        ContactLookupKey.appendToLookupKey(
+                local2LookupKeyBuilder, "Local", "Phone", localRawContactId2, null, null);
+        StringBuilder local2ByNameLookupKeyBuilder = new StringBuilder();
+        ContactLookupKey.appendToLookupKey(
+                local2ByNameLookupKeyBuilder, "Local", "Phone", 10000, null, "Jane Doe");
+
+        assertStoredValue(
+                Contacts.CONTENT_LOOKUP_URI.buildUpon()
+                        .appendPath(local1LookupKeyBuilder.toString()).build(),
+                Contacts.DISPLAY_NAME, "John Doe");
+        assertStoredValue(
+                Contacts.CONTENT_LOOKUP_URI.buildUpon()
+                        .appendPath(local2LookupKeyBuilder.toString()).build(),
+                Contacts.DISPLAY_NAME, "Jane Doe");
+        assertStoredValue(
+                Contacts.CONTENT_LOOKUP_URI.buildUpon()
+                        .appendPath(local2ByNameLookupKeyBuilder.toString()).build(),
+                Contacts.DISPLAY_NAME, "Jane Doe");
+
+        local1LookupKeyBuilder.delete(0, local1LookupKeyBuilder.length());
+        ContactLookupKey.appendToLookupKey(
+                local1LookupKeyBuilder, null, null, localRawContactId1, "sid_r1", null);
+        local2LookupKeyBuilder.delete(0, local2LookupKeyBuilder.length());
+        ContactLookupKey.appendToLookupKey(
+                local2LookupKeyBuilder, null, null, localRawContactId2, null, null);
+        local2ByNameLookupKeyBuilder.delete(0, local2ByNameLookupKeyBuilder.length());
+        ContactLookupKey.appendToLookupKey(
+                local2ByNameLookupKeyBuilder, null, null, 100, null, "Jane Doe");
+
+        assertStoredValue(
+                Contacts.CONTENT_LOOKUP_URI.buildUpon()
+                        .appendPath(local1LookupKeyBuilder.toString()).build(),
+                Contacts.DISPLAY_NAME, "John Doe");
+        assertStoredValue(
+                Contacts.CONTENT_LOOKUP_URI.buildUpon()
+                        .appendPath(local2LookupKeyBuilder.toString()).build(),
+                Contacts.DISPLAY_NAME, "Jane Doe");
+        assertStoredValue(
+                Contacts.CONTENT_LOOKUP_URI.buildUpon()
+                        .appendPath(local2ByNameLookupKeyBuilder.toString()).build(),
+                Contacts.DISPLAY_NAME, "Jane Doe");
+
+
+        // Lookup key for a non-local raw contact using local accounts should not resolve.
+        StringBuilder bogusNonLocalLookupKeyBuilder = new StringBuilder();
+        ContactLookupKey.appendToLookupKey(
+                bogusNonLocalLookupKeyBuilder, null, null, nonLocalRawContactId, null, null);
+        ContactLookupKey.appendToLookupKey(
+                bogusNonLocalLookupKeyBuilder, "Phone", "Local", nonLocalRawContactId, null, null);
+        assertNoRowsAndClose(
+                mResolver.query(
+                        Contacts.CONTENT_LOOKUP_URI.buildUpon()
+                                .appendPath(bogusNonLocalLookupKeyBuilder.toString()).build(),
+                        new String[] { RawContacts._ID }, null, null, null));
     }
 
     public void testGetLookupUri() {

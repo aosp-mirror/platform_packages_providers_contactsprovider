@@ -7733,7 +7733,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private interface LookupBySourceIdQuery {
-        String TABLE = Views.RAW_CONTACTS;
+        String TABLE = Views.RAW_CONTACTS_LOOKUP_COMPAT;
         String COLUMNS[] = {
                 RawContacts.CONTACT_ID,
                 RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
@@ -7789,7 +7789,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private interface LookupByRawContactIdQuery {
-        String TABLE = Views.RAW_CONTACTS;
+        String TABLE = Views.RAW_CONTACTS_LOOKUP_COMPAT;
 
         String COLUMNS[] = {
                 RawContacts.CONTACT_ID,
@@ -7844,7 +7844,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private interface LookupByDisplayNameQuery {
-        String TABLE = Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS;
+        String TABLE = Tables.NAME_LOOKUP_JOIN_RAW_CONTACTS_LOOKUP_COMPAT;
         String COLUMNS[] = {
                 RawContacts.CONTACT_ID,
                 RawContacts.ACCOUNT_TYPE_AND_DATA_SET,
