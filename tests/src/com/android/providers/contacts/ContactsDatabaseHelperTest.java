@@ -128,6 +128,31 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
                 mDbHelper.getOrCreateAccountIdInTransaction(a5b));
     }
 
+    public void testGetOrCreateAccountId_originalLocalAccount() {
+        AccountWithDataSet originalLocalAccount = new AccountWithDataSet("Phone", "Local", null);
+        mDbHelper.setOriginalLocalAccount(originalLocalAccount);
+
+        Long idNewLocal = mDbHelper.getOrCreateAccountIdInTransaction(AccountWithDataSet.LOCAL);
+
+        assertEquals(idNewLocal, mDbHelper.getAccountIdOrNull(originalLocalAccount));
+
+        // Remove all accounts.
+        mDbHelper.getWritableDatabase().execSQL("delete from " + Tables.ACCOUNTS);
+
+        // This is created as the new local account.
+        Long idOriginalLocal = mDbHelper.getOrCreateAccountIdInTransaction(originalLocalAccount);
+        try (Cursor cursor = mDbHelper.getReadableDatabase().query(Tables.ACCOUNTS, new String[]{
+                ContactsDatabaseHelper.AccountsColumns.ACCOUNT_NAME,
+                ContactsDatabaseHelper.AccountsColumns.ACCOUNT_TYPE
+        }, null, null, null, null, null)) {
+            assertTrue(cursor.moveToFirst());
+            assertNull(cursor.getString(0));
+            assertNull(cursor.getString(1));
+        }
+
+        assertEquals(idOriginalLocal, mDbHelper.getAccountIdOrNull(AccountWithDataSet.LOCAL));
+    }
+
     /**
      * Test for {@link ContactsDatabaseHelper#queryIdWithOneArg} and
      * {@link ContactsDatabaseHelper#insertWithOneArgAndReturnId}.
