@@ -20,7 +20,6 @@ import com.android.providers.contacts.ContactsProvider2;
 import android.app.admin.DevicePolicyManager;
 import android.content.Context;
 import android.content.pm.UserInfo;
-import android.os.UserHandle;
 import android.os.UserManager;
 import android.util.Log;
 
@@ -41,7 +40,7 @@ public final class UserUtils {
     }
 
     public static int getCurrentUserHandle(Context context) {
-        return getUserManager(context).getUserHandle();
+        return getUserManager(context).getProcessUserId();
     }
 
     /**
@@ -52,7 +51,7 @@ public final class UserUtils {
      */
     private static UserInfo getCorpUserInfo(Context context) {
         final UserManager um = getUserManager(context);
-        final int myUser = um.getUserHandle();
+        final int myUser = um.getProcessUserId();
 
         // Check each user.
         for (UserInfo ui : um.getUsers()) {

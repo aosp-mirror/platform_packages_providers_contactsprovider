@@ -3262,7 +3262,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private void upgradeToVersion910(SQLiteDatabase db) {
         final UserManager userManager = (UserManager) mContext.getSystemService(
                 Context.USER_SERVICE);
-        final UserInfo user = userManager.getUserInfo(userManager.getUserHandle());
+        final UserInfo user = userManager.getUserInfo(userManager.getProcessUserId());
         if (user.isManagedProfile()) {
             db.execSQL("DELETE FROM calls;");
         }
