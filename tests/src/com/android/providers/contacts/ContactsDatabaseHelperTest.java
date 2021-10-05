@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import android.content.ContentValues;
 import android.database.ContentObserver;
+import android.accounts.Account;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
@@ -532,5 +533,29 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
         dbHelper2.getReadableDatabase(); // Open the DB.
 
         assertEquals(creationTime, dbHelper2.getDatabaseCreationTime());
+    }
+
+    public void testGetAndSetDefaultAccount() {
+        Account account = mDbHelper.getDefaultAccount();
+        assertNull(account);
+
+        mDbHelper.setDefaultAccount("a", "b");
+        account = mDbHelper.getDefaultAccount();
+        assertEquals("a", account.name);
+        assertEquals("b", account.type);
+
+        mDbHelper.setDefaultAccount("c", "d");
+        account = mDbHelper.getDefaultAccount();
+        assertEquals("c", account.name);
+        assertEquals("d", account.type);
+
+        mDbHelper.setDefaultAccount(null, null);
+        account = mDbHelper.getDefaultAccount();
+        assertNull(account);
+
+        // invalid account name does nothing.
+        mDbHelper.setDefaultAccount(")--", null);
+        account = mDbHelper.getDefaultAccount();
+        assertNull(account);
     }
 }
