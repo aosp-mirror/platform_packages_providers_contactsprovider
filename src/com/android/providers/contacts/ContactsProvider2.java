@@ -219,6 +219,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final String WRITE_PERMISSION = "android.permission.WRITE_CONTACTS";
     private static final String MANAGE_SIM_ACCOUNTS_PERMISSION =
             "android.contacts.permission.MANAGE_SIM_ACCOUNTS";
+    private static final String SET_DEFAULT_ACCOUNT_PERMISSION =
+            "android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS";
 
 
     /* package */ static final String PHONEBOOK_COLLATOR_NAME = "PHONEBOOK";
@@ -2388,6 +2390,40 @@ public class ContactsProvider2 extends AbstractContactsProvider
             final List<SimAccount> simAccounts = mDbHelper.get().getAllSimAccounts();
             response.putParcelableList(SimContacts.KEY_SIM_ACCOUNTS, simAccounts);
 
+            return response;
+        } else if (Settings.QUERY_DEFAULT_ACCOUNT_METHOD.equals(method)) {
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
+            final Bundle response = new Bundle();
+
+            final Account defaultAccount = mDbHelper.get().getDefaultAccount();
+            response.putParcelable(Settings.KEY_DEFAULT_ACCOUNT, defaultAccount);
+
+            return response;
+        } else if (Settings.SET_DEFAULT_ACCOUNT_METHOD.equals(method)) {
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                    SET_DEFAULT_ACCOUNT_PERMISSION);
+            final String accountName = extras.getString(Settings.ACCOUNT_NAME);
+            final String accountType = extras.getString(Settings.ACCOUNT_TYPE);
+            final String dataSet = extras.getString(Settings.DATA_SET);
+
+            if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
+                throw new IllegalArgumentException(
+                        "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE");
+            }
+            if (!TextUtils.isEmpty(dataSet)) {
+                throw new IllegalArgumentException(
+                        "Cannot set default account with non-null data set.");
+            }
+
+            final Bundle response = new Bundle();
+            final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+            db.beginTransaction();
+            try {
+                mDbHelper.get().setDefaultAccount(accountName, accountType);
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
             return response;
         }
         return null;
