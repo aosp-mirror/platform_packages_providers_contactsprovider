@@ -27,6 +27,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.database.DatabaseUtils.InsertHelper;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.os.Binder;
 import android.provider.CallLog.Calls;
@@ -65,6 +66,7 @@ public class DbModifierWithNotification implements DatabaseModifier {
             Voicemails.DELETED + " == 0";
     private final String mTableName;
     private final SQLiteDatabase mDb;
+    private final boolean mHasReadVoicemailPermission;
     private final InsertHelper mInsertHelper;
     private final Context mContext;
     private final Uri mBaseUri;
@@ -86,8 +88,14 @@ public class DbModifierWithNotification implements DatabaseModifier {
 
     private DbModifierWithNotification(String tableName, SQLiteDatabase db,
             InsertHelper insertHelper, Context context) {
+        this(tableName, db, insertHelper, true /* hasReadVoicemail */, context);
+    }
+
+    public DbModifierWithNotification(String tableName, SQLiteDatabase db,
+            InsertHelper insertHelper, boolean hasReadVoicemailPermission, Context context) {
         mTableName = tableName;
         mDb = db;
+        mHasReadVoicemailPermission = hasReadVoicemailPermission;
         mInsertHelper = insertHelper;
         mContext = context;
         mBaseUri = mTableName.equals(Tables.VOICEMAIL_STATUS) ?
@@ -196,7 +204,16 @@ public class DbModifierWithNotification implements DatabaseModifier {
         if (values.isEmpty()) {
             return 0;
         }
-        int count = mDb.update(table, values, whereClause, whereArgs);
+
+        final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+        qb.setTables(mTableName);
+        qb.setProjectionMap(CallLogProvider.sCallsProjectionMap);
+        qb.setStrict(true);
+        if (!mHasReadVoicemailPermission) {
+            qb.setStrictGrammar(true);
+        }
+        int count = qb.update(mDb, values, whereClause, whereArgs);
+
         if (count > 0 && isVoicemailContent || Tables.VOICEMAIL_STATUS.equals(table)) {
             notifyVoicemailChange(mBaseUri, packagesModified);
         }
@@ -269,14 +286,23 @@ public class DbModifierWithNotification implements DatabaseModifier {
         // If the deletion is being made by the package that inserted the voicemail or by
         // CP2 (cleanup after uninstall), then we don't need to wait for sync, so just delete it.
         final int count;
+
+        final SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
+        qb.setTables(mTableName);
+        qb.setProjectionMap(CallLogProvider.sCallsProjectionMap);
+        qb.setStrict(true);
+        if (!mHasReadVoicemailPermission) {
+            qb.setStrictGrammar(true);
+        }
+
         if (mIsCallsTable && isVoicemail && !isSelfModifyingOrInternal(packagesModified)) {
             ContentValues values = new ContentValues();
             values.put(VoicemailContract.Voicemails.DIRTY, 1);
             values.put(VoicemailContract.Voicemails.DELETED, 1);
             values.put(VoicemailContract.Voicemails.LAST_MODIFIED, getTimeMillis());
-            count = mDb.update(table, values, whereClause, whereArgs);
+            count = qb.update(mDb, values, whereClause, whereArgs);
         } else {
-            count = mDb.delete(table, whereClause, whereArgs);
+            count = qb.delete(mDb, whereClause, whereArgs);
         }
 
         if (count > 0 && isVoicemail) {

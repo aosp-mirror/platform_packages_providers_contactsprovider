@@ -19,7 +19,7 @@
     <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core Apps"</string>
     <string name="app_label" msgid="3389954322874982620">"संपर्क मेमोरी"</string>
     <string name="provider_label" msgid="6012150850819899907">"संपर्क"</string>
-    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"संपर्क अपग्रेड के लिए ज़्यादा स्टोरेज की आवश्यकता होती है."</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"संपर्क अपग्रेड के लिए ज़्यादा मेमोरी की आवश्यकता होती है."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"संपर्कों के लिए मेमोरी अपग्रेड करना"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"अपग्रेड पूरा करने के लिए टैप करें."</string>
     <string name="default_directory" msgid="93961630309570294">"संपर्क"</string>
