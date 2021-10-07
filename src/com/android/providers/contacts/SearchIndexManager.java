@@ -55,7 +55,8 @@ public class SearchIndexManager {
     private static final int MAX_STRING_BUILDER_SIZE = 1024 * 10;
 
     public static final String PROPERTY_SEARCH_INDEX_VERSION = "search_index";
-    private static final int SEARCH_INDEX_VERSION = 1;
+    private static final String ROW_ID_KEY = "rowid";
+    private static final int SEARCH_INDEX_VERSION = 2;
 
     private static final class ContactIndexQuery {
         public static final String[] COLUMNS = {
@@ -327,7 +328,7 @@ public class SearchIndexManager {
         // Remove affected search_index rows.
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         final int deleted = db.delete(Tables.SEARCH_INDEX,
-                SearchIndexColumns.CONTACT_ID + " IN (SELECT " +
+                ROW_ID_KEY + " IN (SELECT " +
                     RawContacts.CONTACT_ID +
                     " FROM " + Tables.RAW_CONTACTS +
                     " WHERE " + rawContactsSelection +
@@ -400,6 +401,7 @@ public class SearchIndexManager {
         mValues.put(SearchIndexColumns.NAME, builder.getName());
         mValues.put(SearchIndexColumns.TOKENS, builder.getTokens());
         mValues.put(SearchIndexColumns.CONTACT_ID, contactId);
+        mValues.put(ROW_ID_KEY, contactId);
         db.insert(Tables.SEARCH_INDEX, null, mValues);
     }
     private int getSearchIndexVersion() {
