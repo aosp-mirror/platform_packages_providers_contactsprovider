@@ -51,8 +51,8 @@ public class DataRowHandlerForOrganization extends DataRowHandlerForCommonDataKi
 
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
-            Cursor c, boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
-        if (!super.update(db, txContext, values, c, callerIsSyncAdapter, callerIsMetadataSyncAdapter)) {
+            Cursor c, boolean callerIsSyncAdapter) {
+        if (!super.update(db, txContext, values, c, callerIsSyncAdapter)) {
             return false;
         }
 

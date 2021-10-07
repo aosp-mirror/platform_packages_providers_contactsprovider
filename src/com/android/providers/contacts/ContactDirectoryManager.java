@@ -245,8 +245,7 @@ public class ContactDirectoryManager {
         Log.i(TAG, "Discovered " + count + " contact directories in " + (end - start) + "ms");
 
         // Announce the change to listeners of the contacts authority
-        mContactsProvider.notifyChange(/* syncToNetwork =*/false,
-                /* syncToMetadataNetwork =*/false);
+        mContactsProvider.notifyChange(/* syncToNetwork =*/false);
 
         // We schedule a rescan if update(DIRECTORIES) is called while we're scanning all packages.
         if (mDirectoriesForceUpdated) {

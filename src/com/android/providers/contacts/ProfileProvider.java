@@ -116,8 +116,8 @@ public class ProfileProvider extends AbstractContactsProvider {
         mDelegate.notifyChange();
     }
 
-    protected void notifyChange(boolean syncToNetwork, boolean syncToMetadataNetWork) {
-        mDelegate.notifyChange(syncToNetwork, syncToMetadataNetWork);
+    protected void notifyChange(boolean syncToNetwork) {
+        mDelegate.notifyChange(syncToNetwork);
     }
 
     protected Locale getLocale() {
