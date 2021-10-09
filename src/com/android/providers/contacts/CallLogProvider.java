@@ -70,8 +70,6 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
@@ -945,14 +943,12 @@ public class CallLogProvider extends ContentProvider {
         }
 
         final UserManager userManager = UserUtils.getUserManager(getContext());
+        final int myUserId = userManager.getProcessUserId();
 
         // TODO: http://b/24944959
-        if (!Calls.shouldHaveSharedCallLogEntries(getContext(), userManager,
-                userManager.getUserHandle())) {
+        if (!Calls.shouldHaveSharedCallLogEntries(getContext(), userManager, myUserId)) {
             return;
         }
-
-        final int myUserId = userManager.getUserHandle();
 
         // See the comment in Calls.addCall() for the logic.
 
