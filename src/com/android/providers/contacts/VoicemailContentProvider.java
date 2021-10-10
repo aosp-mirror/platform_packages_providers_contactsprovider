@@ -24,6 +24,7 @@ import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.AppOpsManager;
+import android.content.AttributionSource;
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
@@ -119,24 +120,23 @@ public class VoicemailContentProvider extends ContentProvider
     }
 
     @Override
-    protected int enforceReadPermissionInner(Uri uri, String callingPkg,
-            @Nullable String featureId, IBinder callerToken) throws SecurityException {
+    protected int enforceReadPermissionInner(Uri uri,
+            @NonNull AttributionSource attributionSource) throws SecurityException {
         // Permit carrier-privileged apps regardless of ADD_VOICEMAIL permission state.
         if (mVoicemailPermissions.callerHasCarrierPrivileges()) {
             return MODE_ALLOWED;
         }
-        return super.enforceReadPermissionInner(uri, callingPkg, featureId, callerToken);
+        return super.enforceReadPermissionInner(uri, attributionSource);
     }
 
-
     @Override
-    protected int enforceWritePermissionInner(Uri uri, String callingPkg,
-            @Nullable String featureId, IBinder callerToken) throws SecurityException {
+    protected int enforceWritePermissionInner(Uri uri,
+            @NonNull AttributionSource attributionSource) throws SecurityException {
         // Permit carrier-privileged apps regardless of ADD_VOICEMAIL permission state.
         if (mVoicemailPermissions.callerHasCarrierPrivileges()) {
             return MODE_ALLOWED;
         }
-        return super.enforceWritePermissionInner(uri, callingPkg, featureId, callerToken);
+        return super.enforceWritePermissionInner(uri, attributionSource);
     }
 
     @VisibleForTesting

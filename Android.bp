@@ -19,6 +19,7 @@ license {
 
 android_app {
     name: "ContactsProvider",
+    defaults: ["platform_app_defaults"],
     // Only compile source java files in this apk.
     srcs: [
         "src/**/*.java",
