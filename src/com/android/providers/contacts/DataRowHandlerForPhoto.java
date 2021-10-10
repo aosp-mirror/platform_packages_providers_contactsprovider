@@ -76,7 +76,7 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
 
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
-            Cursor c, boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
+            Cursor c, boolean callerIsSyncAdapter) {
         long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
         if (values.containsKey(SKIP_PROCESSING_KEY)) {
@@ -89,7 +89,7 @@ public class DataRowHandlerForPhoto extends DataRowHandler {
         }
 
         // Do the actual update.
-        if (!super.update(db, txContext, values, c, callerIsSyncAdapter, callerIsMetadataSyncAdapter)) {
+        if (!super.update(db, txContext, values, c, callerIsSyncAdapter)) {
             return false;
         }
 
