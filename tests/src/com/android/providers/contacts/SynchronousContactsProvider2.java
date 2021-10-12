@@ -36,7 +36,6 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     private static ContactsDatabaseHelper sDbHelper;
     private Account mAccount;
     private boolean mNetworkNotified;
-    private boolean mMetadataNetworkNotified;
     private boolean mIsPhone = true;
     private boolean mIsVoiceCapable = true;
 
@@ -62,21 +61,15 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     public void onBegin() {
         super.onBegin();
         mNetworkNotified = false;
-        mMetadataNetworkNotified = false;
     }
 
     @Override
-    protected void notifyChange(boolean syncToNetwork, boolean syncToMetadataNetwork) {
+    protected void notifyChange(boolean syncToNetwork) {
         mNetworkNotified |= syncToNetwork;
-        mMetadataNetworkNotified |= syncToMetadataNetwork;
     }
 
     public boolean isNetworkNotified() {
         return mNetworkNotified;
-    }
-
-    public boolean isMetadataNetworkNotified() {
-        return mMetadataNetworkNotified;
     }
 
     public void setIsPhone(boolean flag) {
