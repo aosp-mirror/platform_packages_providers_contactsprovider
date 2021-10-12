@@ -60,7 +60,7 @@ public class DataRowHandlerForStructuredPostal extends DataRowHandler {
 
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
-            Cursor c, boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
+            Cursor c, boolean callerIsSyncAdapter) {
         final long dataId = c.getLong(DataUpdateQuery._ID);
         final ContentValues augmented = getAugmentedValues(db, dataId, values);
         if (augmented == null) {    // No change
@@ -68,7 +68,7 @@ public class DataRowHandlerForStructuredPostal extends DataRowHandler {
         }
 
         fixStructuredPostalComponents(augmented, values);
-        super.update(db, txContext, values, c, callerIsSyncAdapter, callerIsMetadataSyncAdapter);
+        super.update(db, txContext, values, c, callerIsSyncAdapter);
         return true;
     }
 

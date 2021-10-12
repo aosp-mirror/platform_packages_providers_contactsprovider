@@ -35,7 +35,6 @@ public class TransactionContext  {
     /** Map from raw contact id to account Id */
     private ArrayMap<Long, Long> mInsertedRawContactsAccounts;
     private ArraySet<Long> mUpdatedRawContacts;
-    private ArraySet<Long> mMetadataDirtyRawContacts;
     private ArraySet<Long> mBackupIdChangedRawContacts;
     private ArraySet<Long> mDirtyRawContacts;
     // Set used to track what has been changed and deleted. This is needed so we can update the
@@ -78,22 +77,6 @@ public class TransactionContext  {
         markRawContactChangedOrDeletedOrInserted(rawContactId);
     }
 
-    public void markRawContactMetadataDirty(long rawContactId, boolean isMetadataSyncAdapter) {
-        if (!isMetadataSyncAdapter) {
-            if (mMetadataDirtyRawContacts == null) {
-                mMetadataDirtyRawContacts = new ArraySet<>();
-            }
-            mMetadataDirtyRawContacts.add(rawContactId);
-        }
-    }
-
-    public void markBackupIdChangedRawContact(long rawContactId) {
-        if (mBackupIdChangedRawContacts == null) {
-            mBackupIdChangedRawContacts = new ArraySet<>();
-        }
-        mBackupIdChangedRawContacts.add(rawContactId);
-    }
-
     public void markRawContactChangedOrDeletedOrInserted(long rawContactId) {
         if (mChangedRawContacts == null) {
             mChangedRawContacts = new ArraySet<>();
@@ -131,16 +114,6 @@ public class TransactionContext  {
         return mDirtyRawContacts;
     }
 
-    public Set<Long> getMetadataDirtyRawContactIds() {
-        if (mMetadataDirtyRawContacts == null) mMetadataDirtyRawContacts = new ArraySet<>();
-        return mMetadataDirtyRawContacts;
-    }
-
-    public Set<Long> getBackupIdChangedRawContacts() {
-        if (mBackupIdChangedRawContacts == null) mBackupIdChangedRawContacts = new ArraySet<>();
-        return mBackupIdChangedRawContacts;
-    }
-
     public Set<Long> getChangedRawContactIds() {
         if (mChangedRawContacts == null) mChangedRawContacts = new ArraySet<>();
         return mChangedRawContacts;
@@ -176,7 +149,6 @@ public class TransactionContext  {
         mUpdatedRawContacts = null;
         mUpdatedSyncStates = null;
         mDirtyRawContacts = null;
-        mMetadataDirtyRawContacts = null;
         mChangedRawContacts = null;
         mBackupIdChangedRawContacts = null;
     }
