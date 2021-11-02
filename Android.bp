@@ -30,7 +30,6 @@ android_app {
     ],
     static_libs: [
         "android-common",
-        "androidx.annotation_annotation",
         "com.android.vcard",
         "guava",
     ],

@@ -18,13 +18,4 @@
            xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <!-- Package name for the contacts metadata syncadapter [DO NOT TRANSLATE] -->
     <string name="metadata_sync_pacakge" translatable="false"></string>
-
-    <!-- Value that was used for the account_name of local contacts prior to Android T when these
-         accounts were updated to match the AOSP convention of using NULL values for the local
-         account. This string is used to configure which account to migrate and allows lookup keys
-         for contacts in this account to continue to work. [DO NOT TRANSLATE] -->
-    <string name="config_originalLocalAccountName" translatable="false"></string>
-    <!-- Value that was used for the account_type of local contacts prior to Android T. See comment
-         on original_local_account_name. [DO NOT TRANSLATE] -->
-    <string name="config_originalLocalAccountType" translatable="false"></string>
 </resources>
