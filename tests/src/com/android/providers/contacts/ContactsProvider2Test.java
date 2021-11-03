@@ -6448,8 +6448,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mActor.setAccounts(new Account[]{mAccount, mAccountTwo});
         cp.onAccountsUpdated(new Account[]{mAccount, mAccountTwo});
         assertEquals(1, getCount(RawContacts.CONTENT_URI, null, null));
-        assertStoredValue(rawContact3, RawContacts.ACCOUNT_NAME, null);
-        assertStoredValue(rawContact3, RawContacts.ACCOUNT_TYPE, null);
+        assertStoredValue(
+                rawContact3, RawContacts.ACCOUNT_NAME,
+                AccountWithDataSet.LOCAL.getAccountName());
+        assertStoredValue(rawContact3, RawContacts.ACCOUNT_TYPE,
+                AccountWithDataSet.LOCAL.getAccountType());
 
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, mAccount);
         insertEmail(rawContactId1, "account1@email.com");
