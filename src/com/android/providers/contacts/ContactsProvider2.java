@@ -2400,33 +2400,48 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             return response;
         } else if (Settings.SET_DEFAULT_ACCOUNT_METHOD.equals(method)) {
-            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
-                    SET_DEFAULT_ACCOUNT_PERMISSION);
-            final String accountName = extras.getString(Settings.ACCOUNT_NAME);
-            final String accountType = extras.getString(Settings.ACCOUNT_TYPE);
-            final String dataSet = extras.getString(Settings.DATA_SET);
-
-            if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
-                throw new IllegalArgumentException(
-                        "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE");
-            }
-            if (!TextUtils.isEmpty(dataSet)) {
-                throw new IllegalArgumentException(
-                        "Cannot set default account with non-null data set.");
-            }
-
-            final Bundle response = new Bundle();
-            final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-            db.beginTransaction();
-            try {
-                mDbHelper.get().setDefaultAccount(accountName, accountType);
-                db.setTransactionSuccessful();
-            } finally {
-                db.endTransaction();
-            }
-            return response;
+            return setDefaultAccountSetting(extras);
         }
         return null;
+    }
+
+    private Bundle setDefaultAccountSetting(Bundle extras) {
+        ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                SET_DEFAULT_ACCOUNT_PERMISSION);
+        final String accountName = extras.getString(Settings.ACCOUNT_NAME);
+        final String accountType = extras.getString(Settings.ACCOUNT_TYPE);
+        final String dataSet = extras.getString(Settings.DATA_SET);
+
+        if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
+            throw new IllegalArgumentException(
+                    "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE");
+        }
+        if (!TextUtils.isEmpty(dataSet)) {
+            throw new IllegalArgumentException(
+                    "Cannot set default account with non-null data set.");
+        }
+
+        AccountWithDataSet accountWithDataSet = new AccountWithDataSet(
+                accountName, accountType, dataSet);
+        Account[] systemAccounts = AccountManager.get(getContext()).getAccounts();
+        List<SimAccount> simAccounts = mDbHelper.get().getAllSimAccounts();
+        if (!accountWithDataSet.isLocalAccount()
+                && !accountWithDataSet.inSystemAccounts(systemAccounts)
+                && !accountWithDataSet.inSimAccounts(simAccounts)) {
+            throw new IllegalArgumentException(
+                    "Cannot set default account for invalid accounts.");
+        }
+
+        final Bundle response = new Bundle();
+        final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+        db.beginTransaction();
+        try {
+            mDbHelper.get().setDefaultAccount(accountName, accountType);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        return response;
     }
 
     /**
