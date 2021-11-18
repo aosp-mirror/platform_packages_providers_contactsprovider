@@ -49,3 +49,8 @@ android_app {
         proguard_flags_files: ["proguard.flags"],
     },
 }
+
+platform_compat_config {
+    name: "contacts-provider-platform-compat-config",
+    src: ":ContactsProvider",
+}
