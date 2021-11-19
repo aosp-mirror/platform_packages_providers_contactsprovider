@@ -9125,6 +9125,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     public void testDefaultAccountSet_throwException() {
+        mActor.setAccounts(new Account[]{mAccount});
         try {
             mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
                     null, null);
@@ -9135,7 +9136,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
         try {
             Bundle bundle = new Bundle();
-            bundle.putString(Settings.ACCOUNT_NAME, "a"); // no account type specified
+            bundle.putString(Settings.ACCOUNT_NAME, "account1"); // no account type specified
             mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
                     null, bundle);
             fail();
@@ -9144,11 +9145,21 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
         try {
             Bundle bundle = new Bundle();
-            bundle.putString(Settings.ACCOUNT_NAME, "a");
-            bundle.putString(Settings.ACCOUNT_TYPE, "b");
-            bundle.putString(Settings.DATA_SET, "c");
+            bundle.putString(Settings.ACCOUNT_NAME, "account1");
+            bundle.putString(Settings.ACCOUNT_TYPE, "account type1");
+            bundle.putString(Settings.DATA_SET, "c"); // data set should not be set.
             mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
                     null, bundle);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+
+        try {
+            Bundle bundle = new Bundle();
+            bundle.putString(Settings.ACCOUNT_NAME, "account2"); // invalid account
+            bundle.putString(Settings.ACCOUNT_TYPE, "account type2");
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                null, bundle);
             fail();
         } catch (IllegalArgumentException expected) {
         }
@@ -9161,18 +9172,19 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNull(account);
 
         mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
-        // Set (a, b) account as the default account.
+        mActor.setAccounts(new Account[]{mAccount});
+        // Set ("account1", "account type1") account as the default account.
         Bundle bundle = new Bundle();
-        bundle.putString(Settings.ACCOUNT_NAME, "a");
-        bundle.putString(Settings.ACCOUNT_TYPE, "b");
+        bundle.putString(Settings.ACCOUNT_NAME, "account1");
+        bundle.putString(Settings.ACCOUNT_TYPE, "account type1");
         mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
                 null, bundle);
 
         response = mResolver.call(ContactsContract.AUTHORITY_URI,
                 Settings.QUERY_DEFAULT_ACCOUNT_METHOD, null, null);
         account = response.getParcelable(Settings.KEY_DEFAULT_ACCOUNT);
-        assertEquals("a", account.name);
-        assertEquals("b", account.type);
+        assertEquals("account1", account.name);
+        assertEquals("account type1", account.type);
 
         // Set NULL account as default account.
         bundle = new Bundle();
