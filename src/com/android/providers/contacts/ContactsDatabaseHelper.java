@@ -4165,23 +4165,32 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *
      * @param accountName The account name to be set to default.
      * @param accountType The account type to be set to default.
+     * @throws IllegalArgumentException if the account name or type is null.
      */
     public void setDefaultAccount(String accountName, String accountType) {
+        if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
+            throw new IllegalArgumentException("Account name or type is null.");
+        }
         SQLiteDatabase db = getWritableDatabase();
         db.execSQL(
-            "UPDATE " + Tables.ACCOUNTS +
-                " SET " + AccountsColumns.IS_DEFAULT + "=0" +
-                " WHERE " + AccountsColumns.IS_DEFAULT + "=1");
+                "UPDATE " + Tables.ACCOUNTS +
+                        " SET " + AccountsColumns.IS_DEFAULT + "=0" +
+                        " WHERE " + AccountsColumns.IS_DEFAULT + "=1");
 
+        Long accountId = getAccountIdOrNull(new AccountWithDataSet(accountName, accountType, null));
         ContentValues values = new ContentValues();
-        if (!TextUtils.isEmpty(accountName)) {
-            values.put(AccountsColumns.ACCOUNT_NAME, accountName);
-        }
-        if (!TextUtils.isEmpty(accountType)) {
-            values.put(AccountsColumns.ACCOUNT_TYPE, accountType);
-        }
         values.put(AccountsColumns.IS_DEFAULT, 1);
-        db.insertWithOnConflict(Tables.ACCOUNTS, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+        if (accountId == null) {
+            if (!TextUtils.isEmpty(accountName)) {
+                values.put(AccountsColumns.ACCOUNT_NAME, accountName);
+            }
+            if (!TextUtils.isEmpty(accountType)) {
+                values.put(AccountsColumns.ACCOUNT_TYPE, accountType);
+            }
+            db.insert(Tables.ACCOUNTS, null, values);
+        } else {
+            db.update(Tables.ACCOUNTS, values, AccountsColumns.CONCRETE_ID + "=" + accountId, null);
+        }
     }
 
     /**
