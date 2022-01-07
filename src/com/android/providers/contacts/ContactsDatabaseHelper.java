@@ -92,6 +92,7 @@ import android.util.Log;
 import android.util.Slog;
 
 import com.android.common.content.SyncStateContentProviderHelper;
+import com.android.internal.R;
 import com.android.internal.R.bool;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
@@ -103,6 +104,8 @@ import com.android.providers.contacts.sqlite.SqlChecker;
 import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
 import com.android.providers.contacts.util.NeededForTesting;
 import com.android.providers.contacts.util.PropertyUtils;
+
+import com.google.common.base.Strings;
 
 import java.io.PrintWriter;
 import java.security.MessageDigest;
@@ -355,18 +358,30 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public interface Clauses {
+
         final String HAVING_NO_GROUPS = "COUNT(" + DataColumns.CONCRETE_GROUP_ID + ") == 0";
 
         final String GROUP_BY_ACCOUNT_CONTACT_ID = AccountsColumns.CONCRETE_ID + ","
                 + RawContacts.CONTACT_ID;
 
         String LOCAL_ACCOUNT_ID =
-                "(SELECT " + AccountsColumns._ID +
-                " FROM " + Tables.ACCOUNTS +
-                " WHERE " +
-                    AccountsColumns.ACCOUNT_NAME + " IS NULL AND " +
-                    AccountsColumns.ACCOUNT_TYPE + " IS NULL AND " +
-                    AccountsColumns.DATA_SET + " IS NULL)";
+                "(SELECT "
+                        + AccountsColumns._ID
+                        + " FROM "
+                        + Tables.ACCOUNTS
+                        + " WHERE "
+                        + AccountsColumns.ACCOUNT_NAME
+                        + " IS "
+                        + MoreDatabaseUtils.sqlEscapeNullableString(
+                                AccountWithDataSet.LOCAL.getAccountName())
+                        + " AND "
+                        + AccountsColumns.ACCOUNT_TYPE
+                        + " IS "
+                        + MoreDatabaseUtils.sqlEscapeNullableString(
+                                AccountWithDataSet.LOCAL.getAccountType())
+                        + " AND "
+                        + AccountsColumns.DATA_SET
+                        + " IS NULL)";
 
         final String ZERO_GROUP_MEMBERSHIPS = "COUNT(" + GroupsColumns.CONCRETE_ID + ")=0";
 
@@ -2276,16 +2291,21 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     + AccountsColumns.SHOULD_SYNC + " = NEW." + Settings.SHOULD_SYNC + " "
                 + "WHERE _id = OLD." + ViewSettingsColumns.ACCOUNT_ID + "; "
                 + "END;");
+
         // Unlike other accounts ungrouped contacts in the local account are visible by default and
         // it is not syncable.
+        String localAccountNameSqlLiteral = MoreDatabaseUtils.sqlEscapeNullableString(
+                AccountWithDataSet.LOCAL.getAccountName());
+        String localAccountTypeSqlLiteral = MoreDatabaseUtils.sqlEscapeNullableString(
+                AccountWithDataSet.LOCAL.getAccountType());
         db.execSQL("CREATE TRIGGER " + Tables.ACCOUNTS + "_insert_local_account "
                 + "AFTER INSERT ON " + Tables.ACCOUNTS + " "
-                + "WHEN NEW." + AccountsColumns.ACCOUNT_NAME + " IS NULL AND "
-                    + "NEW." + AccountsColumns.ACCOUNT_TYPE + " IS NULL AND "
-                    + "NEW." + AccountsColumns.DATA_SET + " IS NULL "
+                + "WHEN NEW." + AccountsColumns.ACCOUNT_NAME + " IS " + localAccountNameSqlLiteral
+                + " AND NEW." + AccountsColumns.ACCOUNT_TYPE + " IS " + localAccountTypeSqlLiteral
+                + " AND NEW." + AccountsColumns.DATA_SET + " IS NULL "
                 + "BEGIN UPDATE " + Tables.ACCOUNTS + " SET "
-                    + Settings.UNGROUPED_VISIBLE + " = 1, "
-                    + Settings.SHOULD_SYNC + " = 0 "
+                + Settings.UNGROUPED_VISIBLE + " = 1, "
+                + Settings.SHOULD_SYNC + " = 0 "
                 + "WHERE " + AccountsColumns._ID + " = NEW." + AccountsColumns._ID + "; "
                 + "END;"
         );
@@ -4165,23 +4185,32 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *
      * @param accountName The account name to be set to default.
      * @param accountType The account type to be set to default.
+     * @throws IllegalArgumentException if the account name or type is null.
      */
     public void setDefaultAccount(String accountName, String accountType) {
+        if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
+            throw new IllegalArgumentException("Account name or type is null.");
+        }
         SQLiteDatabase db = getWritableDatabase();
         db.execSQL(
-            "UPDATE " + Tables.ACCOUNTS +
-                " SET " + AccountsColumns.IS_DEFAULT + "=0" +
-                " WHERE " + AccountsColumns.IS_DEFAULT + "=1");
+                "UPDATE " + Tables.ACCOUNTS +
+                        " SET " + AccountsColumns.IS_DEFAULT + "=0" +
+                        " WHERE " + AccountsColumns.IS_DEFAULT + "=1");
 
+        Long accountId = getAccountIdOrNull(new AccountWithDataSet(accountName, accountType, null));
         ContentValues values = new ContentValues();
-        if (!TextUtils.isEmpty(accountName)) {
-            values.put(AccountsColumns.ACCOUNT_NAME, accountName);
-        }
-        if (!TextUtils.isEmpty(accountType)) {
-            values.put(AccountsColumns.ACCOUNT_TYPE, accountType);
-        }
         values.put(AccountsColumns.IS_DEFAULT, 1);
-        db.insertWithOnConflict(Tables.ACCOUNTS, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+        if (accountId == null) {
+            if (!TextUtils.isEmpty(accountName)) {
+                values.put(AccountsColumns.ACCOUNT_NAME, accountName);
+            }
+            if (!TextUtils.isEmpty(accountType)) {
+                values.put(AccountsColumns.ACCOUNT_TYPE, accountType);
+            }
+            db.insert(Tables.ACCOUNTS, null, values);
+        } else {
+            db.update(Tables.ACCOUNTS, values, AccountsColumns.CONCRETE_ID + "=" + accountId, null);
+        }
     }
 
     /**
