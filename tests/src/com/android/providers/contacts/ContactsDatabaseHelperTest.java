@@ -528,9 +528,27 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
         account = mDbHelper.getDefaultAccount();
         assertNull(account);
 
-        // invalid account name does nothing.
-        mDbHelper.setDefaultAccount(")--", null);
+        // Invalid account (not-null account name and null account type) throws exception.
+        try {
+            mDbHelper.setDefaultAccount("name", null);
+            fail("Setting default account to an invalid account should fail.");
+        } catch (IllegalArgumentException e) {
+            // expected.
+        }
         account = mDbHelper.getDefaultAccount();
         assertNull(account);
+
+        // Update default account to an existing account
+        mDbHelper.setDefaultAccount("a", "b");
+        account = mDbHelper.getDefaultAccount();
+        assertEquals("a", account.name);
+        assertEquals("b", account.type);
+
+        try (Cursor cursor = mDbHelper.getReadableDatabase().query(Tables.ACCOUNTS, new String[]{
+                ContactsDatabaseHelper.AccountsColumns.ACCOUNT_NAME,
+                ContactsDatabaseHelper.AccountsColumns.ACCOUNT_TYPE
+        }, null, null, null, null, null)) {
+            assertEquals(3, cursor.getCount());
+        }
     }
 }
