@@ -3,5 +3,5 @@
 Use the following command to run the unit tests.
 
 ```
-atest ContactsProviderTests
+atest ContactsProviderTests ContactsProviderTests2
 ```
