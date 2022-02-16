@@ -20,7 +20,6 @@ import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
-import android.os.Looper;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
@@ -65,6 +64,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor.AutoCloseInputStream;
 import android.os.RemoteException;
@@ -148,11 +148,12 @@ import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Projections;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.SearchIndexColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.SettingsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemPhotosColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StreamItemsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
-import com.android.providers.contacts.ContactsDatabaseHelper.ViewSettingsColumns;
+import com.android.providers.contacts.ContactsDatabaseHelper.ViewGroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Views;
 import com.android.providers.contacts.SearchIndexManager.FtsQueryBuilder;
 import com.android.providers.contacts.aggregation.AbstractContactAggregator;
@@ -219,8 +220,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final String WRITE_PERMISSION = "android.permission.WRITE_CONTACTS";
     private static final String MANAGE_SIM_ACCOUNTS_PERMISSION =
             "android.contacts.permission.MANAGE_SIM_ACCOUNTS";
-    private static final String SET_DEFAULT_ACCOUNT_PERMISSION =
-            "android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS";
 
 
     /* package */ static final String PHONEBOOK_COLLATOR_NAME = "PHONEBOOK";
@@ -249,7 +248,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int BACKGROUND_TASK_CLEANUP_PHOTOS = 10;
     private static final int BACKGROUND_TASK_CLEAN_DELETE_LOG = 11;
     private static final int BACKGROUND_TASK_RESCAN_DIRECTORY = 12;
-    private static final int BACKGROUND_TASK_CLEANUP_DANGLING_CONTACTS = 13;
 
     protected static final int STATUS_NORMAL = 0;
     protected static final int STATUS_UPGRADING = 1;
@@ -267,9 +265,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     /** Rate limit (in milliseconds) for photo cleanup.  Do it at most once per day. */
     private static final int PHOTO_CLEANUP_RATE_LIMIT = 24 * 60 * 60 * 1000;
-
-    /** Rate limit (in milliseconds) for dangling contacts cleanup.  Do it at most once per day. */
-    private static final int DANGLING_CONTACTS_CLEANUP_RATE_LIMIT = 24 * 60 * 60 * 1000;
 
     /** Maximum length of a phone number that can be inserted into the database */
     private static final int PHONE_NUMBER_LENGTH_LIMIT = 1000;
@@ -1016,10 +1011,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                 + " THEN 1"
                                 + " ELSE MIN(" + Groups.SHOULD_SYNC + ")"
                                 + " END)"
-                            + " FROM " + Tables.GROUPS
-                            + " WHERE " + GroupsColumns.CONCRETE_ACCOUNT_ID + "="
-                                + ViewSettingsColumns.CONCRETE_ACCOUNT_ID
-                        + "))=0"
+                            + " FROM " + Views.GROUPS
+                            + " WHERE " + ViewGroupsColumns.CONCRETE_ACCOUNT_NAME + "="
+                                    + SettingsColumns.CONCRETE_ACCOUNT_NAME
+                                + " AND " + ViewGroupsColumns.CONCRETE_ACCOUNT_TYPE + "="
+                                    + SettingsColumns.CONCRETE_ACCOUNT_TYPE
+                                + " AND ((" + ViewGroupsColumns.CONCRETE_DATA_SET + " IS NULL AND "
+                                    + SettingsColumns.CONCRETE_DATA_SET + " IS NULL) OR ("
+                                    + ViewGroupsColumns.CONCRETE_DATA_SET + "="
+                                    + SettingsColumns.CONCRETE_DATA_SET + "))))=0"
                     + " THEN 1"
                     + " ELSE 0"
                     + " END)")
@@ -1467,8 +1467,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private long mLastPhotoCleanup = 0;
 
-    private long mLastDanglingContactsCleanup = 0;
-
     private FastScrollingIndexCache mFastScrollingIndexCache;
 
     // Stats about FastScrollingIndex.
@@ -1567,7 +1565,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         scheduleBackgroundTask(BACKGROUND_TASK_OPEN_WRITE_ACCESS);
         scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_PHOTOS);
         scheduleBackgroundTask(BACKGROUND_TASK_CLEAN_DELETE_LOG);
-        scheduleBackgroundTask(BACKGROUND_TASK_CLEANUP_DANGLING_CONTACTS);
 
         ContactsPackageMonitor.start(getContext());
 
@@ -1771,17 +1768,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case BACKGROUND_TASK_CLEAN_DELETE_LOG: {
                 final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
                 DeletedContactsTableUtil.deleteOldLogs(db);
-                break;
-            }
-
-            case BACKGROUND_TASK_CLEANUP_DANGLING_CONTACTS: {
-                // Check rate limit.
-                long now = System.currentTimeMillis();
-                if (now - mLastDanglingContactsCleanup > DANGLING_CONTACTS_CLEANUP_RATE_LIMIT) {
-                    mLastDanglingContactsCleanup = now;
-
-                    cleanupDanglingContacts();
-                }
                 break;
             }
         }
@@ -2009,31 +1995,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 db.endTransaction();
             }
         }
-    }
-
-    @VisibleForTesting
-    protected void cleanupDanglingContacts() {
-      // Dangling contacts are the contacts whose _id doesn't have a raw_contact_id linked with.
-      String danglingContactsSelection =
-          Contacts._ID
-              + " NOT IN (SELECT "
-              + RawContacts.CONTACT_ID
-              + " FROM "
-              + Tables.RAW_CONTACTS
-              + " WHERE "
-              + RawContacts.DELETED
-              + " = 0)";
-      int danglingContactsCount =
-          mDbHelper
-              .get()
-              .getWritableDatabase()
-              .delete(Tables.CONTACTS, danglingContactsSelection, /* selectionArgs= */ null);
-      LogFields.Builder logBuilder =
-          LogFields.Builder.aLogFields()
-              .setTaskType(LogUtils.TaskType.DANGLING_CONTACTS_CLEANUP_TASK)
-              .setResultCount(danglingContactsCount);
-      LogUtils.log(logBuilder.build());
-      Log.v(TAG, danglingContactsCount + " Dangling Contacts have been cleaned up.");
     }
 
     @Override
@@ -2311,6 +2272,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
+        LogFields.Builder logBuilder =
+                LogFields.Builder.aLogFields()
+                        .setApiType(LogUtils.ApiType.CALL)
+                        .setStartNanos(SystemClock.elapsedRealtimeNanos());
         waitForAccess(mReadAccessLatch);
         switchToContactMode();
         if (Authorization.AUTHORIZATION_METHOD.equals(method)) {
@@ -2351,34 +2316,54 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 throw new IllegalArgumentException("Account name or type is empty");
             }
 
+            long resultId = -1;
             final Bundle response = new Bundle();
             final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
             db.beginTransaction();
             try {
-                mDbHelper.get().createSimAccountIdInTransaction(
+                resultId = mDbHelper.get().createSimAccountIdInTransaction(
                         AccountWithDataSet.get(accountName, accountType, null), simSlot, efType);
                 db.setTransactionSuccessful();
+            } catch (Exception e) {
+                logBuilder.setException(e);
+                throw e;
             } finally {
+                LogUtils.log(
+                        logBuilder
+                                .setMethodCall(LogUtils.MethodCall.ADD_SIM_ACCOUNTS)
+                                .setResultCount(resultId > -1 ? 1 : 0)
+                                .build());
                 db.endTransaction();
             }
+
             getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
             return response;
         } else if (SimContacts.REMOVE_SIM_ACCOUNT_METHOD.equals(method)) {
-            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
-                    MANAGE_SIM_ACCOUNTS_PERMISSION);
+            ContactsPermissions.enforceCallingOrSelfPermission(
+                    getContext(), MANAGE_SIM_ACCOUNTS_PERMISSION);
 
             final int simSlot = extras.getInt(SimContacts.KEY_SIM_SLOT_INDEX, -1);
             if (simSlot < 0) {
                 throw new IllegalArgumentException("Sim slot is negative");
             }
+
+            int removedCount = 0;
             final Bundle response = new Bundle();
             final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
             db.beginTransaction();
             try {
-                mDbHelper.get().removeSimAccounts(simSlot);
+                removedCount = mDbHelper.get().removeSimAccounts(simSlot);
                 scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
                 db.setTransactionSuccessful();
+            } catch (Exception e) {
+                logBuilder.setException(e);
+                throw e;
             } finally {
+                LogUtils.log(
+                        logBuilder
+                                .setMethodCall(LogUtils.MethodCall.REMOVE_SIM_ACCOUNTS)
+                                .setResultCount(removedCount)
+                                .build());
                 db.endTransaction();
             }
             getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
@@ -2386,62 +2371,24 @@ public class ContactsProvider2 extends AbstractContactsProvider
         } else if (SimContacts.QUERY_SIM_ACCOUNTS_METHOD.equals(method)) {
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
             final Bundle response = new Bundle();
-
-            final List<SimAccount> simAccounts = mDbHelper.get().getAllSimAccounts();
-            response.putParcelableList(SimContacts.KEY_SIM_ACCOUNTS, simAccounts);
-
-            return response;
-        } else if (Settings.QUERY_DEFAULT_ACCOUNT_METHOD.equals(method)) {
-            ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
-            final Bundle response = new Bundle();
-
-            final Account defaultAccount = mDbHelper.get().getDefaultAccount();
-            response.putParcelable(Settings.KEY_DEFAULT_ACCOUNT, defaultAccount);
-
-            return response;
-        } else if (Settings.SET_DEFAULT_ACCOUNT_METHOD.equals(method)) {
-            return setDefaultAccountSetting(extras);
+            int accountsCount = 0;
+            try {
+                final List<SimAccount> simAccounts = mDbHelper.get().getAllSimAccounts();
+                response.putParcelableList(SimContacts.KEY_SIM_ACCOUNTS, simAccounts);
+                accountsCount = simAccounts.size();
+                return response;
+            } catch (Exception e) {
+                logBuilder.setException(e);
+                throw e;
+            } finally {
+                LogUtils.log(
+                        logBuilder
+                                .setMethodCall(LogUtils.MethodCall.GET_SIM_ACCOUNTS)
+                                .setResultCount(accountsCount)
+                                .build());
+            }
         }
         return null;
-    }
-
-    private Bundle setDefaultAccountSetting(Bundle extras) {
-        ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
-                SET_DEFAULT_ACCOUNT_PERMISSION);
-        final String accountName = extras.getString(Settings.ACCOUNT_NAME);
-        final String accountType = extras.getString(Settings.ACCOUNT_TYPE);
-        final String dataSet = extras.getString(Settings.DATA_SET);
-
-        if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
-            throw new IllegalArgumentException(
-                    "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE");
-        }
-        if (!TextUtils.isEmpty(dataSet)) {
-            throw new IllegalArgumentException(
-                    "Cannot set default account with non-null data set.");
-        }
-
-        AccountWithDataSet accountWithDataSet = new AccountWithDataSet(
-                accountName, accountType, dataSet);
-        Account[] systemAccounts = AccountManager.get(getContext()).getAccounts();
-        List<SimAccount> simAccounts = mDbHelper.get().getAllSimAccounts();
-        if (!accountWithDataSet.isLocalAccount()
-                && !accountWithDataSet.inSystemAccounts(systemAccounts)
-                && !accountWithDataSet.inSimAccounts(simAccounts)) {
-            throw new IllegalArgumentException(
-                    "Cannot set default account for invalid accounts.");
-        }
-
-        final Bundle response = new Bundle();
-        final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-        db.beginTransaction();
-        try {
-            mDbHelper.get().setDefaultAccount(accountName, accountType);
-            db.setTransactionSuccessful();
-        } finally {
-            db.endTransaction();
-        }
-        return response;
     }
 
     /**
@@ -2816,9 +2763,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case SETTINGS: {
+                id = insertSettings(values);
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                // Settings rows are referenced by the account instead of their ID.
-                return insertSettings(uri, values);
+                break;
             }
 
             case STATUS_UPDATES:
@@ -3376,35 +3323,55 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return groupId;
     }
 
-    private Uri insertSettings(Uri uri, ContentValues values) {
-        final AccountWithDataSet account = resolveAccountWithDataSet(uri, values);
-
-        // Note that the following check means the local account settings cannot be created with
-        // an insert because resolveAccountWithDataSet returns null for it. However, the settings
-        // for it can be updated once it is created automatically by a raw contact or group insert.
-        if (account == null) {
-            return null;
+    private long insertSettings(ContentValues values) {
+        // Before inserting, ensure that no settings record already exists for the
+        // values being inserted (this used to be enforced by a primary key, but that no
+        // longer works with the nullable data_set field added).
+        String accountName = values.getAsString(Settings.ACCOUNT_NAME);
+        String accountType = values.getAsString(Settings.ACCOUNT_TYPE);
+        String dataSet = values.getAsString(Settings.DATA_SET);
+        Uri.Builder settingsUri = Settings.CONTENT_URI.buildUpon();
+        if (accountName != null) {
+            settingsUri.appendQueryParameter(Settings.ACCOUNT_NAME, accountName);
         }
-        final ContactsDatabaseHelper dbHelper = mDbHelper.get();
+        if (accountType != null) {
+            settingsUri.appendQueryParameter(Settings.ACCOUNT_TYPE, accountType);
+        }
+        if (dataSet != null) {
+            settingsUri.appendQueryParameter(Settings.DATA_SET, dataSet);
+        }
+        Cursor c = queryLocal(settingsUri.build(), null, null, null, null, 0, null);
+        try {
+            if (c.getCount() > 0) {
+                // If a record was found, replace it with the new values.
+                String selection = null;
+                String[] selectionArgs = null;
+                if (accountName != null && accountType != null) {
+                    selection = Settings.ACCOUNT_NAME + "=? AND " + Settings.ACCOUNT_TYPE + "=?";
+                    if (dataSet == null) {
+                        selection += " AND " + Settings.DATA_SET + " IS NULL";
+                        selectionArgs = new String[] {accountName, accountType};
+                    } else {
+                        selection += " AND " + Settings.DATA_SET + "=?";
+                        selectionArgs = new String[] {accountName, accountType, dataSet};
+                    }
+                }
+                return updateSettings(values, selection, selectionArgs);
+            }
+        } finally {
+            c.close();
+        }
+
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
 
-        long accountId = dbHelper.getOrCreateAccountIdInTransaction(account);
-        mSelectionArgs1[0] = String.valueOf(accountId);
-
-        int count = db.update(Views.SETTINGS, values,
-                ViewSettingsColumns.ACCOUNT_ID + "= ?", mSelectionArgs1);
+        // If we didn't find a duplicate, we're fine to insert.
+        final long id = db.insert(Tables.SETTINGS, null, values);
 
         if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
             mVisibleTouched = true;
         }
 
-        Uri.Builder builder = Settings.CONTENT_URI.buildUpon()
-                .appendQueryParameter(Settings.ACCOUNT_NAME, account.getAccountName())
-                .appendQueryParameter(Settings.ACCOUNT_TYPE, account.getAccountType());
-        if (account.getDataSet() != null) {
-            builder.appendQueryParameter(Settings.DATA_SET, account.getDataSet());
-        }
-        return builder.build();
+        return id;
     }
 
     /**
@@ -3831,7 +3798,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case SETTINGS: {
                 mSyncToNetwork |= !callerIsSyncAdapter;
-                return deleteSettings(appendAccountIdToSelection(uri, selection), selectionArgs);
+                return deleteSettings(appendAccountToSelection(uri, selection), selectionArgs);
             }
 
             case STATUS_UPDATES:
@@ -3908,21 +3875,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private int deleteSettings(String initialSelection, String[] selectionArgs) {
+    private int deleteSettings(String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-
-        int count = 0;
-        final String selection = DbQueryUtils.concatenateClauses(
-                initialSelection, Clauses.DELETABLE_SETTINGS);
-        try (Cursor cursor = db.query(Views.SETTINGS,
-                new String[] { ViewSettingsColumns.ACCOUNT_ID },
-                selection, selectionArgs, null, null, null)) {
-            while (cursor.moveToNext()) {
-                mSelectionArgs1[0] = cursor.getString(0);
-                db.delete(Tables.ACCOUNTS, AccountsColumns._ID + "=?", mSelectionArgs1);
-                count++;
-            }
-        }
+        final int count = db.delete(Tables.SETTINGS, selection, selectionArgs);
         mVisibleTouched = true;
         return count;
     }
@@ -4591,20 +4546,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private int updateSettings(ContentValues values, String selection, String[] selectionArgs) {
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-
-        int count = 0;
-        // We have to query for the count because the update is using a trigger and triggers
-        // don't return a count of modified rows.
-        try (Cursor cursor = db.query(Views.SETTINGS,
-                new String[] { "COUNT(*)" },
-                selection, selectionArgs, null, null, null)) {
-            if (cursor.moveToFirst()) {
-                count = cursor.getInt(0);
-            }
-        }
-        if (count > 0) {
-            db.update(Views.SETTINGS, values, selection, selectionArgs);
-        }
+        final int count = db.update(Tables.SETTINGS, values, selection, selectionArgs);
         if (values.containsKey(Settings.UNGROUPED_VISIBLE)) {
             mVisibleTouched = true;
         }
@@ -5385,7 +5327,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
             }
 
-            // Second, remove stale rows from Tables.DIRECTORIES
+            // Second, remove stale rows from Tables.SETTINGS and Tables.DIRECTORIES
+            removeStaleAccountRows(
+                    Tables.SETTINGS, Settings.ACCOUNT_NAME, Settings.ACCOUNT_TYPE, systemAccounts);
             removeStaleAccountRows(Tables.DIRECTORIES, Directory.ACCOUNT_NAME,
                     Directory.ACCOUNT_TYPE, systemAccounts);
 
@@ -6967,9 +6911,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case SETTINGS: {
-                qb.setTables(Views.SETTINGS);
+                qb.setTables(Tables.SETTINGS);
                 qb.setProjectionMap(sSettingsProjectionMap);
-                appendAccountIdFromParameter(qb, uri);
+                appendAccountFromParameter(qb, uri);
 
                 // When requesting specific columns, this query requires
                 // late-binding of the GroupMembership MIME-type.
