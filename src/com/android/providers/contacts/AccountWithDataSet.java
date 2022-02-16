@@ -17,15 +17,11 @@
 package com.android.providers.contacts;
 
 import android.accounts.Account;
-import android.content.res.Resources;
-import android.database.DatabaseUtils;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.SimAccount;
 import android.text.TextUtils;
 
-import com.android.internal.R;
-
 import com.google.common.base.Objects;
-import com.google.common.base.Strings;
 
 import java.util.List;
 
@@ -33,16 +29,7 @@ import java.util.List;
  * Account information that includes the data set, if any.
  */
 public class AccountWithDataSet {
-    public static final AccountWithDataSet LOCAL;
-
-    static {
-        Resources resources = Resources.getSystem();
-        String accountName = Strings.nullToEmpty(
-                resources.getString(R.string.config_rawContactsLocalAccountName));
-        String accountType = Strings.nullToEmpty(
-                resources.getString(R.string.config_rawContactsLocalAccountType));
-        LOCAL = new AccountWithDataSet(accountName, accountType, null);
-    }
+    public static final AccountWithDataSet LOCAL = new AccountWithDataSet(null, null, null);
 
     private final String mAccountName;
     private final String mAccountType;
@@ -79,8 +66,7 @@ public class AccountWithDataSet {
     }
 
     public boolean isLocalAccount() {
-        return LOCAL.equals(this) || (
-                mAccountName == null && mAccountType == null && mDataSet == null);
+        return (mAccountName == null) && (mAccountType == null);
     }
 
     @Override
