@@ -37,12 +37,7 @@ public class LogUtils {
         int INSERT = 2;
         int UPDATE = 3;
         int DELETE = 4;
-    }
-
-    // Keep in sync with ContactsProviderStatus#TaskType in
-    // frameworks/proto_logging/stats/atoms.proto file.
-    public interface TaskType {
-        int DANGLING_CONTACTS_CLEANUP_TASK = 1;
+        int CALL = 5;
     }
 
     // Keep in sync with ContactsProviderStatus#CallerType in
@@ -50,6 +45,14 @@ public class LogUtils {
     public interface CallerType {
         int CALLER_IS_SYNC_ADAPTER = 1;
         int CALLER_IS_NOT_SYNC_ADAPTER = 2;
+    }
+
+    // Keep in sync with ContactsProviderStatus#MethodCall in
+    // frameworks/proto_logging/stats/atoms.proto file.
+    public interface MethodCall {
+        int ADD_SIM_ACCOUNTS = 1;
+        int REMOVE_SIM_ACCOUNTS = 2;
+        int GET_SIM_ACCOUNTS = 3;
     }
 
     private static final int STATSD_LOG_ATOM_ID = 301;
@@ -61,9 +64,10 @@ public class LogUtils {
                 .writeInt(logFields.getUriType())
                 .writeInt(getCallerType(logFields.isCallerIsSyncAdapter()))
                 .writeInt(getResultType(logFields.getException()))
-                .writeInt(logFields.getTaskType())
                 .writeInt(logFields.getResultCount())
                 .writeLong(getLatencyMicros(logFields.getStartNanos()))
+                .writeInt(0) // Empty value for TaskType
+                .writeInt(logFields.getMethodCall())
                 .usePooledBuffer()
                 .build());
     }
