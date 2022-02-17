@@ -77,6 +77,7 @@ import android.util.ArraySet;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsActor.AlteringUserContext;
 import com.android.providers.contacts.ContactsActor.MockUserManager;
+import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
@@ -84,6 +85,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.tests.R;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 import com.android.providers.contacts.testutil.ContactUtil;
 import com.android.providers.contacts.testutil.DataUtil;
@@ -91,7 +93,6 @@ import com.android.providers.contacts.testutil.DatabaseAsserts;
 import com.android.providers.contacts.testutil.DeletedContactUtil;
 import com.android.providers.contacts.testutil.RawContactUtil;
 import com.android.providers.contacts.testutil.TestUtil;
-import com.android.providers.contacts.tests.R;
 import com.android.providers.contacts.util.NullContentProvider;
 import com.android.providers.contacts.util.UserUtils;
 
@@ -4242,6 +4243,136 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 new String[] {"c", "d", "plus"}, Settings.SHOULD_SYNC, "0");
     }
 
+    public void testSettingsDeletion() {
+        Account account = new Account("a", "b");
+        Uri settingUri = createSettings(account, "0", "1");
+        long rawContactId = RawContactUtil.createRawContact(mResolver, account);
+
+        int count = mResolver.delete(settingUri, null, null);
+
+        // Settings cannot be deleted when there are still raw contacts for the account.
+        assertEquals(0, count);
+
+        assertStoredValue(Settings.CONTENT_URI,
+                Settings.ACCOUNT_NAME + "= ? AND " + Settings.ACCOUNT_TYPE + "= ?",
+                new String[] {"a", "b"}, Settings.UNGROUPED_VISIBLE, "1");
+
+        RawContactUtil.delete(mResolver, rawContactId, true);
+
+        count = mResolver.delete(settingUri, null, null);
+
+        assertEquals(1, count);
+        assertRowCount(0, Settings.CONTENT_URI, null, null);
+    }
+
+    public void testSettingsUpdate() {
+        Account account1 = new Account("a", "b");
+        Account account2 = new Account("c", "d");
+        Account account3 = new Account("e", "f");
+        createSettings(account1, "0", "0");
+        createSettings(account2, "0", "0");
+        createSettings(account3, "0", "0");
+
+        ContentValues values = new ContentValues();
+        values.put(Settings.UNGROUPED_VISIBLE, 1);
+        int count = mResolver.update(Settings.CONTENT_URI, values, null, null);
+
+        assertEquals(3, count);
+        assertStoredValues(Settings.CONTENT_URI,
+                cv(Settings.UNGROUPED_VISIBLE, 1),
+                cv(Settings.UNGROUPED_VISIBLE, 1),
+                cv(Settings.UNGROUPED_VISIBLE, 1));
+
+        values.put(Settings.SHOULD_SYNC, 1);
+        count = mResolver.update(Settings.CONTENT_URI, values,
+                Settings.ACCOUNT_NAME  + "=?", new String[] {"a"});
+
+        assertEquals(1, count);
+        assertStoredValues(Settings.CONTENT_URI,
+                cv(Settings.ACCOUNT_NAME, "a",
+                        Settings.SHOULD_SYNC, 1),
+                cv(Settings.ACCOUNT_NAME, "c",
+                        Settings.SHOULD_SYNC, 0),
+                cv(Settings.ACCOUNT_NAME, "e",
+                        Settings.SHOULD_SYNC, 0));
+
+        values.clear();
+        // Settings are stored in the accounts table but updates shouldn't be allowed to modify
+        // the other non-Settings columns.
+        values.put(Settings.ACCOUNT_NAME, "x");
+        values.put(Settings.ACCOUNT_TYPE, "y");
+        values.put(Settings.DATA_SET, "z");
+        mResolver.update(Settings.CONTENT_URI, values, null, null);
+
+        values.put(AccountsColumns.SIM_EF_TYPE, 1);
+        values.put(AccountsColumns.SIM_SLOT_INDEX, 1);
+        try {
+            mResolver.update(Settings.CONTENT_URI, values, null, null);
+        } catch (Exception e) {
+            // ignored. We just care that the update didn't change the data
+        }
+
+        assertStoredValuesDb("SELECT * FROM " + Tables.ACCOUNTS, null,
+                cv(
+                        Settings.ACCOUNT_NAME, "a",
+                        Settings.ACCOUNT_TYPE, "b",
+                        Settings.DATA_SET, null,
+                        AccountsColumns.SIM_SLOT_INDEX, null,
+                        AccountsColumns.SIM_EF_TYPE, null
+                ),
+                cv(
+                        Settings.ACCOUNT_NAME, "c",
+                        Settings.ACCOUNT_TYPE, "d",
+                        Settings.DATA_SET, null,
+                        AccountsColumns.SIM_SLOT_INDEX, null,
+                        AccountsColumns.SIM_EF_TYPE, null
+                ),
+                cv(
+                        Settings.ACCOUNT_NAME, "e",
+                        Settings.ACCOUNT_TYPE, "f",
+                        Settings.DATA_SET, null,
+                        AccountsColumns.SIM_SLOT_INDEX, null,
+                        AccountsColumns.SIM_EF_TYPE, null
+                ));
+    }
+
+    public void testSettingsLocalAccount() {
+        AccountWithDataSet localAccount = AccountWithDataSet.LOCAL;
+
+        // It's not possible to insert the local account directly into settings but it will be
+        // created automatically when a raw contact is created for it.
+        RawContactUtil.createRawContactWithAccountDataSet(
+                mResolver, localAccount.getAccountName(),
+                localAccount.getAccountType(), localAccount.getDataSet());
+
+        ContentValues values = new ContentValues();
+        values.put(Settings.ACCOUNT_NAME, localAccount.getAccountName());
+        values.put(Settings.ACCOUNT_TYPE, localAccount.getAccountType());
+        values.put(Settings.DATA_SET, localAccount.getDataSet());
+        ContentValues expectedValues = new ContentValues(values);
+        // The defaults for the local account are opposite of other accounts.
+        expectedValues.put(Settings.UNGROUPED_VISIBLE, "1");
+        expectedValues.put(Settings.SHOULD_SYNC, "0");
+
+        assertStoredValues(Settings.CONTENT_URI, expectedValues);
+
+        values.put(Settings.SHOULD_SYNC, 1);
+        values.put(Settings.UNGROUPED_VISIBLE, 0);
+        mResolver.update(Settings.CONTENT_URI, values, null, null);
+
+        expectedValues.put(Settings.UNGROUPED_VISIBLE, "0");
+        expectedValues.put(Settings.SHOULD_SYNC, "1");
+        assertStoredValues(Settings.CONTENT_URI, expectedValues);
+
+        // Empty strings should also be the local account.
+        values.put(Settings.ACCOUNT_NAME, "");
+        values.put(Settings.ACCOUNT_TYPE, "");
+        values.put(Settings.DATA_SET, "");
+        mResolver.insert(Settings.CONTENT_URI, values);
+
+        assertRowCount(1, Settings.CONTENT_URI, null, null);
+    }
+
     public void testDisplayNameParsingWhenPartsUnspecified() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = new ContentValues();
@@ -6317,8 +6448,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mActor.setAccounts(new Account[]{mAccount, mAccountTwo});
         cp.onAccountsUpdated(new Account[]{mAccount, mAccountTwo});
         assertEquals(1, getCount(RawContacts.CONTENT_URI, null, null));
-        assertStoredValue(rawContact3, RawContacts.ACCOUNT_NAME, null);
-        assertStoredValue(rawContact3, RawContacts.ACCOUNT_TYPE, null);
+        assertStoredValue(
+                rawContact3, RawContacts.ACCOUNT_NAME,
+                AccountWithDataSet.LOCAL.getAccountName());
+        assertStoredValue(rawContact3, RawContacts.ACCOUNT_TYPE,
+                AccountWithDataSet.LOCAL.getAccountType());
 
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, mAccount);
         insertEmail(rawContactId1, "account1@email.com");
@@ -7327,6 +7461,55 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 ContentUris.withAppendedId(Contacts.CONTENT_URI, profileContactId),
                 Contacts.PHOTO_FILE_ID));
 
+    }
+
+    public void testCleanupDanglingContacts_noDanglingContacts() throws Exception {
+        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
+        RawContactUtil.createRawContactWithName(mResolver, "A", "B");
+        RawContactUtil.createRawContactWithName(mResolver, "C", "D");
+
+        provider.cleanupDanglingContacts();
+
+        Cursor contactCursor = mResolver.query(Contacts.CONTENT_URI, null, null, null, null);
+        Cursor rawContactCursor = mResolver.query(RawContacts.CONTENT_URI, null, null, null, null);
+
+        // No contacts should be deleted
+        assertEquals(2, contactCursor.getCount());
+        assertEquals(2, rawContactCursor.getCount());
+    }
+
+    public void testCleanupDanglingContacts_singleDanglingContacts() throws Exception {
+        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "A", "B");
+
+        // Change the contact_id to create dangling contact.
+        SQLiteDatabase db = provider.getDatabaseHelper().getWritableDatabase();
+        db.execSQL("UPDATE raw_contacts SET contact_id = 99999 WHERE _id = " + rawContactId + ";");
+
+        provider.cleanupDanglingContacts();
+
+        // Dangling contact should be deleted from contacts table.
+        assertEquals(0, mResolver.query(Contacts.CONTENT_URI, null, null, null, null).getCount());
+    }
+
+    public void testCleanupDanglingContacts_multipleDanglingContacts() throws Exception {
+        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "A", "B");
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "C", "D");
+        RawContactUtil.createRawContactWithName(mResolver, "E", "F");
+
+        final ContactsDatabaseHelper helper = provider.getDatabaseHelper();
+        SQLiteDatabase db = helper.getWritableDatabase();
+
+        // Change contact_id of RawContact1 and RawContact2 to create dangling contacts.
+        db.execSQL("UPDATE raw_contacts SET contact_id = 99998 WHERE _id = " + rawContactId1 + ";");
+        db.execSQL("UPDATE raw_contacts SET contact_id = 99999 WHERE _id = " + rawContactId2 + ";");
+
+        provider.cleanupDanglingContacts();
+
+        // Should only be one contact left in the contacts table.
+        // RawContact1 and RawContact2 should be deleted from the contacts table.
+        assertEquals(1, mResolver.query(Contacts.CONTENT_URI, null, null, null, null).getCount());
     }
 
     public void testOverwritePhotoWithThumbnail() throws IOException {
@@ -8942,6 +9125,79 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 cv(Contacts._ID, cId4, Contacts.PINNED, PinnedPositions.UNPINNED),
                 cv(Contacts._ID, i5.mContactId, Contacts.PINNED, 6)
         );
+    }
+
+    public void testDefaultAccountSet_throwException() {
+        mActor.setAccounts(new Account[]{mAccount});
+        try {
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                    null, null);
+            fail();
+        } catch (SecurityException expected) {
+        }
+
+        mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
+        try {
+            Bundle bundle = new Bundle();
+            bundle.putString(Settings.ACCOUNT_NAME, "account1"); // no account type specified
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                    null, bundle);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+
+        try {
+            Bundle bundle = new Bundle();
+            bundle.putString(Settings.ACCOUNT_NAME, "account1");
+            bundle.putString(Settings.ACCOUNT_TYPE, "account type1");
+            bundle.putString(Settings.DATA_SET, "c"); // data set should not be set.
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                    null, bundle);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+
+        try {
+            Bundle bundle = new Bundle();
+            bundle.putString(Settings.ACCOUNT_NAME, "account2"); // invalid account
+            bundle.putString(Settings.ACCOUNT_TYPE, "account type2");
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                null, bundle);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    public void testDefaultAccountSetAndQuery() {
+        Bundle response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                Settings.QUERY_DEFAULT_ACCOUNT_METHOD, null, null);
+        Account account = response.getParcelable(Settings.KEY_DEFAULT_ACCOUNT);
+        assertNull(account);
+
+        mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
+        mActor.setAccounts(new Account[]{mAccount});
+        // Set ("account1", "account type1") account as the default account.
+        Bundle bundle = new Bundle();
+        bundle.putString(Settings.ACCOUNT_NAME, "account1");
+        bundle.putString(Settings.ACCOUNT_TYPE, "account type1");
+        mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                null, bundle);
+
+        response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                Settings.QUERY_DEFAULT_ACCOUNT_METHOD, null, null);
+        account = response.getParcelable(Settings.KEY_DEFAULT_ACCOUNT);
+        assertEquals("account1", account.name);
+        assertEquals("account type1", account.type);
+
+        // Set NULL account as default account.
+        bundle = new Bundle();
+        mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+            null, bundle);
+
+        response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                Settings.QUERY_DEFAULT_ACCOUNT_METHOD, null, null);
+        account = response.getParcelable(Settings.KEY_DEFAULT_ACCOUNT);
+        assertNull(account);
     }
 
     public void testPinnedPositionsDemoteIllegalArguments() {

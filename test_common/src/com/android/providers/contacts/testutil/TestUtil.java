@@ -59,7 +59,7 @@ public class TestUtil {
         return uri.buildUpon()
                 .appendQueryParameter(RawContacts.ACCOUNT_NAME, accountName)
                 .appendQueryParameter(RawContacts.ACCOUNT_TYPE, accountType)
-                .appendQueryParameter(RawContacts.DATA_SET, dataSet)
+                .appendQueryParameter(RawContacts.DATA_SET, dataSet != null ? dataSet : "")
                 .build();
     }
 }
