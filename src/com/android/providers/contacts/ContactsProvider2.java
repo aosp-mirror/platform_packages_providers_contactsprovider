@@ -5700,8 +5700,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 Log.v(TAG, "Making authority " + directoryAuthority
                         + " visible to UID " + callingUid);
             }
-            getContext().getPackageManager().grantImplicitAccess(
-                    callingUid, directoryAuthority);
+            getContext().getPackageManager()
+                    .makeProviderVisible(callingUid, directoryAuthority);
         }
 
         // Load the cursor contents into a memory cursor (backed by a cursor window) and close the
