@@ -16,7 +16,6 @@
 
 package com.android.providers.contacts;
 
-import android.accounts.Account;
 import android.app.ActivityManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -92,7 +91,6 @@ import android.util.Log;
 import android.util.Slog;
 
 import com.android.common.content.SyncStateContentProviderHelper;
-import com.android.internal.R;
 import com.android.internal.R.bool;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
@@ -104,8 +102,6 @@ import com.android.providers.contacts.sqlite.SqlChecker;
 import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
 import com.android.providers.contacts.util.NeededForTesting;
 import com.android.providers.contacts.util.PropertyUtils;
-
-import com.google.common.base.Strings;
 
 import java.io.PrintWriter;
 import java.security.MessageDigest;
@@ -147,10 +143,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1300-1399 P
      *   1400-1499 Q
      *   1500-1599 S
-     *   1600-1699 T
      * </pre>
      */
-    static final int DATABASE_VERSION = 1603;
+    static final int DATABASE_VERSION = 1501;
     private static final int MINIMUM_SUPPORTED_VERSION = 700;
 
     @VisibleForTesting
@@ -229,21 +224,37 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     + ")";
 
         // NOTE: This requires late binding of GroupMembership MIME-type
+        // TODO Consolidate settings and accounts
         public static final String RAW_CONTACTS_JOIN_SETTINGS_DATA_GROUPS = Tables.RAW_CONTACTS
                 + " JOIN " + Tables.ACCOUNTS + " ON ("
                 +   RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
                     + ")"
+                + "LEFT OUTER JOIN " + Tables.SETTINGS + " ON ("
+                    + AccountsColumns.CONCRETE_ACCOUNT_NAME + "="
+                        + SettingsColumns.CONCRETE_ACCOUNT_NAME + " AND "
+                    + AccountsColumns.CONCRETE_ACCOUNT_TYPE + "="
+                        + SettingsColumns.CONCRETE_ACCOUNT_TYPE + " AND "
+                    + "((" + AccountsColumns.CONCRETE_DATA_SET + " IS NULL AND "
+                            + SettingsColumns.CONCRETE_DATA_SET + " IS NULL) OR ("
+                        + AccountsColumns.CONCRETE_DATA_SET + "="
+                            + SettingsColumns.CONCRETE_DATA_SET + "))) "
                 + "LEFT OUTER JOIN data ON (data.mimetype_id=? AND "
                     + "data.raw_contact_id = raw_contacts._id) "
                 + "LEFT OUTER JOIN groups ON (groups._id = data." + GroupMembership.GROUP_ROW_ID
                 + ")";
 
         // NOTE: This requires late binding of GroupMembership MIME-type
-        public static final String SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS = "accounts "
+        // TODO Add missing DATA_SET join -- or just consolidate settings and accounts
+        public static final String SETTINGS_JOIN_RAW_CONTACTS_DATA_MIMETYPES_CONTACTS = "settings "
                 + "LEFT OUTER JOIN raw_contacts ON ("
-                    + RawContactsColumns.CONCRETE_ACCOUNT_ID + "="
+                    + RawContactsColumns.CONCRETE_ACCOUNT_ID + "=(SELECT "
                         + AccountsColumns.CONCRETE_ID
-                    + ")"
+                        + " FROM " + Tables.ACCOUNTS
+                        + " WHERE "
+                            + "(" + AccountsColumns.CONCRETE_ACCOUNT_NAME
+                                + "=" + SettingsColumns.CONCRETE_ACCOUNT_NAME + ") AND "
+                            + "(" + AccountsColumns.CONCRETE_ACCOUNT_TYPE
+                                + "=" + SettingsColumns.CONCRETE_ACCOUNT_TYPE + ")))"
                 + "LEFT OUTER JOIN data ON (data.mimetype_id=? AND "
                     + "data.raw_contact_id = raw_contacts._id) "
                 + "LEFT OUTER JOIN contacts ON (raw_contacts.contact_id = contacts._id)";
@@ -329,7 +340,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String ENTITIES = "view_entities";
         public static final String RAW_ENTITIES = "view_raw_entities";
         public static final String GROUPS = "view_groups";
-        public static final String SETTINGS = "view_settings";
 
         /** The data_usage_stat table with the low-res columns. */
         public static final String DATA_USAGE_LR = "view_data_usage";
@@ -358,30 +368,21 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     public interface Clauses {
-
         final String HAVING_NO_GROUPS = "COUNT(" + DataColumns.CONCRETE_GROUP_ID + ") == 0";
 
-        final String GROUP_BY_ACCOUNT_CONTACT_ID = AccountsColumns.CONCRETE_ID + ","
-                + RawContacts.CONTACT_ID;
+        final String GROUP_BY_ACCOUNT_CONTACT_ID = SettingsColumns.CONCRETE_ACCOUNT_NAME + ","
+                + SettingsColumns.CONCRETE_ACCOUNT_TYPE + "," + RawContacts.CONTACT_ID;
 
         String LOCAL_ACCOUNT_ID =
-                "(SELECT "
-                        + AccountsColumns._ID
-                        + " FROM "
-                        + Tables.ACCOUNTS
-                        + " WHERE "
-                        + AccountsColumns.ACCOUNT_NAME
-                        + " IS "
-                        + MoreDatabaseUtils.sqlEscapeNullableString(
-                                AccountWithDataSet.LOCAL.getAccountName())
-                        + " AND "
-                        + AccountsColumns.ACCOUNT_TYPE
-                        + " IS "
-                        + MoreDatabaseUtils.sqlEscapeNullableString(
-                                AccountWithDataSet.LOCAL.getAccountType())
-                        + " AND "
-                        + AccountsColumns.DATA_SET
-                        + " IS NULL)";
+                "(SELECT " + AccountsColumns._ID +
+                " FROM " + Tables.ACCOUNTS +
+                " WHERE " +
+                    AccountsColumns.ACCOUNT_NAME + " IS NULL AND " +
+                    AccountsColumns.ACCOUNT_TYPE + " IS NULL AND " +
+                    AccountsColumns.DATA_SET + " IS NULL)";
+
+        final String RAW_CONTACT_IS_LOCAL = RawContactsColumns.CONCRETE_ACCOUNT_ID
+                + "=" + LOCAL_ACCOUNT_ID;
 
         final String ZERO_GROUP_MEMBERSHIPS = "COUNT(" + GroupsColumns.CONCRETE_ID + ")=0";
 
@@ -392,6 +393,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "SELECT " +
                     "MAX((SELECT (CASE WHEN " +
                         "(CASE" +
+                            " WHEN " + RAW_CONTACT_IS_LOCAL +
+                            " THEN 1 " +
                             " WHEN " + ZERO_GROUP_MEMBERSHIPS +
                             " THEN " + Settings.UNGROUPED_VISIBLE +
                             " ELSE MAX(" + Groups.GROUP_VISIBLE + ")" +
@@ -414,17 +417,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 "EXISTS (SELECT _id FROM " + Tables.DEFAULT_DIRECTORY
                         + " WHERE " + Tables.CONTACTS +"." + Contacts._ID
                         + "=" + Tables.DEFAULT_DIRECTORY +"." + Contacts._ID + ")";
-
-        // Settings are in the accounts table and should only be deletable if there are no
-        // raw contacts or groups remaining in the account.
-        public static final String DELETABLE_SETTINGS =
-                "NOT EXISTS (SELECT 1 FROM " + Tables.RAW_CONTACTS
-                    + " WHERE " + RawContactsColumns.ACCOUNT_ID + "="
-                        + ViewSettingsColumns.CONCRETE_ACCOUNT_ID
-                    + " UNION SELECT 1 FROM " + Tables.GROUPS
-                    + " WHERE " + GroupsColumns.ACCOUNT_ID + "="
-                        + ViewSettingsColumns.CONCRETE_ACCOUNT_ID
-                + ")";
     }
 
     public interface ContactsColumns {
@@ -567,8 +559,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         public static final String ACCOUNT_ID = "account_id";
         public static final String CONCRETE_ACCOUNT_ID = Tables.GROUPS + "." + ACCOUNT_ID;
+    }
 
-        public static final String CONCRETE_SHOULD_SYNC = Tables.GROUPS + "." + Groups.SHOULD_SYNC;
+    public interface ViewGroupsColumns {
+        String CONCRETE_ACCOUNT_NAME = Views.GROUPS + "." + Groups.ACCOUNT_NAME;
+        String CONCRETE_ACCOUNT_TYPE = Views.GROUPS + "." + Groups.ACCOUNT_TYPE;
+        String CONCRETE_DATA_SET = Views.GROUPS + "." + Groups.DATA_SET;
     }
 
     public interface ActivitiesColumns {
@@ -615,9 +611,13 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String CLUSTER = "cluster";
     }
 
-    public interface ViewSettingsColumns {
-        public static final String ACCOUNT_ID = "account_id";
-        public static final String CONCRETE_ACCOUNT_ID = Views.SETTINGS + "." + ACCOUNT_ID;
+    public interface SettingsColumns {
+        public static final String CONCRETE_ACCOUNT_NAME = Tables.SETTINGS + "."
+                + Settings.ACCOUNT_NAME;
+        public static final String CONCRETE_ACCOUNT_TYPE = Tables.SETTINGS + "."
+                + Settings.ACCOUNT_TYPE;
+        public static final String CONCRETE_DATA_SET = Tables.SETTINGS + "."
+                + Settings.DATA_SET;
     }
 
     public interface PresenceColumns {
@@ -703,14 +703,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String DATA_SET = RawContacts.DATA_SET;
         String SIM_SLOT_INDEX = "sim_slot_index";
         String SIM_EF_TYPE = "sim_ef_type";
-        String UNGROUPED_VISIBLE = Settings.UNGROUPED_VISIBLE;
-        String SHOULD_SYNC = Settings.SHOULD_SYNC;
-        String IS_DEFAULT = Settings.IS_DEFAULT;
 
         String CONCRETE_ACCOUNT_NAME = Tables.ACCOUNTS + "." + ACCOUNT_NAME;
         String CONCRETE_ACCOUNT_TYPE = Tables.ACCOUNTS + "." + ACCOUNT_TYPE;
         String CONCRETE_DATA_SET = Tables.ACCOUNTS + "." + DATA_SET;
-
     }
 
     public interface DirectoryColumns {
@@ -1228,10 +1224,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 AccountsColumns.ACCOUNT_TYPE + " TEXT, " +
                 AccountsColumns.DATA_SET + " TEXT, " +
                 AccountsColumns.SIM_SLOT_INDEX + " INTEGER, " +
-                AccountsColumns.SIM_EF_TYPE + " INTEGER, " +
-                AccountsColumns.UNGROUPED_VISIBLE + " INTEGER NOT NULL DEFAULT 0," +
-                AccountsColumns.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1," +
-                AccountsColumns.IS_DEFAULT + " INTEGER NOT NULL DEFAULT 0" + ");");
+                AccountsColumns.SIM_EF_TYPE + " INTEGER" +
+                ");");
 
         // Note, there are two sets of the usage stat columns: LR_* and RAW_*.
         // RAW_* contain the real values, which clients can't access.  The column names start
@@ -1557,6 +1551,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 AggregationExceptions.RAW_CONTACT_ID1 +
         ");");
 
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.SETTINGS + " (" +
+                Settings.ACCOUNT_NAME + " STRING NOT NULL," +
+                Settings.ACCOUNT_TYPE + " STRING NOT NULL," +
+                Settings.DATA_SET + " STRING," +
+                Settings.UNGROUPED_VISIBLE + " INTEGER NOT NULL DEFAULT 0," +
+                Settings.SHOULD_SYNC + " INTEGER NOT NULL DEFAULT 1" +
+        ");");
+
         db.execSQL("CREATE TABLE " + Tables.VISIBLE_CONTACTS + " (" +
                 Contacts._ID + " INTEGER PRIMARY KEY" +
         ");");
@@ -1605,7 +1607,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         // When adding new tables, be sure to also add size-estimates in updateSqliteStats
         createContactsViews(db);
         createGroupsView(db);
-        createSettingsView(db);
         createContactsTriggers(db);
         createContactsIndexes(db, false /* we build stats table later */);
         createPresenceTables(db);
@@ -1775,6 +1776,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + "     WHERE " + Groups._ID + "=OLD." + Groups._ID + ";"
                 + " END");
 
+        // Update DEFAULT_FILTER table per AUTO_ADD column update, see upgradeToVersion411.
+        final String insertContactsWithoutAccount = (
+                " INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
+                "     SELECT " + RawContacts.CONTACT_ID +
+                "     FROM " + Tables.RAW_CONTACTS +
+                "     WHERE " + RawContactsColumns.CONCRETE_ACCOUNT_ID +
+                            "=" + Clauses.LOCAL_ACCOUNT_ID + ";");
+
         final String insertContactsWithAccountNoDefaultGroup = (
                 " INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY +
                 "     SELECT " + RawContacts.CONTACT_ID +
@@ -1809,6 +1818,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + "   AFTER UPDATE OF " + Groups.AUTO_ADD + " ON " + Tables.GROUPS
                 + " BEGIN "
                 + "   DELETE FROM " + Tables.DEFAULT_DIRECTORY + ";"
+                    + insertContactsWithoutAccount
                     + insertContactsWithAccountNoDefaultGroup
                     + insertContactsWithAccountDefaultGroup
                 + " END");
@@ -2242,7 +2252,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + Groups.SYSTEM_ID + ","
                 + Groups.DELETED + ","
                 + Groups.GROUP_VISIBLE + ","
-                + GroupsColumns.CONCRETE_SHOULD_SYNC + " AS " + Groups.SHOULD_SYNC + ","
+                + Groups.SHOULD_SYNC + ","
                 + Groups.AUTO_ADD + ","
                 + Groups.FAVORITES + ","
                 + Groups.GROUP_IS_READ_ONLY + ","
@@ -2262,53 +2272,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     + GroupsColumns.CONCRETE_PACKAGE_ID + "=" + PackagesColumns.CONCRETE_ID + ")";
 
         db.execSQL("CREATE VIEW " + Views.GROUPS + " AS " + groupsSelect);
-    }
-
-    private void createSettingsView(SQLiteDatabase db) {
-        db.execSQL("DROP TRIGGER IF EXISTS " + Views.SETTINGS + "_update;");
-        db.execSQL("DROP TRIGGER IF EXISTS " + Tables.ACCOUNTS + "_insert_local_account ");
-        db.execSQL("DROP VIEW IF EXISTS " + Views.SETTINGS + ";");
-
-        String settingsColumns = AccountsColumns.CONCRETE_ID
-                + " AS " + ViewSettingsColumns.ACCOUNT_ID + ","
-                + AccountsColumns.CONCRETE_ACCOUNT_NAME + " AS " + Settings.ACCOUNT_NAME + ","
-                + AccountsColumns.CONCRETE_ACCOUNT_TYPE + " AS " + Settings.ACCOUNT_TYPE + ","
-                + AccountsColumns.CONCRETE_DATA_SET + " AS " + Settings.DATA_SET + ","
-                + Settings.UNGROUPED_VISIBLE + ","
-                + Settings.SHOULD_SYNC;
-
-        String settingsSelect = "SELECT " + settingsColumns + " FROM " + Tables.ACCOUNTS;
-
-        db.execSQL("CREATE VIEW " + Views.SETTINGS + " AS " + settingsSelect);
-
-        // A trigger is used to update settings to prevent changing the other columns in the
-        // accounts table that are not settings related.
-        db.execSQL("CREATE TRIGGER " + Views.SETTINGS + "_update "
-                + "INSTEAD OF UPDATE ON " + Views.SETTINGS + " "
-                + "BEGIN UPDATE " + Tables.ACCOUNTS + " SET "
-                    + AccountsColumns.UNGROUPED_VISIBLE + " = NEW."
-                        + Settings.UNGROUPED_VISIBLE + ", "
-                    + AccountsColumns.SHOULD_SYNC + " = NEW." + Settings.SHOULD_SYNC + " "
-                + "WHERE _id = OLD." + ViewSettingsColumns.ACCOUNT_ID + "; "
-                + "END;");
-
-        // Unlike other accounts ungrouped contacts in the local account are visible by default and
-        // it is not syncable.
-        String localAccountNameSqlLiteral = MoreDatabaseUtils.sqlEscapeNullableString(
-                AccountWithDataSet.LOCAL.getAccountName());
-        String localAccountTypeSqlLiteral = MoreDatabaseUtils.sqlEscapeNullableString(
-                AccountWithDataSet.LOCAL.getAccountType());
-        db.execSQL("CREATE TRIGGER " + Tables.ACCOUNTS + "_insert_local_account "
-                + "AFTER INSERT ON " + Tables.ACCOUNTS + " "
-                + "WHEN NEW." + AccountsColumns.ACCOUNT_NAME + " IS " + localAccountNameSqlLiteral
-                + " AND NEW." + AccountsColumns.ACCOUNT_TYPE + " IS " + localAccountTypeSqlLiteral
-                + " AND NEW." + AccountsColumns.DATA_SET + " IS NULL "
-                + "BEGIN UPDATE " + Tables.ACCOUNTS + " SET "
-                + Settings.UNGROUPED_VISIBLE + " = 1, "
-                + Settings.SHOULD_SYNC + " = 0 "
-                + "WHERE " + AccountsColumns._ID + " = NEW." + AccountsColumns._ID + "; "
-                + "END;"
-        );
     }
 
     @Override
@@ -2631,38 +2594,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1501;
         }
 
-        if (isUpgradeRequired(oldVersion, newVersion, 1600)) {
-            upgradeToVersion1600(db);
-            upgradeViewsAndTriggers = true;
-            oldVersion = 1600;
-        }
-
-        if (isUpgradeRequired(oldVersion, newVersion, 1601)) {
-            upgradeToVersion1601(db);
-            upgradeViewsAndTriggers = true;
-            oldVersion = 1601;
-        }
-
-        if (isUpgradeRequired(oldVersion, newVersion, 1602)) {
-            // 1602 was used for an upgrade that was reverted and is now a no-op. It is safe to skip
-            // it but the database version should not be reused because droidfood devices may have
-            // run the upgrade.
-            oldVersion = 1602;
-        }
-
-        if (isUpgradeRequired(oldVersion, newVersion, 1603)) {
-            upgradeToVersion1603(db);
-            upgradeViewsAndTriggers = true;
-            oldVersion = 1603;
-        }
-
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
         // yet, until CallLogDatabaseHelper moves the data.
 
         if (upgradeViewsAndTriggers) {
             createContactsViews(db);
             createGroupsView(db);
-            createSettingsView(db);
             createContactsTriggers(db);
             createContactsIndexes(db, false /* we build stats table later */);
             upgradeLegacyApiSupport = true;
@@ -3186,7 +3123,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private void upgradeToVersion910(SQLiteDatabase db) {
         final UserManager userManager = (UserManager) mContext.getSystemService(
                 Context.USER_SERVICE);
-        final UserInfo user = userManager.getUserInfo(userManager.getProcessUserId());
+        final UserInfo user = userManager.getUserInfo(userManager.getUserHandle());
         if (user.isManagedProfile()) {
             db.execSQL("DELETE FROM calls;");
         }
@@ -3435,62 +3372,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             db.execSQL("ALTER TABLE accounts ADD sim_slot_index INTEGER;");
             db.execSQL("ALTER TABLE accounts ADD sim_ef_type INTEGER;");
         } catch (SQLException ignore) {
-        }
-    }
-
-    private void upgradeToVersion1600(SQLiteDatabase db) {
-        db.execSQL("ALTER TABLE accounts ADD ungrouped_visible INTEGER NOT NULL DEFAULT 0;");
-        db.execSQL("ALTER TABLE accounts ADD should_sync INTEGER NOT NULL DEFAULT 1;");
-
-        ContentValues values = new ContentValues();
-        // Copy over the existing settings rows.
-        try (Cursor cursor = db.query("settings", new String[]{
-                Settings.ACCOUNT_NAME, Settings.ACCOUNT_TYPE, Settings.DATA_SET,
-                Settings.UNGROUPED_VISIBLE, Settings.SHOULD_SYNC
-        }, null, null, null, null, null)) {
-            String[] selectionArgs = new String[3];
-            while (cursor.moveToNext()) {
-                DatabaseUtils.cursorRowToContentValues(cursor, values);
-                selectionArgs[0] = values.getAsString(Settings.ACCOUNT_NAME);
-                selectionArgs[1] = values.getAsString(Settings.ACCOUNT_TYPE);
-                selectionArgs[2] = values.getAsString(Settings.DATA_SET);
-                if (values.getAsString(Settings.DATA_SET) != null) {
-                    db.update("accounts", values,
-                            "account_name = ? AND account_type = ? AND data_set = ?",
-                            selectionArgs);
-                } else {
-                    db.update("accounts", values,
-                            "account_name = ? AND account_type = ? AND data_set IS ?",
-                            selectionArgs);
-                }
-            }
-        }
-
-        db.execSQL("DROP TABLE settings;");
-
-        // If the local account exists update it's settings so that ungrouped contacts are
-        // visible by default for the local account.
-        values.clear();
-        values.put("ungrouped_visible", true);
-        values.put("should_sync", false);
-        db.update("accounts", values,
-                "account_name IS NULL AND account_type IS NULL AND data_set IS NULL", null);
-    }
-
-    private void upgradeToVersion1601(SQLiteDatabase db) {
-        try {
-            db.execSQL("ALTER TABLE accounts ADD x_is_default INTEGER NOT NULL DEFAULT 0;");
-        } catch (SQLException ignore) {
-            Log.v(TAG, "Version 1601: Columns already exist, skipping upgrade steps.");
-        }
-    }
-
-    private void upgradeToVersion1603(SQLiteDatabase db) {
-        try {
-            // Drop the view that was created in 1602 which was reverted
-            db.execSQL("DROP VIEW IF EXISTS view_raw_contacts_lookup_compat");
-        } catch (SQLException ignore) {
-            Log.v(TAG, "Version 1603: failed to remove view_raw_contacts_lookup_compat.");
         }
     }
 
@@ -3751,6 +3632,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             // Tiny tables
             updateIndexStats(db, Tables.AGGREGATION_EXCEPTIONS,
                     null, "10");
+            updateIndexStats(db, Tables.SETTINGS,
+                    null, "10");
             updateIndexStats(db, Tables.PACKAGES,
                     null, "0");
             updateIndexStats(db, Tables.DIRECTORIES,
@@ -3825,6 +3708,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DELETE FROM " + Tables.NAME_LOOKUP + ";");
         db.execSQL("DELETE FROM " + Tables.GROUPS + ";");
         db.execSQL("DELETE FROM " + Tables.AGGREGATION_EXCEPTIONS + ";");
+        db.execSQL("DELETE FROM " + Tables.SETTINGS + ";");
         db.execSQL("DELETE FROM " + Tables.DIRECTORIES + ";");
         db.execSQL("DELETE FROM " + Tables.SEARCH_INDEX + ";");
         db.execSQL("DELETE FROM " + Tables.DELETED_CONTACTS + ";");
@@ -4114,6 +3998,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         } finally {
             insert.close();
         }
+
         return id;
     }
 
@@ -4181,59 +4066,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * Set is_default column for the given account name and account type.
-     *
-     * @param accountName The account name to be set to default.
-     * @param accountType The account type to be set to default.
-     * @throws IllegalArgumentException if the account name or type is null.
-     */
-    public void setDefaultAccount(String accountName, String accountType) {
-        if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
-            throw new IllegalArgumentException("Account name or type is null.");
-        }
-        SQLiteDatabase db = getWritableDatabase();
-        db.execSQL(
-                "UPDATE " + Tables.ACCOUNTS +
-                        " SET " + AccountsColumns.IS_DEFAULT + "=0" +
-                        " WHERE " + AccountsColumns.IS_DEFAULT + "=1");
-
-        Long accountId = getAccountIdOrNull(new AccountWithDataSet(accountName, accountType, null));
-        ContentValues values = new ContentValues();
-        values.put(AccountsColumns.IS_DEFAULT, 1);
-        if (accountId == null) {
-            if (!TextUtils.isEmpty(accountName)) {
-                values.put(AccountsColumns.ACCOUNT_NAME, accountName);
-            }
-            if (!TextUtils.isEmpty(accountType)) {
-                values.put(AccountsColumns.ACCOUNT_TYPE, accountType);
-            }
-            db.insert(Tables.ACCOUNTS, null, values);
-        } else {
-            db.update(Tables.ACCOUNTS, values, AccountsColumns.CONCRETE_ID + "=" + accountId, null);
-        }
-    }
-
-    /**
-     * Return the default account from Accounts table.
-     */
-    public Account getDefaultAccount() {
-        Account defaultAccount = null;
-        try (Cursor c = getReadableDatabase().rawQuery(
-                "SELECT " + AccountsColumns.ACCOUNT_NAME + ","
-                + AccountsColumns.ACCOUNT_TYPE + " FROM " + Tables.ACCOUNTS + " WHERE "
-                + AccountsColumns.IS_DEFAULT + " = 1", null)) {
-            while (c.moveToNext()) {
-                String accountName = c.getString(0);
-                String accountType = c.getString(1);
-                if (!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
-                    defaultAccount = new Account(accountName, accountType);
-                }
-            }
-        }
-        return defaultAccount;
-    }
-
-    /**
      * Update {@link Contacts#IN_VISIBLE_GROUP} for all contacts.
      */
     public void updateAllVisible() {
@@ -4285,6 +4117,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                                 + GroupsColumns.CONCRETE_ACCOUNT_ID +
                         "  AND " + Groups.AUTO_ADD + " != 0" +
                         ")" +
+                ") OR EXISTS (" +
+                    "SELECT " + RawContacts._ID +
+                    " FROM " + Tables.RAW_CONTACTS +
+                    " WHERE " + RawContacts.CONTACT_ID + "=?1" +
+                    "   AND " + RawContactsColumns.CONCRETE_ACCOUNT_ID + "=" +
+                        Clauses.LOCAL_ACCOUNT_ID +
                 ")",
                 new String[] {
                     contactIdAsString,
