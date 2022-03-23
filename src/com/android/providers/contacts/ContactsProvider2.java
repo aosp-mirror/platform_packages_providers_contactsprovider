@@ -20,6 +20,7 @@ import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
+import android.os.Looper;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
@@ -64,7 +65,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor.AutoCloseInputStream;
 import android.os.RemoteException;
@@ -126,6 +126,7 @@ import android.util.Log;
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.common.io.MoreCloseables;
+import com.android.i18n.phonenumbers.Phonenumber;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
@@ -2272,10 +2273,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
-        LogFields.Builder logBuilder =
-                LogFields.Builder.aLogFields()
-                        .setApiType(LogUtils.ApiType.CALL)
-                        .setStartNanos(SystemClock.elapsedRealtimeNanos());
         waitForAccess(mReadAccessLatch);
         switchToContactMode();
         if (Authorization.AUTHORIZATION_METHOD.equals(method)) {
@@ -2316,54 +2313,34 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 throw new IllegalArgumentException("Account name or type is empty");
             }
 
-            long resultId = -1;
             final Bundle response = new Bundle();
             final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
             db.beginTransaction();
             try {
-                resultId = mDbHelper.get().createSimAccountIdInTransaction(
+                mDbHelper.get().createSimAccountIdInTransaction(
                         AccountWithDataSet.get(accountName, accountType, null), simSlot, efType);
                 db.setTransactionSuccessful();
-            } catch (Exception e) {
-                logBuilder.setException(e);
-                throw e;
             } finally {
-                LogUtils.log(
-                        logBuilder
-                                .setMethodCall(LogUtils.MethodCall.ADD_SIM_ACCOUNTS)
-                                .setResultCount(resultId > -1 ? 1 : 0)
-                                .build());
                 db.endTransaction();
             }
-
             getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
             return response;
         } else if (SimContacts.REMOVE_SIM_ACCOUNT_METHOD.equals(method)) {
-            ContactsPermissions.enforceCallingOrSelfPermission(
-                    getContext(), MANAGE_SIM_ACCOUNTS_PERMISSION);
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                    MANAGE_SIM_ACCOUNTS_PERMISSION);
 
             final int simSlot = extras.getInt(SimContacts.KEY_SIM_SLOT_INDEX, -1);
             if (simSlot < 0) {
                 throw new IllegalArgumentException("Sim slot is negative");
             }
-
-            int removedCount = 0;
             final Bundle response = new Bundle();
             final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
             db.beginTransaction();
             try {
-                removedCount = mDbHelper.get().removeSimAccounts(simSlot);
+                mDbHelper.get().removeSimAccounts(simSlot);
                 scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
                 db.setTransactionSuccessful();
-            } catch (Exception e) {
-                logBuilder.setException(e);
-                throw e;
             } finally {
-                LogUtils.log(
-                        logBuilder
-                                .setMethodCall(LogUtils.MethodCall.REMOVE_SIM_ACCOUNTS)
-                                .setResultCount(removedCount)
-                                .build());
                 db.endTransaction();
             }
             getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
@@ -2371,22 +2348,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         } else if (SimContacts.QUERY_SIM_ACCOUNTS_METHOD.equals(method)) {
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
             final Bundle response = new Bundle();
-            int accountsCount = 0;
-            try {
-                final List<SimAccount> simAccounts = mDbHelper.get().getAllSimAccounts();
-                response.putParcelableList(SimContacts.KEY_SIM_ACCOUNTS, simAccounts);
-                accountsCount = simAccounts.size();
-                return response;
-            } catch (Exception e) {
-                logBuilder.setException(e);
-                throw e;
-            } finally {
-                LogUtils.log(
-                        logBuilder
-                                .setMethodCall(LogUtils.MethodCall.GET_SIM_ACCOUNTS)
-                                .setResultCount(accountsCount)
-                                .build());
-            }
+
+            final List<SimAccount> simAccounts = mDbHelper.get().getAllSimAccounts();
+            response.putParcelableList(SimContacts.KEY_SIM_ACCOUNTS, simAccounts);
+
+            return response;
         }
         return null;
     }
