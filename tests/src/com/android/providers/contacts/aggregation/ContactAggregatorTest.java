@@ -1396,7 +1396,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         // Action: make raw contact 2's name super primary
         storeValue(nameUri2, Data.IS_SUPER_PRIMARY, 1);
 
-        // Initial check.
+        // Sanity check.
         assertStoredValue(nameUri1, Data.IS_SUPER_PRIMARY, 0);
         assertStoredValue(nameUri2, Data.IS_SUPER_PRIMARY, 1);
 
@@ -1750,7 +1750,7 @@ public class ContactAggregatorTest extends BaseContactsProvider2Test {
         final Uri uri = DataUtil.insertStructuredName(mResolver, rawContactId1, "name1",
                 null, null, /* isSuperPrimary = */ true);
 
-        // Initial check.
+        // Sanity check.
         assertStoredValue(uri, Data.IS_SUPER_PRIMARY, 1);
 
         // Action: aggregate

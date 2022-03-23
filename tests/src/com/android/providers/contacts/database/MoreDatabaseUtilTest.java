@@ -54,19 +54,4 @@ public class MoreDatabaseUtilTest extends TestCase {
         assertEquals("testtable_testfield_index",
                 MoreDatabaseUtils.buildIndexName("testtable", "testfield"));
     }
-
-    public void testSqlEscapeNullableString() {
-        assertEquals("NULL", MoreDatabaseUtils.sqlEscapeNullableString(null));
-        assertEquals("'foo'", MoreDatabaseUtils.sqlEscapeNullableString("foo"));
-    }
-
-    public void testAppendEscapedSQLStringOrLiteralNull() {
-        StringBuilder sb1 = new StringBuilder();
-        MoreDatabaseUtils.appendEscapedSQLStringOrLiteralNull(sb1, null);
-        assertEquals("NULL", sb1.toString());
-
-        StringBuilder sb2 = new StringBuilder();
-        MoreDatabaseUtils.appendEscapedSQLStringOrLiteralNull(sb2, "foo");
-        assertEquals("'foo'", sb2.toString());
-    }
 }
