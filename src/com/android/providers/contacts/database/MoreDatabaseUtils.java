@@ -16,10 +16,12 @@
 
 package com.android.providers.contacts.database;
 
-import com.android.providers.contacts.util.NeededForTesting;
-
+import android.annotation.Nullable;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.util.Log;
+
+import com.android.providers.contacts.util.NeededForTesting;
 
 /**
  * Static methods for database operations.
@@ -106,6 +108,32 @@ public class MoreDatabaseUtils {
                 sb.append(s == null ? "{null}" : s.replaceAll("\\s", "{space}"));
             }
             Log.d(logTag, sb.toString());
+        }
+    }
+
+    /**
+     * Same as {@link DatabaseUtils#sqlEscapeString(String)} but handles a null argument by
+     * returning the string "NULL".
+     *
+     * @return the SQL-escaped string or "NULL" if the argument is null.
+     */
+    @Nullable
+    public static String sqlEscapeNullableString(@Nullable String s) {
+        return s == null
+                ? "NULL"
+                : DatabaseUtils.sqlEscapeString(s);
+    }
+
+    /**
+     * Same as {@link DatabaseUtils#appendEscapedSQLString(StringBuilder, String)} but handles a
+     * null argument by appending the literal string "NULL".
+     */
+    @Nullable
+    public static void appendEscapedSQLStringOrLiteralNull(StringBuilder sb, @Nullable String s) {
+        if (s == null) {
+            sb.append("NULL");
+        } else {
+            DatabaseUtils.appendEscapedSQLString(sb, s);
         }
     }
 }
