@@ -170,6 +170,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private static final String RUSSIA_COUNTRY_CODE = "RU";
     private static final String KAZAKHSTAN_COUNTRY_CODE = "KZ";
 
+    /**
+     * Max size for "simple" fields, such as names, phone numbers and email addresses.
+     */
+    private static final int SIMPLE_FIELD_MAX_SIZE_DEFAULT = 10 * 1024;
+    private static final String SIMPLE_FIELD_MAX_SIZE_KEY = "simple_field_max_size";
+    private static volatile Integer sSimpleFieldMaxSizeCached = null;
+
+    private static final long DEVICE_CONFIG_CACHE_EXPIRATION_MS = 1 * 60 * 60 * 1000; // 1 hour
+    private static volatile long sDeviceConfigCacheExpirationElapsedTime;
+
     public interface Tables {
         public static final String CONTACTS = "contacts";
         public static final String DELETED_CONTACTS = "deleted_contacts";
@@ -5279,6 +5289,38 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             Slog.w(TAG, "[Test mode, warning only] " + message);
         } else {
             Slog.wtfStack(TAG, message);
+        }
+    }
+
+    private static void invalidateDeviceConfigCacheIfTooOld() {
+        final long now = SystemClock.elapsedRealtime();
+        if (sDeviceConfigCacheExpirationElapsedTime > now) {
+            return;
+        }
+        if (AbstractContactsProvider.VERBOSE_LOGGING) {
+            Log.v(TAG, "Invalidating device config cache");
+        }
+        sSimpleFieldMaxSizeCached = null;
+        sDeviceConfigCacheExpirationElapsedTime = now + DEVICE_CONFIG_CACHE_EXPIRATION_MS;
+    }
+
+    /**
+     * @return the max size for "simple" fields from the device config setting.
+     */
+    public static int getSimpleFieldMaxSize() {
+        invalidateDeviceConfigCacheIfTooOld();
+        final Integer cached = sSimpleFieldMaxSizeCached;
+        if (cached != null) {
+            return cached;
+        }
+        final long token = Binder.clearCallingIdentity();
+        try {
+            final int value = DeviceConfig.getInt(DeviceConfig.NAMESPACE_CONTACTS_PROVIDER,
+                    SIMPLE_FIELD_MAX_SIZE_KEY, SIMPLE_FIELD_MAX_SIZE_DEFAULT);
+            sSimpleFieldMaxSizeCached = value;
+            return value;
+        } finally {
+            Binder.restoreCallingIdentity(token);
         }
     }
 
