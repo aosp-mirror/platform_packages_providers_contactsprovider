@@ -151,12 +151,7 @@ public class VoicemailPermissions {
     }
 
     private static boolean packageHasCarrierPrivileges(TelephonyManager tm, String packageName) {
-        final long token = Binder.clearCallingIdentity();
-        try {
-            return tm.checkCarrierPrivilegesForPackageAnyPhone(packageName)
-                    == TelephonyManager.CARRIER_PRIVILEGE_STATUS_HAS_ACCESS;
-        } finally {
-            Binder.restoreCallingIdentity(token);
-        }
+        return tm.checkCarrierPrivilegesForPackageAnyPhone(packageName)
+                == TelephonyManager.CARRIER_PRIVILEGE_STATUS_HAS_ACCESS;
     }
 }

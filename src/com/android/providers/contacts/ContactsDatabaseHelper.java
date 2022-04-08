@@ -16,6 +16,12 @@
 
 package com.android.providers.contacts;
 
+import com.android.internal.R.bool;
+import com.android.providers.contacts.sqlite.DatabaseAnalyzer;
+import com.android.providers.contacts.sqlite.SqlChecker;
+import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
+import com.android.providers.contacts.util.PropertyUtils;
+
 import android.app.ActivityManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -67,13 +73,14 @@ import android.provider.ContactsContract.DisplayNameSources;
 import android.provider.ContactsContract.DisplayPhoto;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.Groups;
+import android.provider.ContactsContract.MetadataSync;
+import android.provider.ContactsContract.MetadataSyncState;
 import android.provider.ContactsContract.PhoneticNameStyle;
 import android.provider.ContactsContract.PhotoFiles;
 import android.provider.ContactsContract.PinnedPositions;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
-import android.provider.ContactsContract.SimAccount;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
@@ -91,23 +98,17 @@ import android.util.Log;
 import android.util.Slog;
 
 import com.android.common.content.SyncStateContentProviderHelper;
-import com.android.internal.R.bool;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
-import com.android.providers.contacts.sqlite.DatabaseAnalyzer;
-import com.android.providers.contacts.sqlite.SqlChecker;
-import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
 import com.android.providers.contacts.util.NeededForTesting;
-import com.android.providers.contacts.util.PropertyUtils;
 
 import java.io.PrintWriter;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.Executor;
@@ -142,10 +143,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1200-1299 O
      *   1300-1399 P
      *   1400-1499 Q
-     *   1500-1599 S
      * </pre>
      */
-    static final int DATABASE_VERSION = 1501;
+    static final int DATABASE_VERSION = 1400;
     private static final int MINIMUM_SUPPORTED_VERSION = 700;
 
     @VisibleForTesting
@@ -189,6 +189,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String DIRECTORIES = "directories";
         public static final String DEFAULT_DIRECTORY = "default_directory";
         public static final String SEARCH_INDEX = "search_index";
+        public static final String METADATA_SYNC = "metadata_sync";
+        public static final String METADATA_SYNC_STATE = "metadata_sync_state";
         public static final String PRE_AUTHORIZED_URIS = "pre_authorized_uris";
 
         // This list of tables contains auto-incremented sequences.
@@ -310,6 +312,15 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final String RAW_CONTACTS_JOIN_ACCOUNTS = Tables.RAW_CONTACTS
                 + " JOIN " + Tables.ACCOUNTS + " ON ("
                 + AccountsColumns.CONCRETE_ID + "=" + RawContactsColumns.CONCRETE_ACCOUNT_ID
+                + ")";
+
+        public static final String RAW_CONTACTS_JOIN_METADATA_SYNC = Tables.RAW_CONTACTS
+                + " JOIN " + Tables.METADATA_SYNC + " ON ("
+                + RawContactsColumns.CONCRETE_BACKUP_ID + "="
+                + MetadataSyncColumns.CONCRETE_BACKUP_ID
+                + " AND "
+                + RawContactsColumns.CONCRETE_ACCOUNT_ID + "="
+                + MetadataSyncColumns.CONCRETE_ACCOUNT_ID
                 + ")";
     }
 
@@ -701,8 +712,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         String ACCOUNT_NAME = RawContacts.ACCOUNT_NAME;
         String ACCOUNT_TYPE = RawContacts.ACCOUNT_TYPE;
         String DATA_SET = RawContacts.DATA_SET;
-        String SIM_SLOT_INDEX = "sim_slot_index";
-        String SIM_EF_TYPE = "sim_ef_type";
 
         String CONCRETE_ACCOUNT_NAME = Tables.ACCOUNTS + "." + ACCOUNT_NAME;
         String CONCRETE_ACCOUNT_TYPE = Tables.ACCOUNTS + "." + ACCOUNT_TYPE;
@@ -759,6 +768,22 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         public static final int USAGE_TYPE_INT_CALL = 0;
         public static final int USAGE_TYPE_INT_LONG_TEXT = 1;
         public static final int USAGE_TYPE_INT_SHORT_TEXT = 2;
+    }
+
+    public interface MetadataSyncColumns {
+        static final String CONCRETE_ID = Tables.METADATA_SYNC + "._id";
+        static final String ACCOUNT_ID = "account_id";
+        static final String CONCRETE_BACKUP_ID = Tables.METADATA_SYNC + "." +
+                MetadataSync.RAW_CONTACT_BACKUP_ID;
+        static final String CONCRETE_ACCOUNT_ID = Tables.METADATA_SYNC + "." + ACCOUNT_ID;
+        static final String CONCRETE_DELETED = Tables.METADATA_SYNC + "." +
+                MetadataSync.DELETED;
+    }
+
+    public interface MetadataSyncStateColumns {
+        static final String CONCRETE_ID = Tables.METADATA_SYNC_STATE + "._id";
+        static final String ACCOUNT_ID = "account_id";
+        static final String CONCRETE_ACCOUNT_ID = Tables.METADATA_SYNC_STATE + "." + ACCOUNT_ID;
     }
 
     private  interface EmailQuery {
@@ -1222,10 +1247,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 AccountsColumns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                 AccountsColumns.ACCOUNT_NAME + " TEXT, " +
                 AccountsColumns.ACCOUNT_TYPE + " TEXT, " +
-                AccountsColumns.DATA_SET + " TEXT, " +
-                AccountsColumns.SIM_SLOT_INDEX + " INTEGER, " +
-                AccountsColumns.SIM_EF_TYPE + " INTEGER" +
-                ");");
+                AccountsColumns.DATA_SET + " TEXT" +
+        ");");
 
         // Note, there are two sets of the usage stat columns: LR_* and RAW_*.
         // RAW_* contain the real values, which clients can't access.  The column names start
@@ -1599,10 +1622,33 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 DataUsageStatColumns.USAGE_TYPE_INT +
         ");");
 
+        db.execSQL("CREATE TABLE IF NOT EXISTS "
+                + Tables.METADATA_SYNC + " (" +
+                MetadataSync._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                MetadataSync.RAW_CONTACT_BACKUP_ID + " TEXT NOT NULL," +
+                MetadataSyncColumns.ACCOUNT_ID + " INTEGER NOT NULL," +
+                MetadataSync.DATA + " TEXT," +
+                MetadataSync.DELETED + " INTEGER NOT NULL DEFAULT 0);");
+
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS metadata_sync_index ON " +
+                Tables.METADATA_SYNC + " (" +
+                MetadataSync.RAW_CONTACT_BACKUP_ID + ", " +
+                MetadataSyncColumns.ACCOUNT_ID +");");
+
         db.execSQL("CREATE TABLE " + Tables.PRE_AUTHORIZED_URIS + " ("+
                 PreAuthorizedUris._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 PreAuthorizedUris.URI + " STRING NOT NULL, " +
                 PreAuthorizedUris.EXPIRATION + " INTEGER NOT NULL DEFAULT 0);");
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS "
+                + Tables.METADATA_SYNC_STATE + " (" +
+                MetadataSyncState._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
+                MetadataSyncStateColumns.ACCOUNT_ID + " INTEGER NOT NULL," +
+                MetadataSyncState.STATE + " BLOB);");
+
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS metadata_sync_state_index ON " +
+                Tables.METADATA_SYNC_STATE + " (" +
+                MetadataSyncColumns.ACCOUNT_ID +");");
 
         // When adding new tables, be sure to also add size-estimates in updateSqliteStats
         createContactsViews(db);
@@ -2196,6 +2242,34 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + RawContactsColumns.CONCRETE_CONTACT_ID + "=" + ContactsColumns.CONCRETE_ID + ")";
 
         db.execSQL("CREATE VIEW " + Views.STREAM_ITEMS + " AS " + streamItemSelect);
+
+        String metadataSyncSelect = "SELECT " +
+                MetadataSyncColumns.CONCRETE_ID + ", " +
+                MetadataSync.RAW_CONTACT_BACKUP_ID + ", " +
+                AccountsColumns.ACCOUNT_NAME + ", " +
+                AccountsColumns.ACCOUNT_TYPE + ", " +
+                AccountsColumns.DATA_SET + ", " +
+                MetadataSync.DATA + ", " +
+                MetadataSync.DELETED +
+                " FROM " + Tables.METADATA_SYNC
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                +   MetadataSyncColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                + ")";
+
+        db.execSQL("CREATE VIEW " + Views.METADATA_SYNC + " AS " + metadataSyncSelect);
+
+        String metadataSyncStateSelect = "SELECT " +
+                MetadataSyncStateColumns.CONCRETE_ID + ", " +
+                AccountsColumns.ACCOUNT_NAME + ", " +
+                AccountsColumns.ACCOUNT_TYPE + ", " +
+                AccountsColumns.DATA_SET + ", " +
+                MetadataSyncState.STATE +
+                " FROM " + Tables.METADATA_SYNC_STATE
+                + " JOIN " + Tables.ACCOUNTS + " ON ("
+                +   MetadataSyncStateColumns.CONCRETE_ACCOUNT_ID + "=" + AccountsColumns.CONCRETE_ID
+                + ")";
+
+        db.execSQL("CREATE VIEW " + Views.METADATA_SYNC_STATE + " AS " + metadataSyncStateSelect);
     }
 
     private static String buildDisplayPhotoUriAlias(String contactIdColumn, String alias) {
@@ -2579,19 +2653,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             ContactsProvider2.deleteDataUsage(db);
             upgradeViewsAndTriggers = true;
             oldVersion = 1400;
-        }
-
-        if (isUpgradeRequired(oldVersion, newVersion, 1500)) {
-            db.execSQL("DROP TABLE IF EXISTS metadata_sync;");
-            db.execSQL("DROP TABLE IF EXISTS metadata_sync_state;");
-            upgradeViewsAndTriggers = true;
-            oldVersion = 1500;
-        }
-
-        if (isUpgradeRequired(oldVersion, newVersion, 1501)) {
-            upgradeToVersion1501(db);
-            upgradeViewsAndTriggers = true;
-            oldVersion = 1501;
         }
 
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
@@ -3256,19 +3317,30 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * Used to add new metadata_sync table to cache the meta data on raw contacts level from server
-     * before they are merged into other CP2 tables. The table is not used any more.
+     * Add new metadata_sync table to cache the meta data on raw contacts level from server before
+     * they are merged into other CP2 tables. The data column is the blob column containing all
+     * the backed up metadata for this raw_contact. This table should only be used by metadata
+     * sync adapter.
      */
     public void upgradeToVersion1104(SQLiteDatabase db) {
         db.execSQL("DROP TABLE IF EXISTS metadata_sync;");
+        db.execSQL("CREATE TABLE metadata_sync (" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, raw_contact_backup_id TEXT NOT NULL, " +
+                "account_id INTEGER NOT NULL, data TEXT, deleted INTEGER NOT NULL DEFAULT 0);");
+        db.execSQL("CREATE UNIQUE INDEX metadata_sync_index ON metadata_sync (" +
+                "raw_contact_backup_id, account_id);");
     }
 
     /**
-     * Used to add new metadata_sync_state table to store the metadata sync state for a set of
-     * accounts. The table is not used any more.
+     * Add new metadata_sync_state table to store the metadata sync state for a set of accounts.
      */
     public void upgradeToVersion1105(SQLiteDatabase db) {
         db.execSQL("DROP TABLE IF EXISTS metadata_sync_state;");
+        db.execSQL("CREATE TABLE metadata_sync_state (" +
+                "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "account_id INTEGER NOT NULL, state BLOB);");
+        db.execSQL("CREATE UNIQUE INDEX metadata_sync_state_index ON metadata_sync_state (" +
+                "account_id);");
     }
 
     public void upgradeToVersion1106(SQLiteDatabase db) {
@@ -3364,14 +3436,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     + "TEXT;");
             db.execSQL("ALTER TABLE data ADD preferred_phone_account_id TEXT;");
         } catch (SQLiteException ignore) {
-        }
-    }
-
-    private void upgradeToVersion1501(SQLiteDatabase db) {
-        try {
-            db.execSQL("ALTER TABLE accounts ADD sim_slot_index INTEGER;");
-            db.execSQL("ALTER TABLE accounts ADD sim_ef_type INTEGER;");
-        } catch (SQLException ignore) {
         }
     }
 
@@ -3629,6 +3693,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             updateIndexStats(db, Tables.DATA_USAGE_STAT,
                     "data_usage_stat_index", "20 2 1");
 
+            updateIndexStats(db, Tables.METADATA_SYNC,
+                    "metadata_sync_index", "10000 1 1");
+
             // Tiny tables
             updateIndexStats(db, Tables.AGGREGATION_EXCEPTIONS,
                     null, "10");
@@ -3648,6 +3715,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     null, "1");
             updateIndexStats(db, "properties",
                     "sqlite_autoindex_properties_1", "4 1");
+
+            updateIndexStats(db, Tables.METADATA_SYNC_STATE,
+                    "metadata_sync_state_index", "2 1 1");
 
             // Search index
             updateIndexStats(db, "search_index_docsize",
@@ -3910,37 +3980,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * Gets all SIM accounts in the accounts table.
-     */
-    public List<SimAccount> getAllSimAccounts() {
-        final List<SimAccount> result = new ArrayList<>();
-        final Cursor c = getReadableDatabase().rawQuery(
-                "SELECT DISTINCT " + AccountsColumns._ID + ","
-                        + AccountsColumns.ACCOUNT_NAME + ","
-                        + AccountsColumns.ACCOUNT_TYPE + ","
-                        + AccountsColumns.SIM_SLOT_INDEX + ","
-                        + AccountsColumns.SIM_EF_TYPE + " FROM " + Tables.ACCOUNTS, null);
-        try {
-            while (c.moveToNext()) {
-                if (c.isNull(3) || c.isNull(4)) {
-                    // Invalid slot index or ef type
-                    continue;
-                }
-                final int simSlot = c.getInt(3);
-                final int efType = c.getInt(4);
-                if (simSlot < 0 || !SimAccount.getValidEfTypes().contains(efType)) {
-                    // Invalid slot index or ef type
-                    continue;
-                }
-                result.add(new SimAccount(c.getString(1), c.getString(2), simSlot, efType));
-            }
-        } finally {
-            c.close();
-        }
-        return result;
-    }
-
-    /**
      * @return ID of the specified account, or null if the account doesn't exist.
      */
     public Long getAccountIdOrNull(AccountWithDataSet accountWithDataSet) {
@@ -4000,69 +4039,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
 
         return id;
-    }
-
-    /**
-     * This method will create a record in the accounts table.
-     *
-     * This must be used in a transaction, so there's no need for synchronization.
-     *
-     * @param simSlot Sim slot index of the account. Must be 0 or greater
-     * @param efType  EF type of the account. Must be a value contained in {@link
-     *                SimAccount#getValidEfTypes()}
-     * @throws IllegalArgumentException if the account name/type pair is already within the table.
-     *                                  SIM accounts should have distinct names and types.
-     *                                  And if simSlot is negative, or efType is not in {@link
-     *                                  SimAccount#getValidEfTypes()}
-     */
-    public long createSimAccountIdInTransaction(AccountWithDataSet accountWithDataSet,
-            int simSlot, int efType) {
-        if (simSlot < 0) {
-            throw new IllegalArgumentException("Sim slot is negative");
-        }
-        if (!SimAccount.getValidEfTypes().contains(efType)) {
-            throw new IllegalArgumentException("Invalid EF type");
-        }
-        if (accountWithDataSet == null || TextUtils.isEmpty(accountWithDataSet.getAccountName())
-                || TextUtils.isEmpty(accountWithDataSet.getAccountType())) {
-            throw new IllegalArgumentException("Account is null or the name/type is empty");
-        }
-
-        Long id = getAccountIdOrNull(accountWithDataSet);
-        if (id != null) {
-            throw new IllegalArgumentException("Account already exists in the table");
-        }
-        final SQLiteStatement insert = getWritableDatabase().compileStatement(
-                "INSERT INTO " + Tables.ACCOUNTS +
-                        " (" + AccountsColumns.ACCOUNT_NAME + ", " +
-                        AccountsColumns.ACCOUNT_TYPE + ", " +
-                        AccountsColumns.DATA_SET + ", " +
-                        AccountsColumns.SIM_SLOT_INDEX + ", " +
-                        AccountsColumns.SIM_EF_TYPE + ") VALUES (?, ?, ?, ?, ?)");
-        try {
-            DatabaseUtils.bindObjectToProgram(insert, 1, accountWithDataSet.getAccountName());
-            DatabaseUtils.bindObjectToProgram(insert, 2, accountWithDataSet.getAccountType());
-            DatabaseUtils.bindObjectToProgram(insert, 3, accountWithDataSet.getDataSet());
-            DatabaseUtils.bindObjectToProgram(insert, 4, simSlot);
-            DatabaseUtils.bindObjectToProgram(insert, 5, efType);
-            id = insert.executeInsert();
-        } finally {
-            insert.close();
-        }
-
-        return id;
-    }
-
-    /**
-     * Deletes all rows in the accounts table with the given sim slot index
-     *
-     * @param simSlot Sim slot to remove accounts
-     * @return how many rows were deleted
-     */
-    public int removeSimAccounts(int simSlot) {
-        final SQLiteDatabase db = getWritableDatabase();
-        return db.delete(Tables.ACCOUNTS, AccountsColumns.SIM_SLOT_INDEX + "=?",
-                new String[]{String.valueOf(simSlot)});
     }
 
     /**
@@ -5011,6 +4987,22 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 " FROM " + Tables.SEARCH_INDEX +
                 " WHERE " + SearchIndexColumns.CONTACT_ID + "=CAST(? AS int)",
                 new String[] {String.valueOf(contactId)});
+    }
+
+    public long upsertMetadataSync(String backupId, Long accountId, String data, Integer deleted) {
+        final SQLiteStatement metadataSyncInsert = getWritableDatabase().compileStatement(
+                    "INSERT OR REPLACE INTO " + Tables.METADATA_SYNC + "("
+                            + MetadataSync.RAW_CONTACT_BACKUP_ID + ", "
+                            + MetadataSyncColumns.ACCOUNT_ID + ", "
+                            + MetadataSync.DATA + ","
+                            + MetadataSync.DELETED + ")" +
+                            " VALUES (?,?,?,?)");
+        metadataSyncInsert.bindString(1, backupId);
+        metadataSyncInsert.bindLong(2, accountId);
+        data = (data == null) ? "" : data;
+        metadataSyncInsert.bindString(3, data);
+        metadataSyncInsert.bindLong(4, deleted);
+        return metadataSyncInsert.executeInsert();
     }
 
     public static void notifyProviderStatusChange(Context context) {

@@ -86,11 +86,11 @@ public class DataRowHandlerForGroupMembership extends DataRowHandler {
 
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
-            Cursor c, boolean callerIsSyncAdapter) {
+            Cursor c, boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
         long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
         boolean wasStarred = hasFavoritesGroupMembership(db, rawContactId);
         resolveGroupSourceIdInValues(txContext, rawContactId, db, values, false);
-        if (!super.update(db, txContext, values, c, callerIsSyncAdapter)) {
+        if (!super.update(db, txContext, values, c, callerIsSyncAdapter, callerIsMetadataSyncAdapter)) {
             return false;
         }
         boolean isStarred = hasFavoritesGroupMembership(db, rawContactId);

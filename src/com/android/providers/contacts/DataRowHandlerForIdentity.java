@@ -46,9 +46,9 @@ public class DataRowHandlerForIdentity extends DataRowHandler {
 
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
-            Cursor c, boolean callerIsSyncAdapter) {
+            Cursor c, boolean callerIsSyncAdapter, boolean callerIsMetadataSyncAdapter) {
 
-        super.update(db, txContext, values, c, callerIsSyncAdapter);
+        super.update(db, txContext, values, c, callerIsSyncAdapter, callerIsMetadataSyncAdapter);
 
         // Identity affects aggregation.
         final long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);

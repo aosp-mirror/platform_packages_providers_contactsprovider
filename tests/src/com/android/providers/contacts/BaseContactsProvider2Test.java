@@ -1331,6 +1331,10 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         assertEquals(expected, (getContactsProvider()).isNetworkNotified());
     }
 
+    protected void assertMetadataNetworkNotified(boolean expected) {
+        assertEquals(expected, (getContactsProvider()).isMetadataNetworkNotified());
+    }
+
     protected void assertProjection(Uri uri, String[] expectedProjection) {
         Cursor cursor = mResolver.query(uri, null, "0", null, null);
         String[] actualProjection = cursor.getColumnNames();

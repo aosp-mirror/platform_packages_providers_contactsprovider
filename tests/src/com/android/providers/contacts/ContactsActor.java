@@ -248,11 +248,6 @@ public class ContactsActor {
         public boolean isUserUnlocked(int userId) {
             return true; // Just make it always unlocked for now.
         }
-
-        @Override
-        public boolean isUserRunning(int userId) {
-            return true;
-        }
     }
 
     private MockTelephonyManager mMockTelephonyManager;

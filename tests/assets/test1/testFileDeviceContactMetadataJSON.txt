@@ -1,0 +1,69 @@
+{
+  "unique_contact_id": {
+    "account_type": "CUSTOM_ACCOUNT",
+    "custom_account_type": "facebook",
+    "account_name": "android-test",
+    "contact_id": "1111111",
+    "data_set": "FOCUS"
+  },
+  "contact_prefs": {
+    "send_to_voicemail": true,
+    "starred": false,
+    "pinned": 2
+  },
+  "aggregation_data": [
+    {
+      "type": "TOGETHER",
+      "contact_ids": [
+        {
+          "account_type": "GOOGLE_ACCOUNT",
+          "account_name": "android-test2",
+          "contact_id": "2222222",
+          "data_set": "GOOGLE_PLUS"
+        },
+        {
+          "account_type": "GOOGLE_ACCOUNT",
+          "account_name": "android-test3",
+          "contact_id": "3333333",
+          "data_set": "CUSTOM",
+          "custom_data_set": "custom type"
+        }
+      ]
+    }
+  ],
+  "field_data": [
+    {
+      "field_data_id": "1001",
+      "field_data_prefs": {
+        "is_primary": true,
+        "is_super_primary": true
+      },
+      "usage_stats": [
+        {
+          "usage_type": "CALL",
+          "last_time_used": 10000001,
+          "usage_count": 10
+        },
+        {
+          "usage_type": "SHORT_TEXT",
+          "last_time_used": 20000002,
+          "usage_count": 20
+        }
+      ]
+    },
+    {
+      "field_data_id": "1002",
+      "field_data_prefs": {
+        "is_primary": false,
+        "is_super_primary": false
+      },
+      "usage_stats": [
+        {
+          "usage_type": "LONG_TEXT",
+          "last_time_used": 30000003,
+          "usage_count": 30
+        }
+      ]
+    }
+  ]
+}

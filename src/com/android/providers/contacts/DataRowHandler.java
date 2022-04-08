@@ -121,6 +121,7 @@ public abstract class DataRowHandler {
         if ((primary != null && primary != 0) || (superPrimary != null && superPrimary != 0)) {
             final long mimeTypeId = getMimeTypeId();
             mDbHelper.setIsPrimary(rawContactId, dataId, mimeTypeId);
+            txContext.markRawContactMetadataDirty(rawContactId, /* isMetadataSyncAdapter =*/false);
 
             // We also have to make sure that no other data item on this raw_contact is
             // configured super primary
@@ -153,11 +154,13 @@ public abstract class DataRowHandler {
      * @return true if update changed something
      */
     public boolean update(SQLiteDatabase db, TransactionContext txContext,
-            ContentValues values, Cursor c, boolean callerIsSyncAdapter) {
+            ContentValues values, Cursor c, boolean callerIsSyncAdapter,
+            boolean callerIsMetadataSyncAdapter) {
         long dataId = c.getLong(DataUpdateQuery._ID);
         long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
-        handlePrimaryAndSuperPrimary(txContext, values, dataId, rawContactId);
+        handlePrimaryAndSuperPrimary(txContext, values, dataId, rawContactId,
+                callerIsMetadataSyncAdapter);
         handleHashIdForUpdate(values, dataId);
 
         if (values.size() > 0) {
@@ -248,12 +251,14 @@ public abstract class DataRowHandler {
      * configured correctly
      */
     private void handlePrimaryAndSuperPrimary(TransactionContext txContext, ContentValues values,
-            long dataId, long rawContactId) {
+            long dataId, long rawContactId, boolean callerIsMetadataSyncAdapter) {
         final boolean hasPrimary = values.getAsInteger(Data.IS_PRIMARY) != null;
         final boolean hasSuperPrimary = values.getAsInteger(Data.IS_SUPER_PRIMARY) != null;
 
         // Nothing to do? Bail out early
         if (!hasPrimary && !hasSuperPrimary) return;
+
+        txContext.markRawContactMetadataDirty(rawContactId, callerIsMetadataSyncAdapter);
 
         final long mimeTypeId = getMimeTypeId();
 
@@ -320,6 +325,7 @@ public abstract class DataRowHandler {
         db.delete(Tables.PRESENCE, PresenceColumns.RAW_CONTACT_ID + "=?", mSelectionArgs1);
         if (count != 0 && primary) {
             fixPrimary(db, rawContactId);
+            txContext.markRawContactMetadataDirty(rawContactId, /* isMetadataSyncAdapter =*/false);
         }
 
         if (hasSearchableData()) {
