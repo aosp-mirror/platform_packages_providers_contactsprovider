@@ -43,6 +43,7 @@ import android.os.Binder;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.os.UserManager;
+import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -103,6 +104,7 @@ import com.android.providers.contacts.sqlite.DatabaseAnalyzer;
 import com.android.providers.contacts.sqlite.SqlChecker;
 import com.android.providers.contacts.sqlite.SqlChecker.InvalidSqlException;
 import com.android.providers.contacts.util.NeededForTesting;
+import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 import com.android.providers.contacts.util.PropertyUtils;
 
 import com.google.common.base.Strings;
@@ -111,8 +113,10 @@ import java.io.PrintWriter;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -150,7 +154,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1600-1699 T
      * </pre>
      */
-    static final int DATABASE_VERSION = 1603;
+    static final int DATABASE_VERSION = 1604;
     private static final int MINIMUM_SUPPORTED_VERSION = 700;
 
     @VisibleForTesting
@@ -947,6 +951,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private final boolean mIsTestInstance;
     private final SyncStateContentProviderHelper mSyncState;
     private final CountryMonitor mCountryMonitor;
+    private final PhoneAccountHandleMigrationUtils mPhoneAccountHandleMigrationUtils;
 
     /**
      * Time when the DB was created.  It's persisted in {@link DbProperties#DATABASE_TIME_CREATED},
@@ -997,10 +1002,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return new ContactsDatabaseHelper(context, filename, false, /* isTestInstance=*/ true);
     }
 
+    public PhoneAccountHandleMigrationUtils getPhoneAccountHandleMigrationUtils() {
+        return mPhoneAccountHandleMigrationUtils;
+    }
+
     protected ContactsDatabaseHelper(
             Context context, String databaseName, boolean optimizationEnabled,
             boolean isTestInstance) {
         super(context, databaseName, null, DATABASE_VERSION, MINIMUM_SUPPORTED_VERSION, null);
+        mPhoneAccountHandleMigrationUtils = new PhoneAccountHandleMigrationUtils(
+                context, PhoneAccountHandleMigrationUtils.TYPE_CONTACTS);
         boolean enableWal = android.provider.Settings.Global.getInt(context.getContentResolver(),
                 android.provider.Settings.Global.CONTACTS_DATABASE_WAL_ENABLED, 1) == 1;
         if (dbForProfile() != 0 || ActivityManager.isLowRamDeviceStatic()) {
@@ -1013,7 +1024,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         mIsTestInstance = isTestInstance;
         mContext = context;
         mSyncState = new SyncStateContentProviderHelper();
-
         mCountryMonitor = new CountryMonitor(context, this::updateUseStrictPhoneNumberComparison);
 
         startListeningToDeviceConfigUpdates();
@@ -1139,7 +1149,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    private void createPresenceTables(SQLiteDatabase db) {
+    @VisibleForTesting
+    void createPresenceTables(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE IF NOT EXISTS " + Tables.PRESENCE + " ("+
                 StatusUpdates.DATA_ID + " INTEGER PRIMARY KEY REFERENCES data(_id)," +
                 StatusUpdates.PROTOCOL + " INTEGER NOT NULL," +
@@ -1439,6 +1450,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 Data.SYNC3 + " TEXT, " +
                 Data.SYNC4 + " TEXT, " +
                 Data.CARRIER_PRESENCE + " INTEGER NOT NULL DEFAULT 0, " +
+                Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING + " INTEGER NOT NULL DEFAULT 0, " +
                 Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME + " TEXT, " +
                 Data.PREFERRED_PHONE_ACCOUNT_ID + " TEXT " +
         ");");
@@ -2666,6 +2678,12 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1603;
         }
 
+        if (isUpgradeRequired(oldVersion, newVersion, 1604)) {
+            upgradeToVersion1604(db);
+            upgradeViewsAndTriggers = true;
+            oldVersion = 1604;
+        }
+
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
         // yet, until CallLogDatabaseHelper moves the data.
 
@@ -3502,6 +3520,33 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         } catch (SQLException ignore) {
             Log.v(TAG, "Version 1603: failed to remove view_raw_contacts_lookup_compat.");
         }
+    }
+
+    @VisibleForTesting
+    public void upgradeToVersion1604(SQLiteDatabase db) {
+        // Create colums for IS_PHONE_ACCOUNT_MIGRATION_PENDING
+        try {
+            db.execSQL("ALTER TABLE data ADD is_preferred_phone_account_migration_pending"
+                    + " INTEGER NOT NULL DEFAULT 0;");
+        } catch (SQLException ignore) {
+            Log.v(TAG, "Version 1604: Columns already exist, skipping upgrade steps.");
+        }
+        mPhoneAccountHandleMigrationUtils.markAllTelephonyPhoneAccountsPendingMigration(db);
+        mPhoneAccountHandleMigrationUtils.migrateIccIdToSubId(db);
+    }
+
+    protected void migrateIccIdToSubId() {
+        mPhoneAccountHandleMigrationUtils.migrateIccIdToSubId(getWritableDatabase());
+    }
+
+    protected void migratePendingPhoneAccountHandles(String iccId, String subId) {
+        mPhoneAccountHandleMigrationUtils.migratePendingPhoneAccountHandles(
+                iccId, subId, getWritableDatabase());
+    }
+
+    protected void updatePhoneAccountHandleMigrationPendingStatus() {
+        mPhoneAccountHandleMigrationUtils.updatePhoneAccountHandleMigrationPendingStatus(
+                getWritableDatabase());
     }
 
     /**
