@@ -111,15 +111,6 @@
             </intent-filter>
         </receiver>
 
-        <receiver android:name="PhoneAccountRegistrationReceiver"
-                android:exported="true"
-                android:permission="android.permission.BROADCAST_PHONE_ACCOUNT_REGISTRATION">
-            <!-- Broadcast sent after a phone account is registered in telecom. -->
-            <intent-filter>
-                <action android:name="android.telecom.action.PHONE_ACCOUNT_REGISTERED"/>
-            </intent-filter>
-        </receiver>
-
         <receiver android:name="LocaleChangeReceiver"
             android:exported="true">
             <intent-filter>
