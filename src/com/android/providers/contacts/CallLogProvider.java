@@ -57,12 +57,14 @@ import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.ArrayMap;
+import android.util.EventLog;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.ProviderAccessStats;
 import com.android.providers.contacts.CallLogDatabaseHelper.DbProperties;
 import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
+import com.android.providers.contacts.util.FileUtilities;
 import com.android.providers.contacts.util.NeededForTesting;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.UserUtils;
@@ -723,6 +725,7 @@ public class CallLogProvider extends ContentProvider {
                 throw new FileNotFoundException(uri.toString()
                         + " does not correspond to a valid file.");
             }
+            enforceValidCallLogPath(callComposerDir, pictureFile,"openFile");
             return ParcelFileDescriptor.open(pictureFile.toFile(), modeInt);
         } catch (IOException e) {
             Log.e(TAG, "IOException while opening call composer file: " + e);
@@ -836,6 +839,8 @@ public class CallLogProvider extends ContentProvider {
             return null;
         }
         Path pathToFile = pathToCallComposerDir.resolve(fileName);
+        enforceValidCallLogPath(pathToCallComposerDir, pathToFile,
+                "allocateNewCallComposerPicture");
         Files.createFile(pathToFile);
 
         if (forAllUsers) {
@@ -849,10 +854,10 @@ public class CallLogProvider extends ContentProvider {
     private int deleteCallComposerPicture(Uri uri) {
         try {
             Path pathToCallComposerDir = getCallComposerPictureDirectory(getContext(), uri);
-            String fileName = uri.getLastPathSegment();
-            boolean successfulDelete =
-                    Files.deleteIfExists(pathToCallComposerDir.resolve(fileName));
-            return successfulDelete ? 1 : 0;
+            Path fileToDelete = pathToCallComposerDir.resolve(uri.getLastPathSegment());
+            enforceValidCallLogPath(pathToCallComposerDir, fileToDelete,
+                    "deleteCallComposerPicture");
+            return Files.deleteIfExists(fileToDelete) ? 1 : 0;
         } catch (IOException e) {
             Log.e(TAG, "IOException encountered deleting the call composer pics dir " + e);
             return 0;
@@ -1111,8 +1116,9 @@ public class CallLogProvider extends ContentProvider {
         for (Uri uri : urisToCopy) {
             try {
                 Uri uriWithUser = ContentProvider.maybeAddUserId(uri, sourceUserId);
-                Path newFilePath = getCallComposerPictureDirectory(getContext(), false)
-                        .resolve(uri.getLastPathSegment());
+                Path callComposerDir = getCallComposerPictureDirectory(getContext(), false);
+                Path newFilePath = callComposerDir.resolve(uri.getLastPathSegment());
+                enforceValidCallLogPath(callComposerDir, newFilePath,"syncCallComposerPics");
                 try (ParcelFileDescriptor remoteFile = contentResolver.openFile(uriWithUser,
                         "r", null);
                      OutputStream localOut =
@@ -1302,5 +1308,20 @@ public class CallLogProvider extends ContentProvider {
     @Override
     public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
         mStats.dump(writer, "  ");
+    }
+
+    /**
+     *  Enforces a stricter check on what files the CallLogProvider can perform file operations on.
+     * @param rootPath where all valid new/existing paths should pass through.
+     * @param pathToCheck newly created path that is requesting a file op. (open, delete, etc.)
+     * @param callingMethod the calling method.  Used only for debugging purposes.
+     */
+    private void enforceValidCallLogPath(Path rootPath, Path pathToCheck, String callingMethod){
+        if (!FileUtilities.isSameOrSubDirectory(rootPath.toFile(), pathToCheck.toFile())) {
+            EventLog.writeEvent(0x534e4554, "219015884", Binder.getCallingUid(),
+                    (callingMethod + ": invalid uri passed"));
+            throw new SecurityException(
+                    FileUtilities.INVALID_CALL_LOG_PATH_EXCEPTION_MESSAGE + pathToCheck);
+        }
     }
 }
