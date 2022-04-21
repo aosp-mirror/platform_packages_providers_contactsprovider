@@ -21,9 +21,11 @@ import static android.provider.CallLog.Calls.MISSED_REASON_NOT_MISSED;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
 
+import android.content.ContentResolver;
 import android.telecom.CallerInfo;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 import com.android.providers.contacts.util.ContactsPermissions;
+import com.android.providers.contacts.util.FileUtilities;
 import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 
 import android.content.BroadcastReceiver;
@@ -46,8 +48,10 @@ import android.telecom.PhoneAccountHandle;
 import android.telecom.TelecomManager;
 import android.telephony.SubscriptionInfo;
 import android.test.suitebuilder.annotation.MediumTest;
-import android.util.Log;
 
+import org.junit.Assert;
+
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -91,6 +95,14 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     private static final String TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1 = "891004234814455936F";
     private static final String TEST_PHONE_ACCOUNT_HANDLE_ICC_ID2 = "891004234814455937";
     private static final String TEST_COMPONENT_NAME = "foo/bar";
+
+    private static final Uri INVALID_CALL_LOG_URI = Uri.parse(
+            "content://call_log/call_composer/%2fdata%2fdata%2fcom.android.providers"
+                    + ".contacts%2fshared_prefs%2fContactsUpgradeReceiver.xml");
+
+    private static final String TEST_FAIL_DID_NOT_TRHOW_SE =
+            "fail test because Security Exception was not throw";
+
 
     private int mOldMinMatch;
 
@@ -512,6 +524,51 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             }
         } finally {
             c.close();
+        }
+    }
+
+    /**
+     * Tests scenario where an app gives {@link ContentResolver} a file to open that is not in the
+     * Call Log Provider directory.
+     */
+    public void testOpenFileOutsideOfScopeThrowsException() throws FileNotFoundException {
+        try {
+            mResolver.openFile(INVALID_CALL_LOG_URI, "w", null);
+            // previous line should throw exception
+            fail(TEST_FAIL_DID_NOT_TRHOW_SE);
+        } catch (SecurityException e) {
+            Assert.assertTrue(
+                    e.toString().contains(FileUtilities.INVALID_CALL_LOG_PATH_EXCEPTION_MESSAGE));
+        }
+    }
+
+    /**
+     * Tests scenario where an app gives {@link ContentResolver} a file to delete that is not in the
+     * Call Log Provider directory.
+     */
+    public void testDeleteFileOutsideOfScopeThrowsException() {
+        try {
+            mResolver.delete(INVALID_CALL_LOG_URI, "w", null);
+            // previous line should throw exception
+            fail(TEST_FAIL_DID_NOT_TRHOW_SE);
+        } catch (SecurityException e) {
+            Assert.assertTrue(
+                    e.toString().contains(FileUtilities.INVALID_CALL_LOG_PATH_EXCEPTION_MESSAGE));
+        }
+    }
+
+    /**
+     * Tests scenario where an app gives {@link ContentResolver} a file to insert outside the
+     * Call Log Provider directory.
+     */
+    public void testInsertFileOutsideOfScopeThrowsException() {
+        try {
+            mResolver.insert(INVALID_CALL_LOG_URI, new ContentValues());
+            // previous line should throw exception
+            fail(TEST_FAIL_DID_NOT_TRHOW_SE);
+        } catch (SecurityException e) {
+            Assert.assertTrue(
+                    e.toString().contains(FileUtilities.INVALID_CALL_LOG_PATH_EXCEPTION_MESSAGE));
         }
     }
 
