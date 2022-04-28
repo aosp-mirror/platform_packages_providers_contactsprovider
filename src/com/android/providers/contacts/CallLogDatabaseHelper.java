@@ -18,20 +18,29 @@ package com.android.providers.contacts;
 import android.annotation.Nullable;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.preference.PreferenceManager;
 import android.provider.CallLog.Calls;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.text.TextUtils;
 import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 import com.android.providers.contacts.util.PropertyUtils;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * SQLite database (helper) for {@link CallLogProvider} and {@link VoicemailContentProvider}.
@@ -39,7 +48,8 @@ import com.android.providers.contacts.util.PropertyUtils;
 public class CallLogDatabaseHelper {
     private static final String TAG = "CallLogDatabaseHelper";
 
-    private static final int DATABASE_VERSION = 10;
+    @VisibleForTesting
+    static final int DATABASE_VERSION = 11;
 
     private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
@@ -58,6 +68,9 @@ public class CallLogDatabaseHelper {
 
     private final OpenHelper mOpenHelper;
 
+    @VisibleForTesting
+    final PhoneAccountHandleMigrationUtils mPhoneAccountHandleMigrationUtils;
+
     public interface Tables {
         String CALLS = "calls";
         String VOICEMAIL_STATUS = "voicemail_status";
@@ -74,7 +87,7 @@ public class CallLogDatabaseHelper {
      *
      * DO NOT CHANCE ANY OF THE CONSTANTS.
      */
-    private interface LegacyConstants {
+    public interface LegacyConstants {
         /** Table name used in the contacts DB.*/
         String CALLS_LEGACY = "calls";
 
@@ -85,7 +98,8 @@ public class CallLogDatabaseHelper {
         String CALL_LOG_LAST_SYNCED_LEGACY = "call_log_last_synced";
     }
 
-    private final class OpenHelper extends SQLiteOpenHelper {
+    @VisibleForTesting
+    public class OpenHelper extends SQLiteOpenHelper {
         public OpenHelper(Context context, String name, SQLiteDatabase.CursorFactory factory,
                 int version) {
             super(context, name, factory, version);
@@ -157,7 +171,7 @@ public class CallLogDatabaseHelper {
                     Calls.SUBJECT + " TEXT," +
                     Calls.LOCATION + " TEXT," +
                     Calls.COMPOSER_PHOTO_URI + " TEXT," +
-
+                    Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING + " INTEGER NOT NULL DEFAULT 0," +
                     Voicemails._DATA + " TEXT," +
                     Voicemails.HAS_CONTENT + " INTEGER," +
                     Voicemails.MIME_TYPE + " TEXT," +
@@ -233,12 +247,23 @@ public class CallLogDatabaseHelper {
             if (oldVersion < 10) {
                 upgradeToVersion10(db);
             }
+
+            if (oldVersion < 11) {
+                upgradeToVersion11(db);
+            }
+        }
+
+        @Override
+        public void onDowngrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+            // Ignore
         }
     }
 
     @VisibleForTesting
     CallLogDatabaseHelper(Context context, String databaseName) {
         mContext = context;
+        mPhoneAccountHandleMigrationUtils = new PhoneAccountHandleMigrationUtils(
+                context, PhoneAccountHandleMigrationUtils.TYPE_CALL_LOG);
         mOpenHelper = new OpenHelper(mContext, databaseName, /* factory=*/ null, DATABASE_VERSION);
     }
 
@@ -272,6 +297,31 @@ public class CallLogDatabaseHelper {
 
     public void setProperty(String key, String value) {
         PropertyUtils.setProperty(getWritableDatabase(), key, value);
+    }
+
+    /**
+     * Updates phone account migration pending status, indicating if there is any phone account
+     * handle that need to migrate. Called in CallLogProvider.
+     */
+    void updatePhoneAccountHandleMigrationPendingStatus() {
+        mPhoneAccountHandleMigrationUtils.updatePhoneAccountHandleMigrationPendingStatus(
+                getWritableDatabase());
+    }
+
+    /**
+     * Migrate all the pending phone account handles based on the given iccId and subId. Used
+     * by CallLogProvider.
+     */
+    void migratePendingPhoneAccountHandles(String iccId, String subId) {
+        mPhoneAccountHandleMigrationUtils.migratePendingPhoneAccountHandles(
+                iccId, subId, getWritableDatabase());
+    }
+
+    /**
+     * Try to migrate any PhoneAccountId to SubId from IccId. Used by CallLogProvider.
+     */
+    void migrateIccIdToSubId() {
+        mPhoneAccountHandleMigrationUtils.migrateIccIdToSubId(getWritableDatabase());
     }
 
     /**
@@ -473,6 +523,15 @@ public class CallLogDatabaseHelper {
         db.execSQL("ALTER TABLE calls ADD location TEXT");
         db.execSQL("ALTER TABLE calls ADD composer_photo_uri TEXT");
     }
+
+    private void upgradeToVersion11(SQLiteDatabase db) {
+        // Create colums for IS_PHONE_ACCOUNT_MIGRATION_PENDING
+        db.execSQL("ALTER TABLE calls ADD is_call_log_phone_account_migration_pending"
+                + " INTEGER NOT NULL DEFAULT 0");
+        mPhoneAccountHandleMigrationUtils.markAllTelephonyPhoneAccountsPendingMigration(db);
+        mPhoneAccountHandleMigrationUtils.migrateIccIdToSubId(db);
+    }
+
     /**
      * Perform the migration from the contacts2.db (of the latest version) to the current calllog/
      * voicemail status tables.
@@ -567,6 +626,10 @@ public class CallLogDatabaseHelper {
         return ContactsDatabaseHelper.getInstance(mContext).getWritableDatabase();
     }
 
+    public PhoneAccountHandleMigrationUtils getPhoneAccountHandleMigrationUtils() {
+        return mPhoneAccountHandleMigrationUtils;
+    }
+
     public ArraySet<String> selectDistinctColumn(String table, String column) {
         final ArraySet<String> ret = new ArraySet<>();
         final SQLiteDatabase db = getReadableDatabase();
@@ -598,5 +661,10 @@ public class CallLogDatabaseHelper {
 
     public void wipeForTest() {
         getWritableDatabase().execSQL("DELETE FROM " + Tables.CALLS);
+    }
+
+    @VisibleForTesting
+    OpenHelper getOpenHelper() {
+        return mOpenHelper;
     }
 }
