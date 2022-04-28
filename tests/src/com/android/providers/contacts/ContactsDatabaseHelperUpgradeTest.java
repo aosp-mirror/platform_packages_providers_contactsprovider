@@ -472,6 +472,7 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableColumn(Data.SYNC3, TEXT, false, null),
             new TableColumn(Data.SYNC4, TEXT, false, null),
             new TableColumn(Data.CARRIER_PRESENCE, INTEGER, true, "0"),
+            new TableColumn(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, INTEGER, true, "0"),
             new TableColumn(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME, TEXT, false, null),
             new TableColumn(Data.PREFERRED_PHONE_ACCOUNT_ID, TEXT, false, null),
     };
