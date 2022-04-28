@@ -20,6 +20,8 @@ import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
+import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
+
 import android.os.Looper;
 import android.accounts.Account;
 import android.accounts.AccountManager;
@@ -28,6 +30,7 @@ import android.annotation.Nullable;
 import android.annotation.WorkerThread;
 import android.app.AppOpsManager;
 import android.app.SearchManager;
+import android.content.BroadcastReceiver;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentResolver;
@@ -36,6 +39,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.IContentService;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
@@ -116,7 +120,10 @@ import android.provider.OpenableColumns;
 import android.provider.Settings.Global;
 import android.provider.SyncStateContract;
 import android.sysprop.ContactsProperties;
+import android.telecom.PhoneAccountHandle;
+import android.telecom.TelecomManager;
 import android.telephony.PhoneNumberUtils;
+import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.ArrayMap;
@@ -172,6 +179,7 @@ import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.LogFields;
 import com.android.providers.contacts.util.LogUtils;
 import com.android.providers.contacts.util.NeededForTesting;
+import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 import com.android.providers.contacts.util.UserUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
@@ -202,6 +210,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -250,6 +259,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private static final int BACKGROUND_TASK_CLEAN_DELETE_LOG = 11;
     private static final int BACKGROUND_TASK_RESCAN_DIRECTORY = 12;
     private static final int BACKGROUND_TASK_CLEANUP_DANGLING_CONTACTS = 13;
+    @VisibleForTesting
+    protected static final int BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES = 14;
 
     protected static final int STATUS_NORMAL = 0;
     protected static final int STATUS_UPGRADING = 1;
@@ -1430,6 +1441,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private PostalSplitter mPostalSplitter;
 
     private ContactDirectoryManager mContactDirectoryManager;
+    private SubscriptionManager mSubscriptionManager;
 
     private boolean mIsPhoneInitialized;
     private boolean mIsPhone;
@@ -1479,6 +1491,36 @@ public class ContactsProvider2 extends AbstractContactsProvider
     // Enterprise members
     private EnterprisePolicyGuard mEnterprisePolicyGuard;
 
+    private Set<PhoneAccountHandle> mMigratedPhoneAccountHandles;
+
+    /**
+     * Subscription change will trigger ACTION_PHONE_ACCOUNT_REGISTERED that broadcasts new
+     * PhoneAccountHandle that is created based on the new subscription. This receiver is used
+     * for listening new subscription change and migrating phone account handle if any pending.
+     */
+    private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED.equals(intent.getAction())) {
+                PhoneAccountHandle phoneAccountHandle =
+                        (PhoneAccountHandle) intent.getParcelableExtra(
+                                TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE);
+                Log.i(TAG, "onReceive ACTION_PHONE_ACCOUNT_REGISTERED pending? "
+                        + mContactsHelper.getPhoneAccountHandleMigrationUtils()
+                                .isPhoneAccountMigrationPending());
+                if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
+                        .isPhoneAccountMigrationPending()
+                        && TELEPHONY_COMPONENT_NAME.equals(
+                                phoneAccountHandle.getComponentName().flattenToString())
+                        && !mMigratedPhoneAccountHandles.contains(phoneAccountHandle)) {
+                    mMigratedPhoneAccountHandles.add(phoneAccountHandle);
+                    scheduleBackgroundTask(
+                            BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES, phoneAccountHandle);
+                }
+            }
+        }
+    };
+
     @Override
     public boolean onCreate() {
         if (VERBOSE_LOGGING) {
@@ -1525,7 +1567,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 new StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build());
 
         mFastScrollingIndexCache = FastScrollingIndexCache.getInstance(getContext());
-
+        mSubscriptionManager = getContext().getSystemService(SubscriptionManager.class);
         mContactsHelper = getDatabaseHelper();
         mDbHelper.set(mContactsHelper);
 
@@ -1534,6 +1576,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
+
+        if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
+                .isPhoneAccountMigrationPending()) {
+            IntentFilter filter = new IntentFilter(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE);
+            getContext().registerReceiver(mBroadcastReceiver, filter);
+        }
 
         // The provider is closed for business until fully initialized
         mReadAccessLatch = new CountDownLatch(1);
@@ -1554,12 +1602,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mProfileProvider.attachInfo(getContext(), profileInfo);
         mProfileHelper = mProfileProvider.getDatabaseHelper();
         mEnterprisePolicyGuard = new EnterprisePolicyGuard(getContext());
+        mMigratedPhoneAccountHandles = new HashSet<>();
 
         // Initialize the pre-authorized URI duration.
         mPreAuthorizedUriDuration = DEFAULT_PREAUTHORIZED_URI_EXPIRATION;
 
         scheduleBackgroundTask(BACKGROUND_TASK_INITIALIZE);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_ACCOUNTS);
+        scheduleBackgroundTask(BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_LOCALE);
         scheduleBackgroundTask(BACKGROUND_TASK_UPGRADE_AGGREGATION_ALGORITHM);
         scheduleBackgroundTask(BACKGROUND_TASK_UPDATE_SEARCH_INDEX);
@@ -1683,6 +1733,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         switchToContactMode();
         switch (task) {
             case BACKGROUND_TASK_INITIALIZE: {
+                mContactsHelper.updatePhoneAccountHandleMigrationPendingStatus();
                 initForDefaultLocale();
                 mReadAccessLatch.countDown();
                 mReadAccessLatch = null;
@@ -1715,6 +1766,32 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                 updateContactsAccountCount(accounts);
                 updateDirectoriesInBackground(accountsChanged);
+                break;
+            }
+
+            case BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES: {
+                if (arg == null) {
+                    // No phone account handle specified, try to execute all pending migrations.
+                    if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
+                            .isPhoneAccountMigrationPending()) {
+                        mContactsHelper.migrateIccIdToSubId();
+                    }
+                } else {
+                    // Phone account handle specified, task scheduled when
+                    // ACTION_PHONE_ACCOUNT_REGISTERED received.
+                    PhoneAccountHandle phoneAccountHandle = (PhoneAccountHandle) arg;
+                    String iccId = mSubscriptionManager.getActiveSubscriptionInfo(
+                            Integer.parseInt(phoneAccountHandle.getId())).getIccId();
+                    if (iccId == null) {
+                        Log.i(TAG, "ACTION_PHONE_ACCOUNT_REGISTERED received null IccId.");
+                    } else {
+                        Log.i(TAG, "ACTION_PHONE_ACCOUNT_REGISTERED received for migrating phone"
+                                + " account handle SubId: " + phoneAccountHandle.getId());
+                        mContactsHelper.migratePendingPhoneAccountHandles(iccId,
+                                phoneAccountHandle.getId());
+                        mContactsHelper.updatePhoneAccountHandleMigrationPendingStatus();
+                    }
+                }
                 break;
             }
 
@@ -5700,8 +5777,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 Log.v(TAG, "Making authority " + directoryAuthority
                         + " visible to UID " + callingUid);
             }
-            getContext().getPackageManager().grantImplicitAccess(
-                    callingUid, directoryAuthority);
+            getContext().getPackageManager()
+                    .makeProviderVisible(callingUid, directoryAuthority);
         }
 
         // Load the cursor contents into a memory cursor (backed by a cursor window) and close the
@@ -9925,6 +10002,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return mDbHelper.get();
     }
 
+    /**
+     * @return the currently registered BroadcastReceiver for listening
+     *         ACTION_PHONE_ACCOUNT_REGISTERED in the current process.
+     */
+    @NeededForTesting
+    public BroadcastReceiver getBroadcastReceiverForTest() {
+        return mBroadcastReceiver;
+    }
+
     @Override
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         if (mContactAggregator != null) {
@@ -10009,6 +10095,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     public ContactsDatabaseHelper getContactsDatabaseHelperForTest() {
         return mContactsHelper;
+    }
+
+    /** Should be only used in tests. */
+    @NeededForTesting
+    public void setContactsDatabaseHelperForTest(ContactsDatabaseHelper contactsHelper) {
+        mContactsHelper = contactsHelper;
     }
 
     @VisibleForTesting
