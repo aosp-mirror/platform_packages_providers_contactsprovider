@@ -19,7 +19,12 @@ package com.android.providers.contacts;
 import static com.android.providers.contacts.TestUtils.cv;
 import static com.android.providers.contacts.TestUtils.dumpCursor;
 
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.when;
+
 import android.accounts.Account;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentResolver;
@@ -27,8 +32,10 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Entity;
 import android.content.EntityIterator;
+import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
@@ -68,7 +75,10 @@ import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
 import android.provider.OpenableColumns;
+import android.telecom.PhoneAccountHandle;
+import android.telecom.TelecomManager;
 import android.telephony.PhoneNumberUtils;
+import android.telephony.SubscriptionInfo;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.text.TextUtils;
@@ -94,6 +104,7 @@ import com.android.providers.contacts.testutil.DeletedContactUtil;
 import com.android.providers.contacts.testutil.RawContactUtil;
 import com.android.providers.contacts.testutil.TestUtil;
 import com.android.providers.contacts.util.NullContentProvider;
+import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 import com.android.providers.contacts.util.UserUtils;
 
 import com.google.android.collect.Lists;
@@ -126,27 +137,240 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     private static final int MIN_MATCH = 7;
 
+    static final String TELEPHONY_PACKAGE = "com.android.phone";
+    static final String TELEPHONY_CLASS
+            = "com.android.services.telephony.TelephonyConnectionService";
+    static final String TEST_PHONE_ACCOUNT_HANDLE_SUB_ID = "666";
+    static final int TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT = 666;
+    static final String TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1 = "T6E6S6T6I6C6C6I6D";
+    static final String TEST_PHONE_ACCOUNT_HANDLE_ICC_ID2 = "T5E5S5T5I5C5C5I5D";
+    static final String TEST_COMPONENT_NAME = "foo/bar";
+
     private int mOldMinMatch1;
     private int mOldMinMatch2;
+
+    ContactsDatabaseHelper mMockContactsDatabaseHelper;
+    private ContactsProvider2 mContactsProvider2;
+    private ContactsDatabaseHelper mDbHelper;
+    private BroadcastReceiver mBroadcastReceiver;
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
-        final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
+        mContactsProvider2 = (ContactsProvider2) getProvider();
+        mDbHelper = mContactsProvider2.getThreadActiveDatabaseHelperForTest();
+        mBroadcastReceiver = mContactsProvider2.getBroadcastReceiverForTest();
         mOldMinMatch1 = PhoneNumberUtils.getMinMatchForTest();
-        mOldMinMatch2 = dbHelper.getMinMatchForTest();
+        mOldMinMatch2 = mDbHelper.getMinMatchForTest();
         PhoneNumberUtils.setMinMatchForTest(MIN_MATCH);
-        dbHelper.setMinMatchForTest(MIN_MATCH);
+        mDbHelper.setMinMatchForTest(MIN_MATCH);
     }
 
     @Override
     protected void tearDown() throws Exception {
         final ContactsProvider2 cp = (ContactsProvider2) getProvider();
-        final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
+        //final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
         PhoneNumberUtils.setMinMatchForTest(mOldMinMatch1);
-        dbHelper.setMinMatchForTest(mOldMinMatch2);
+        mDbHelper.setMinMatchForTest(mOldMinMatch2);
         super.tearDown();
+    }
+
+    private ContactsDatabaseHelper getMockContactsDatabaseHelper(String databaseNameForTesting) {
+        ContactsDatabaseHelper contactsDatabaseHelper = new ContactsDatabaseHelper(
+                mTestContext, databaseNameForTesting, true, /* isTestInstance=*/ false);
+        SQLiteDatabase db = contactsDatabaseHelper.getWritableDatabase();
+        db.execSQL("DELETE FROM " + ContactsDatabaseHelper.Tables.DATA);
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, "FAKE_ICCID");
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME, TEST_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, "FAKE_ICCID");
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        return contactsDatabaseHelper;
+    }
+
+    public void testPhoneAccountHandleMigrationSimEvent() throws IOException {
+        ContactsDatabaseHelper originalContactsDatabaseHelper
+                = mContactsProvider2.getContactsDatabaseHelperForTest();
+
+        // Mock SubscriptionManager
+        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(
+                TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1,
+                        1, "a", "b", 1, 1, "test", 1, null, null, null, null, false, null, null);
+        when(mSubscriptionManager.getActiveSubscriptionInfo(
+                eq(TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT))).thenReturn(subscriptionInfo);
+
+        // Mock ContactsDatabaseHelper
+        ContactsDatabaseHelper contactsDatabaseHelper = getMockContactsDatabaseHelper(
+                "testContactsPhoneAccountHandleMigrationSimEvent.db");
+
+        // Test setPhoneAccountMigrationStatusPending as false
+        PhoneAccountHandleMigrationUtils phoneAccountHandleMigrationUtils
+                = contactsDatabaseHelper.getPhoneAccountHandleMigrationUtils();
+
+        // Test ContactsDatabaseHelper.isPhoneAccountMigrationPending as true
+        // and set for testing migration logic
+        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(true);
+
+        mContactsProvider2.setContactsDatabaseHelperForTest(contactsDatabaseHelper);
+        final SQLiteDatabase sqLiteDatabase = contactsDatabaseHelper.getReadableDatabase();
+
+        // Check each entry in the Data has a new coloumn of
+        // Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING that has a value of 1
+        assertEquals(6 /** pending migration entries in the preconfigured file */,
+                DatabaseUtils.longForQuery(sqLiteDatabase,
+                        "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                                + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                        + " = 1", null));
+
+        // Prepare PhoneAccountHandle for the new sim event
+        PhoneAccountHandle phoneAccountHandle = new PhoneAccountHandle(
+                new ComponentName(TELEPHONY_PACKAGE, TELEPHONY_CLASS),
+                        TEST_PHONE_ACCOUNT_HANDLE_SUB_ID);
+        Intent intent = new Intent(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
+        intent.putExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, phoneAccountHandle);
+        mBroadcastReceiver.onReceive(mTestContext, intent);
+
+        // Check four coloumns of Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING have migrated
+        assertEquals(4 /** entries in the preconfigured database file */,
+                DatabaseUtils.longForQuery(sqLiteDatabase,
+                        "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                                + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                        + " = 0", null));
+        // Check two coloumns
+        // of Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING have not migrated
+        assertEquals(2 /** pending migration entries after migration in the preconfigured file */,
+                DatabaseUtils.longForQuery(sqLiteDatabase,
+                        "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                                + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                        + " = 1", null));
+
+        mContactsProvider2.setContactsDatabaseHelperForTest(originalContactsDatabaseHelper);
+    }
+
+    public void testPhoneAccountHandleMigrationInitiation() throws IOException {
+        ContactsDatabaseHelper originalContactsDatabaseHelper
+                = mContactsProvider2.getContactsDatabaseHelperForTest();
+
+        // Mock SubscriptionManager
+        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(
+                TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1,
+                        1, "a", "b", 1, 1, "test", 1, null, null, null, null, false, null, null);
+        List<SubscriptionInfo> subscriptionInfoList = new ArrayList<>();
+        subscriptionInfoList.add(subscriptionInfo);
+        when(mSubscriptionManager.getAllSubscriptionInfoList()).thenReturn(subscriptionInfoList);
+
+        // Mock ContactsDatabaseHelper
+        ContactsDatabaseHelper contactsDatabaseHelper = getMockContactsDatabaseHelper(
+                "testContactsPhoneAccountHandleMigrationInitiation.db");
+
+        // Test setPhoneAccountMigrationStatusPending as false
+        PhoneAccountHandleMigrationUtils phoneAccountHandleMigrationUtils
+                = contactsDatabaseHelper.getPhoneAccountHandleMigrationUtils();
+
+        // Test ContactsDatabaseHelper.isPhoneAccountMigrationPending as true
+        // and set for testing migration logic
+        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(true);
+
+        mContactsProvider2.setContactsDatabaseHelperForTest(contactsDatabaseHelper);
+        final SQLiteDatabase sqLiteDatabase = contactsDatabaseHelper.getReadableDatabase();
+
+        // Check each entry in the Data has a new coloumn of
+        // Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING that has a value of 1
+        assertEquals(6, DatabaseUtils.longForQuery(sqLiteDatabase,
+                "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                        + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                + " = 1", null));
+
+        // Prepare Task for BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES
+        mContactsProvider2.performBackgroundTask(
+                mContactsProvider2.BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES, null);
+
+        // Check four coloumns of Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING have migrated
+        assertEquals(4, DatabaseUtils.longForQuery(sqLiteDatabase,
+                "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                        + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                + " = 0", null));
+        // Check two coloumns of Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING have not migrated
+        assertEquals(2, DatabaseUtils.longForQuery(sqLiteDatabase,
+                "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                        + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                + " = 1", null));
+
+        // Verify the pending status of phone account migration.
+        assertTrue(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
+
+        mContactsProvider2.setContactsDatabaseHelperForTest(originalContactsDatabaseHelper);
+    }
+
+    public void testPhoneAccountHandleMigrationPendingStatus() {
+        // Mock ContactsDatabaseHelper
+        ContactsDatabaseHelper contactsDatabaseHelper = getMockContactsDatabaseHelper(
+                "testPhoneAccountHandleMigrationPendingStatus.db");
+
+        // Test setPhoneAccountMigrationStatusPending as false
+        PhoneAccountHandleMigrationUtils phoneAccountHandleMigrationUtils
+                = contactsDatabaseHelper.getPhoneAccountHandleMigrationUtils();
+        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(false);
+        assertFalse(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
+
+        // Test ContactsDatabaseHelper.isPhoneAccountMigrationPending as true
+        // and set for testing migration logic
+        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(true);
+        assertTrue(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
     }
 
     public void testConvertEnterpriseUriWithEnterpriseDirectoryToLocalUri() {
