@@ -56,6 +56,7 @@ import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItems;
 import android.provider.VoicemailContract;
+import android.telephony.SubscriptionManager;
 import android.test.MoreAsserts;
 import android.test.mock.MockContentResolver;
 import android.util.Log;
@@ -78,6 +79,9 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 /**
  * A common superclass for {@link ContactsProvider2}-related tests.
@@ -110,6 +114,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     protected final static String NO_STRING = new String("");
     protected final static Account NO_ACCOUNT = new Account("a", "b");
 
+    ContextWithServiceOverrides mTestContext;
+    @Mock SubscriptionManager mSubscriptionManager;
+
     /**
      * Use {@link MockClock#install()} to start using it.
      * It'll be automatically uninstalled by {@link #tearDown()}.
@@ -127,9 +134,13 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
+        MockitoAnnotations.initMocks(this);
+
+        mTestContext = new ContextWithServiceOverrides(getContext());
+        mTestContext.injectSystemService(SubscriptionManager.class, mSubscriptionManager);
 
         mActor = new ContactsActor(
-                getContext(), getContextPackageName(), getProviderClass(), getAuthority());
+                mTestContext, getContextPackageName(), getProviderClass(), getAuthority());
         mResolver = mActor.resolver;
         if (mActor.provider instanceof SynchronousContactsProvider2) {
             getContactsProvider().wipeData();
