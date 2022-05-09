@@ -1288,8 +1288,13 @@ public class CallLogProvider extends ContentProvider {
             adjustForNewPhoneAccountInternal((PhoneAccountHandle) arg);
         } else if (task == BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES) {
             PhoneAccountHandle phoneAccountHandle = (PhoneAccountHandle) arg;
-            String iccId = mSubscriptionManager.getActiveSubscriptionInfo(
+            String iccId = null;
+            try {
+                iccId = mSubscriptionManager.getActiveSubscriptionInfo(
                     Integer.parseInt(phoneAccountHandle.getId())).getIccId();
+            } catch (NumberFormatException nfe) {
+                // Ignore the exception, iccId will remain null and be handled below.
+            }
             if (iccId == null) {
                 Log.i(TAG, "ACTION_PHONE_ACCOUNT_REGISTERED received null IccId.");
             } else {
