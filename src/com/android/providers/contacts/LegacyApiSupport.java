@@ -65,6 +65,8 @@ import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.StatusUpdatesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.ContactsDatabaseHelper.Views;
+import com.android.providers.contacts.database.MoreDatabaseUtils;
 
 import java.util.Locale;
 
@@ -1246,7 +1248,7 @@ public class LegacyApiSupport {
                     + ContactsContract.Settings.ACCOUNT_NAME + ","
                     + ContactsContract.Settings.ACCOUNT_TYPE + ","
                     + ContactsContract.Settings.SHOULD_SYNC +
-            " FROM " + Tables.SETTINGS + " LEFT OUTER JOIN " + LegacyTables.SETTINGS +
+            " FROM " + Views.SETTINGS + " LEFT OUTER JOIN " + LegacyTables.SETTINGS +
             " ON (" + ContactsContract.Settings.ACCOUNT_NAME + "="
                               + android.provider.Contacts.Settings._SYNC_ACCOUNT +
                       " AND " + ContactsContract.Settings.ACCOUNT_TYPE + "="
@@ -1859,8 +1861,12 @@ public class LegacyApiSupport {
             sb.append(" AND " + RawContacts.ACCOUNT_TYPE + "=");
             DatabaseUtils.appendEscapedSQLString(sb, mAccount.type);
         } else {
-            sb.append(RawContacts.ACCOUNT_NAME + " IS NULL" +
-                    " AND " + RawContacts.ACCOUNT_TYPE + " IS NULL");
+            sb.append(RawContacts.ACCOUNT_NAME + " IS ");
+            MoreDatabaseUtils.appendEscapedSQLStringOrLiteralNull(
+                    sb, AccountWithDataSet.LOCAL.getAccountName());
+            sb.append(" AND ").append(RawContacts.ACCOUNT_TYPE + " IS ");
+            MoreDatabaseUtils.appendEscapedSQLStringOrLiteralNull(
+                    sb, AccountWithDataSet.LOCAL.getAccountType());
         }
     }
 
@@ -1877,8 +1883,12 @@ public class LegacyApiSupport {
             sb.append(" AND " + Groups.ACCOUNT_TYPE + "=");
             DatabaseUtils.appendEscapedSQLString(sb, mAccount.type);
         } else {
-            sb.append(Groups.ACCOUNT_NAME + " IS NULL" +
-                    " AND " + Groups.ACCOUNT_TYPE + " IS NULL");
+            sb.append(Groups.ACCOUNT_NAME + " IS ");
+            MoreDatabaseUtils.appendEscapedSQLStringOrLiteralNull(
+                    sb, AccountWithDataSet.LOCAL.getAccountName());
+            sb.append(" AND " + Groups.ACCOUNT_TYPE + " IS ");
+            MoreDatabaseUtils.appendEscapedSQLStringOrLiteralNull(
+                    sb, AccountWithDataSet.LOCAL.getAccountType());
         }
     }
 
