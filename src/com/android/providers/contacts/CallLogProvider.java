@@ -19,10 +19,12 @@ package com.android.providers.contacts;
 import static com.android.providers.contacts.util.DbQueryUtils.checkForSupportedColumns;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 import static com.android.providers.contacts.util.DbQueryUtils.getInequalityClause;
+import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.AppOpsManager;
+import android.content.BroadcastReceiver;
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -30,6 +32,8 @@ import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.OperationApplicationException;
 import android.content.UriMatcher;
 import android.database.Cursor;
@@ -49,15 +53,19 @@ import android.provider.CallLog.Calls;
 import android.telecom.PhoneAccount;
 import android.telecom.PhoneAccountHandle;
 import android.telecom.TelecomManager;
+import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.ArrayMap;
+import android.util.EventLog;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.ProviderAccessStats;
 import com.android.providers.contacts.CallLogDatabaseHelper.DbProperties;
 import com.android.providers.contacts.CallLogDatabaseHelper.Tables;
+import com.android.providers.contacts.util.FileUtilities;
+import com.android.providers.contacts.util.NeededForTesting;
 import com.android.providers.contacts.util.SelectionBuilder;
 import com.android.providers.contacts.util.UserUtils;
 
@@ -70,14 +78,14 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
@@ -90,8 +98,10 @@ public class CallLogProvider extends ContentProvider {
 
     public static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
 
-    private static final int BACKGROUND_TASK_INITIALIZE = 0;
+    @VisibleForTesting
+    protected static final int BACKGROUND_TASK_INITIALIZE = 0;
     private static final int BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT = 1;
+    private static final int BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES = 2;
 
     /** Selection clause for selecting all calls that were made after a certain time */
     private static final String MORE_RECENT_THAN_SELECTION = Calls.DATE + "> ?";
@@ -239,7 +249,42 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.COMPOSER_PHOTO_URI, Calls.COMPOSER_PHOTO_URI);
         sCallsProjectionMap.put(Calls.SUBJECT, Calls.SUBJECT);
         sCallsProjectionMap.put(Calls.LOCATION, Calls.LOCATION);
+        sCallsProjectionMap.put(Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING,
+                Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING);
     }
+
+    /**
+     * Subscription change will trigger ACTION_PHONE_ACCOUNT_REGISTERED that broadcasts new
+     * PhoneAccountHandle that is created based on the new subscription. This receiver is used
+     * for listening new subscription change and migrating phone account handle if any pending.
+     *
+     * It is then used by the call log to un-hide any entries which were previously hidden after
+     * a backup-restore until its associated phone-account is registered with telecom. After a
+     * restore, we hide call log entries until the user inserts the corresponding SIM, registers
+     * the corresponding SIP account, or registers a corresponding alternative phone-account.
+     */
+    private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED.equals(intent.getAction())) {
+                PhoneAccountHandle phoneAccountHandle =
+                        (PhoneAccountHandle) intent.getParcelableExtra(
+                                TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE);
+                if (mDbHelper.getPhoneAccountHandleMigrationUtils()
+                        .isPhoneAccountMigrationPending()
+                        && TELEPHONY_COMPONENT_NAME.equals(
+                                phoneAccountHandle.getComponentName().flattenToString())
+                        && !mMigratedPhoneAccountHandles.contains(phoneAccountHandle)) {
+                    mMigratedPhoneAccountHandles.add(phoneAccountHandle);
+                    mTaskScheduler.scheduleTask(
+                            BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES, phoneAccountHandle);
+                } else {
+                    mTaskScheduler.scheduleTask(BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT,
+                            phoneAccountHandle);
+                }
+            }
+        }
+    };
 
     private static final String ALLOWED_PACKAGE_FOR_TESTING = "com.android.providers.contacts";
 
@@ -256,7 +301,8 @@ public class CallLogProvider extends ContentProvider {
 
     private ContactsTaskScheduler mTaskScheduler;
 
-    private volatile CountDownLatch mReadAccessLatch;
+    @VisibleForTesting
+    protected volatile CountDownLatch mReadAccessLatch;
 
     private CallLogDatabaseHelper mDbHelper;
     private DatabaseUtils.InsertHelper mCallsInserter;
@@ -264,10 +310,12 @@ public class CallLogProvider extends ContentProvider {
     private int mMinMatch;
     private VoicemailPermissions mVoicemailPermissions;
     private CallLogInsertionHelper mCallLogInsertionHelper;
+    private SubscriptionManager mSubscriptionManager;
 
     private final ThreadLocal<Boolean> mApplyingBatch = new ThreadLocal<>();
     private final ThreadLocal<Integer> mCallingUid = new ThreadLocal<>();
     private final ProviderAccessStats mStats = new ProviderAccessStats();
+    private final Set<PhoneAccountHandle> mMigratedPhoneAccountHandles = new HashSet<>();
 
     protected boolean isShadow() {
         return false;
@@ -310,6 +358,13 @@ public class CallLogProvider extends ContentProvider {
 
         mTaskScheduler.scheduleTask(BACKGROUND_TASK_INITIALIZE, null);
 
+        mSubscriptionManager = context.getSystemService(SubscriptionManager.class);
+
+        // Register a receiver to hear sim change event for migrating pending
+        // PhoneAccountHandle ID or/and unhides restored call logs
+        IntentFilter filter = new IntentFilter(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
+        context.registerReceiver(mBroadcastReceiver, filter);
+
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
             Log.d(Constants.PERFORMANCE_TAG, getProviderName() + ".onCreate finish");
         }
@@ -329,6 +384,25 @@ public class CallLogProvider extends ContentProvider {
     @VisibleForTesting
     public int getMinMatchForTest() {
         return mMinMatch;
+    }
+
+    @NeededForTesting
+    public CallLogDatabaseHelper getCallLogDatabaseHelperForTest() {
+        return mDbHelper;
+    }
+
+    @NeededForTesting
+    public void setCallLogDatabaseHelperForTest(CallLogDatabaseHelper callLogDatabaseHelper) {
+        mDbHelper = callLogDatabaseHelper;
+    }
+
+    /**
+     * @return the currently registered BroadcastReceiver for listening
+     *         ACTION_PHONE_ACCOUNT_REGISTERED in the current process.
+     */
+    @NeededForTesting
+    public BroadcastReceiver getBroadcastReceiverForTest() {
+        return mBroadcastReceiver;
     }
 
     protected CallLogDatabaseHelper getDatabaseHelper(final Context context) {
@@ -651,6 +725,7 @@ public class CallLogProvider extends ContentProvider {
                 throw new FileNotFoundException(uri.toString()
                         + " does not correspond to a valid file.");
             }
+            enforceValidCallLogPath(callComposerDir, pictureFile,"openFile");
             return ParcelFileDescriptor.open(pictureFile.toFile(), modeInt);
         } catch (IOException e) {
             Log.e(TAG, "IOException while opening call composer file: " + e);
@@ -764,6 +839,8 @@ public class CallLogProvider extends ContentProvider {
             return null;
         }
         Path pathToFile = pathToCallComposerDir.resolve(fileName);
+        enforceValidCallLogPath(pathToCallComposerDir, pathToFile,
+                "allocateNewCallComposerPicture");
         Files.createFile(pathToFile);
 
         if (forAllUsers) {
@@ -777,10 +854,10 @@ public class CallLogProvider extends ContentProvider {
     private int deleteCallComposerPicture(Uri uri) {
         try {
             Path pathToCallComposerDir = getCallComposerPictureDirectory(getContext(), uri);
-            String fileName = uri.getLastPathSegment();
-            boolean successfulDelete =
-                    Files.deleteIfExists(pathToCallComposerDir.resolve(fileName));
-            return successfulDelete ? 1 : 0;
+            Path fileToDelete = pathToCallComposerDir.resolve(uri.getLastPathSegment());
+            enforceValidCallLogPath(pathToCallComposerDir, fileToDelete,
+                    "deleteCallComposerPicture");
+            return Files.deleteIfExists(fileToDelete) ? 1 : 0;
         } catch (IOException e) {
             Log.e(TAG, "IOException encountered deleting the call composer pics dir " + e);
             return 0;
@@ -853,10 +930,6 @@ public class CallLogProvider extends ContentProvider {
             default:
                 throw new UnsupportedOperationException("Cannot delete that URL: " + uri);
         }
-    }
-
-    void adjustForNewPhoneAccount(PhoneAccountHandle handle) {
-        mTaskScheduler.scheduleTask(BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT, handle);
     }
 
     /**
@@ -945,14 +1018,12 @@ public class CallLogProvider extends ContentProvider {
         }
 
         final UserManager userManager = UserUtils.getUserManager(getContext());
+        final int myUserId = userManager.getProcessUserId();
 
         // TODO: http://b/24944959
-        if (!Calls.shouldHaveSharedCallLogEntries(getContext(), userManager,
-                userManager.getUserHandle())) {
+        if (!Calls.shouldHaveSharedCallLogEntries(getContext(), userManager, myUserId)) {
             return;
         }
-
-        final int myUserId = userManager.getUserHandle();
 
         // See the comment in Calls.addCall() for the logic.
 
@@ -1045,8 +1116,9 @@ public class CallLogProvider extends ContentProvider {
         for (Uri uri : urisToCopy) {
             try {
                 Uri uriWithUser = ContentProvider.maybeAddUserId(uri, sourceUserId);
-                Path newFilePath = getCallComposerPictureDirectory(getContext(), false)
-                        .resolve(uri.getLastPathSegment());
+                Path callComposerDir = getCallComposerPictureDirectory(getContext(), false);
+                Path newFilePath = callComposerDir.resolve(uri.getLastPathSegment());
+                enforceValidCallLogPath(callComposerDir, newFilePath,"syncCallComposerPics");
                 try (ParcelFileDescriptor remoteFile = contentResolver.openFile(uriWithUser,
                         "r", null);
                      OutputStream localOut =
@@ -1067,7 +1139,6 @@ public class CallLogProvider extends ContentProvider {
                 // Keep going and get as many as we can.
             }
         }
-        
     }
     /**
      * Un-hides any hidden call log entries that are associated with the specified handle.
@@ -1107,7 +1178,6 @@ public class CallLogProvider extends ContentProvider {
                 cursor.close();
             }
         }
-
     }
 
     /**
@@ -1199,16 +1269,39 @@ public class CallLogProvider extends ContentProvider {
         }
     }
 
-    private void performBackgroundTask(int task, Object arg) {
+    @VisibleForTesting
+    protected void performBackgroundTask(int task, Object arg) {
         if (task == BACKGROUND_TASK_INITIALIZE) {
             try {
+                mDbHelper.updatePhoneAccountHandleMigrationPendingStatus();
+                if (mDbHelper.getPhoneAccountHandleMigrationUtils()
+                        .isPhoneAccountMigrationPending()) {
+                    Log.i(TAG, "performBackgroundTask for pending PhoneAccountHandle migration");
+                    mDbHelper.migrateIccIdToSubId();
+                }
                 syncEntries();
             } finally {
                 mReadAccessLatch.countDown();
-                mReadAccessLatch = null;
             }
         } else if (task == BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT) {
+            Log.i(TAG, "performBackgroundTask for unhide PhoneAccountHandles");
             adjustForNewPhoneAccountInternal((PhoneAccountHandle) arg);
+        } else if (task == BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES) {
+            PhoneAccountHandle phoneAccountHandle = (PhoneAccountHandle) arg;
+            String iccId = null;
+            try {
+                iccId = mSubscriptionManager.getActiveSubscriptionInfo(
+                    Integer.parseInt(phoneAccountHandle.getId())).getIccId();
+            } catch (NumberFormatException nfe) {
+                // Ignore the exception, iccId will remain null and be handled below.
+            }
+            if (iccId == null) {
+                Log.i(TAG, "ACTION_PHONE_ACCOUNT_REGISTERED received null IccId.");
+            } else {
+                Log.i(TAG, "ACTION_PHONE_ACCOUNT_REGISTERED received for migrating phone"
+                        + " account handle SubId: " + phoneAccountHandle.getId());
+                mDbHelper.migratePendingPhoneAccountHandles(iccId, phoneAccountHandle.getId());
+            }
         }
     }
 
@@ -1220,5 +1313,20 @@ public class CallLogProvider extends ContentProvider {
     @Override
     public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
         mStats.dump(writer, "  ");
+    }
+
+    /**
+     *  Enforces a stricter check on what files the CallLogProvider can perform file operations on.
+     * @param rootPath where all valid new/existing paths should pass through.
+     * @param pathToCheck newly created path that is requesting a file op. (open, delete, etc.)
+     * @param callingMethod the calling method.  Used only for debugging purposes.
+     */
+    private void enforceValidCallLogPath(Path rootPath, Path pathToCheck, String callingMethod){
+        if (!FileUtilities.isSameOrSubDirectory(rootPath.toFile(), pathToCheck.toFile())) {
+            EventLog.writeEvent(0x534e4554, "219015884", Binder.getCallingUid(),
+                    (callingMethod + ": invalid uri passed"));
+            throw new SecurityException(
+                    FileUtilities.INVALID_CALL_LOG_PATH_EXCEPTION_MESSAGE + pathToCheck);
+        }
     }
 }
