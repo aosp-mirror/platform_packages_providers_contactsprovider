@@ -191,7 +191,7 @@ public class ContactsActor {
         }
 
         @Override
-        public int getUserHandle() {
+        public int getProcessUserId() {
             return myUser;
         }
 
@@ -404,7 +404,7 @@ public class ContactsActor {
             @Override
             public int getUserId() {
                 if (mockUserManager != null) {
-                    return mockUserManager.getUserHandle();
+                    return mockUserManager.getProcessUserId();
                 } else {
                     return DEFAULT_USER_ID;
                 }
