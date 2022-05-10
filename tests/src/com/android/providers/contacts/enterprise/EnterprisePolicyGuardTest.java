@@ -16,7 +16,6 @@
 package com.android.providers.contacts.enterprise;
 
 import android.app.admin.DevicePolicyManager;
-import android.content.ContentResolver;
 import android.content.Context;
 import android.content.pm.UserInfo;
 import android.net.Uri;
@@ -265,7 +264,7 @@ public class EnterprisePolicyGuardTest extends FixedAndroidTestCase {
 
         List<UserInfo> userInfos = MANAGED_USERINFO_LIST;
         UserManager mockUm = mock(UserManager.class);
-        when(mockUm.getUserHandle()).thenReturn(CURRENT_USER_ID);
+        when(mockUm.getProcessUserId()).thenReturn(CURRENT_USER_ID);
         when(mockUm.getUsers()).thenReturn(userInfos);
         when(mockUm.getProfiles(Matchers.anyInt())).thenReturn(userInfos);
         when(mockUm.getProfileParent(WORK_USER_ID)).thenReturn(CURRENT_USER_INFO);
