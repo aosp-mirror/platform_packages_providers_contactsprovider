@@ -27,6 +27,9 @@ import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Data;
 import android.text.TextUtils;
+import android.util.Log;
+import android.util.LogWriter;
+
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
@@ -37,6 +40,7 @@ import com.android.providers.contacts.aggregation.AbstractContactAggregator;
  * Handles inserts and update for a specific Data type.
  */
 public abstract class DataRowHandler {
+    private static final String TAG = AbstractContactsProvider.TAG;
 
     private static final String[] HASH_INPUT_COLUMNS = new String[] {
             Data.DATA1, Data.DATA2};
@@ -438,5 +442,15 @@ public abstract class DataRowHandler {
             }
         }
         return false;
+    }
+
+    protected static void applySimpleFieldMaxSize(ContentValues cv, String column) {
+        final int maxSize = ContactsDatabaseHelper.getSimpleFieldMaxSize();
+        String v = cv.getAsString(column);
+        if (v == null || v.length() <= maxSize) {
+            return;
+        }
+        Log.w(TAG, "Truncating field " + column + ": length=" + v.length() + " max=" + maxSize);
+        cv.put(column, v.substring(0, maxSize));
     }
 }
