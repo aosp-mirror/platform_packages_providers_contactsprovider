@@ -34,6 +34,7 @@ import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteQueryBuilder;
+import android.database.sqlite.SQLiteTokenizer;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.UserHandle;
@@ -45,6 +46,7 @@ import android.telecom.PhoneAccountHandle;
 import android.telecom.TelecomManager;
 import android.text.TextUtils;
 import android.util.ArrayMap;
+import android.util.EventLog;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -59,6 +61,9 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -329,9 +334,10 @@ public class CallLogProvider extends ContentProvider {
                 List<String> pathSegments = uri.getPathSegments();
                 String phoneNumber = pathSegments.size() >= 2 ? pathSegments.get(2) : null;
                 if (!TextUtils.isEmpty(phoneNumber)) {
-                    qb.appendWhere("PHONE_NUMBERS_EQUAL(number, ");
-                    qb.appendWhereEscapeString(phoneNumber);
+                    qb.appendWhere("PHONE_NUMBERS_EQUAL(number, ?");
                     qb.appendWhere(mUseStrictPhoneNumberComparation ? ", 1)" : ", 0)");
+                    selectionArgs = copyArrayAndAppendElement(selectionArgs,
+                            "'" + phoneNumber + "'");
                 } else {
                     qb.appendWhere(Calls.NUMBER_PRESENTATION + "!="
                             + Calls.PRESENTATION_ALLOWED);
@@ -353,10 +359,77 @@ public class CallLogProvider extends ContentProvider {
         final SQLiteDatabase db = mDbHelper.getReadableDatabase();
         final Cursor c = qb.query(db, projection, selectionBuilder.build(), selectionArgs, null,
                 null, sortOrder, limitClause);
+
+        if (match == CALLS_FILTER && selectionArgs.length > 0) {
+            // throw SE if the user is sending requests that try to bypass voicemail permissions
+            examineEmptyCursorCause(c, selectionArgs[selectionArgs.length - 1]);
+        }
+
         if (c != null) {
             c.setNotificationUri(getContext().getContentResolver(), CallLog.CONTENT_URI);
         }
         return c;
+    }
+
+    /**
+     * Helper method for queryInternal that appends an extra argument to the existing selection
+     * arguments array.
+     *
+     * @param oldSelectionArguments the existing selection argument array in queryInternal
+     * @param phoneNumber           the phoneNumber that was passed into queryInternal
+     * @return the new selection argument array with the phoneNumber as the last argument
+     */
+    private String[] copyArrayAndAppendElement(String[] oldSelectionArguments, String phoneNumber) {
+        if (oldSelectionArguments == null) {
+            return new String[]{phoneNumber};
+        }
+        String[] newSelectionArguments = new String[oldSelectionArguments.length + 1];
+        System.arraycopy(oldSelectionArguments, 0, newSelectionArguments, 0,
+                oldSelectionArguments.length);
+        newSelectionArguments[oldSelectionArguments.length] = phoneNumber;
+        return newSelectionArguments;
+    }
+
+    /**
+     * Helper that throws a Security Exception if the Cursor object is empty && the phoneNumber
+     * appears to have SQL.
+     *
+     * @param cursor      returned from the query.
+     * @param phoneNumber string to check for SQL.
+     */
+    private void examineEmptyCursorCause(Cursor cursor, String phoneNumber) {
+        // checks if the cursor is empty
+        if ((cursor == null) || !cursor.moveToFirst()) {
+            try {
+                // tokenize the phoneNumber and run each token through a checker
+                SQLiteTokenizer.tokenize(phoneNumber, SQLiteTokenizer.OPTION_NONE,
+                        this::enforceStrictPhoneNumber);
+            } catch (IllegalArgumentException e) {
+                EventLog.writeEvent(0x534e4554, "224771921", Binder.getCallingUid(),
+                        ("invalid phoneNumber passed to queryInternal"));
+                throw new SecurityException("invalid phoneNumber passed to queryInternal");
+            }
+        }
+    }
+
+    private void enforceStrictPhoneNumber(String token) {
+        boolean isAllowedKeyword = SQLiteTokenizer.isKeyword(token);
+        switch (token.toUpperCase(Locale.US)) {
+            case "SELECT":
+            case "FROM":
+            case "WHERE":
+            case "GROUP":
+            case "HAVING":
+            case "WINDOW":
+            case "VALUES":
+            case "ORDER":
+            case "LIMIT":
+                isAllowedKeyword = false;
+                break;
+        }
+        if (!isAllowedKeyword) {
+            throw new IllegalArgumentException("Invalid token " + token);
+        }
     }
 
     private void queryForTesting(Uri uri) {
