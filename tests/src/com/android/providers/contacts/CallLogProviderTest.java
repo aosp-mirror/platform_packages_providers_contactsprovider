@@ -18,6 +18,8 @@ package com.android.providers.contacts;
 
 import static android.provider.CallLog.Calls.MISSED_REASON_NOT_MISSED;
 
+import static com.android.providers.contacts.ContactsProvider2.BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES;
+
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
 
@@ -734,6 +736,16 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 getTestCallLogValues(0));
         assertEquals(0, mCallLogProvider.getLastSyncTime(/* forShadow =*/ true));
         assertEquals(10, mCallLogProvider.getLastSyncTime(/* forShadow =*/ false));
+    }
+
+    public void testNullSubscriptionInfo() {
+        PhoneAccountHandle handle = new PhoneAccountHandle(new ComponentName(
+                TELEPHONY_PACKAGE, TELEPHONY_CLASS), TEST_PHONE_ACCOUNT_HANDLE_SUB_ID);
+        when(mSubscriptionManager.getActiveSubscriptionInfo(eq(
+                Integer.parseInt(TEST_PHONE_ACCOUNT_HANDLE_SUB_ID)))).thenReturn(null);
+
+        mCallLogProvider.performBackgroundTask(
+                BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES, handle);
     }
 
     private ContentValues getDefaultValues(int callType) {
