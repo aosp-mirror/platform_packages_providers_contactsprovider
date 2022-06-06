@@ -54,6 +54,7 @@ import android.provider.CallLog.Calls;
 import android.telecom.PhoneAccount;
 import android.telecom.PhoneAccountHandle;
 import android.telecom.TelecomManager;
+import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
@@ -1349,8 +1350,11 @@ public class CallLogProvider extends ContentProvider {
             PhoneAccountHandle phoneAccountHandle = (PhoneAccountHandle) arg;
             String iccId = null;
             try {
-                iccId = mSubscriptionManager.getActiveSubscriptionInfo(
-                    Integer.parseInt(phoneAccountHandle.getId())).getIccId();
+                SubscriptionInfo info = mSubscriptionManager.getActiveSubscriptionInfo(
+                        Integer.parseInt(phoneAccountHandle.getId()));
+                if (info != null) {
+                    iccId = info.getIccId();
+                }
             } catch (NumberFormatException nfe) {
                 // Ignore the exception, iccId will remain null and be handled below.
             }
