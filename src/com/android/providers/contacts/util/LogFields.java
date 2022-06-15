@@ -24,9 +24,6 @@ public final class LogFields {
 
     private final int uriType;
 
-    // The type is from LogUtils.TaskType
-    private final int taskType;
-
     private final boolean callerIsSyncAdapter;
 
     private final long startNanos;
@@ -37,11 +34,11 @@ public final class LogFields {
 
     private int resultCount;
 
-    public LogFields(
-            int apiType, int uriType, int taskType, boolean callerIsSyncAdapter, long startNanos) {
+    private int methodCall;
+
+    public LogFields(int apiType, int uriType, boolean callerIsSyncAdapter, long startNanos) {
         this.apiType = apiType;
         this.uriType = uriType;
-        this.taskType = taskType;
         this.callerIsSyncAdapter = callerIsSyncAdapter;
         this.startNanos = startNanos;
     }
@@ -52,10 +49,6 @@ public final class LogFields {
 
     public int getUriType() {
         return uriType;
-    }
-
-    public int getTaskType() {
-        return taskType;
     }
 
     public boolean isCallerIsSyncAdapter() {
@@ -78,15 +71,19 @@ public final class LogFields {
         return resultCount;
     }
 
+    public int getMethodCall() {
+        return methodCall;
+    }
+
     public static final class Builder {
         private int apiType;
         private int uriType;
-        private int taskType;
         private boolean callerIsSyncAdapter;
         private long startNanos;
         private Exception exception;
         private Uri resultUri;
         private int resultCount;
+        private int methodCall;
 
         private Builder() {
         }
@@ -102,11 +99,6 @@ public final class LogFields {
 
         public Builder setUriType(int uriType) {
             this.uriType = uriType;
-            return this;
-        }
-
-        public Builder setTaskType(int taskType) {
-            this.taskType = taskType;
             return this;
         }
 
@@ -135,12 +127,17 @@ public final class LogFields {
             return this;
         }
 
+        public Builder setMethodCall(int methodCall) {
+            this.methodCall = methodCall;
+            return this;
+        }
+
         public LogFields build() {
-            LogFields logFields =
-                    new LogFields(apiType, uriType, taskType, callerIsSyncAdapter, startNanos);
+            LogFields logFields = new LogFields(apiType, uriType, callerIsSyncAdapter, startNanos);
             logFields.resultCount = this.resultCount;
             logFields.exception = this.exception;
             logFields.resultUri = this.resultUri;
+            logFields.methodCall = this.methodCall;
             return logFields;
         }
     }

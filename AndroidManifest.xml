@@ -22,9 +22,6 @@
     <uses-permission android:name="android.permission.READ_DEVICE_CONFIG" />
     <uses-permission android:name="android.permission.HIDE_NON_SYSTEM_OVERLAY_WINDOWS" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
-    <!-- Permissions required for reading and logging compat changes -->
-    <uses-permission android:name="android.permission.READ_COMPAT_CHANGE_CONFIG" />
-    <uses-permission android:name="android.permission.LOG_COMPAT_CHANGE" />
 
     <permission
             android:name="android.permission.SEND_CALL_LOG_CHANGE"
@@ -108,6 +105,15 @@
                  is sent. -->
             <intent-filter>
                 <action android:name="android.intent.action.PRE_BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name="PhoneAccountRegistrationReceiver"
+                android:exported="true"
+                android:permission="android.permission.BROADCAST_PHONE_ACCOUNT_REGISTRATION">
+            <!-- Broadcast sent after a phone account is registered in telecom. -->
+            <intent-filter>
+                <action android:name="android.telecom.action.PHONE_ACCOUNT_REGISTERED"/>
             </intent-filter>
         </receiver>
 

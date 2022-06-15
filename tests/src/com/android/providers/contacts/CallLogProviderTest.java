@@ -18,8 +18,6 @@ package com.android.providers.contacts;
 
 import static android.provider.CallLog.Calls.MISSED_REASON_NOT_MISSED;
 
-import static com.android.providers.contacts.ContactsProvider2.BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES;
-
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
 
@@ -28,7 +26,6 @@ import android.telecom.CallerInfo;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 import com.android.providers.contacts.util.ContactsPermissions;
 import com.android.providers.contacts.util.FileUtilities;
-import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -83,7 +80,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.DIRTY,
             Voicemails.DELETED};
     /** Total number of columns exposed by call_log provider. */
-    private static final int NUM_CALLLOG_FIELDS = 41;
+    private static final int NUM_CALLLOG_FIELDS = 40;
 
     private static final int MIN_MATCH = 7;
 
@@ -105,11 +102,9 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     private static final String TEST_FAIL_DID_NOT_TRHOW_SE =
             "fail test because Security Exception was not throw";
 
-
     private int mOldMinMatch;
 
     private CallLogProviderTestable mCallLogProvider;
-    private BroadcastReceiver mBroadcastReceiver;
 
     @Override
     protected Class<? extends ContentProvider> getProviderClass() {
@@ -125,7 +120,6 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
     protected void setUp() throws Exception {
         super.setUp();
         mCallLogProvider = addProvider(CallLogProviderTestable.class, CallLog.AUTHORITY);
-        mBroadcastReceiver = mCallLogProvider.getBroadcastReceiverForTest();
         mOldMinMatch = mCallLogProvider.getMinMatchForTest();
         mCallLogProvider.setMinMatchForTest(MIN_MATCH);
     }
@@ -137,211 +131,6 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         setTimeForTest(null);
         mCallLogProvider.setMinMatchForTest(mOldMinMatch);
         super.tearDown();
-    }
-
-    private CallLogDatabaseHelper getMockCallLogDatabaseHelper(String databaseNameForTesting) {
-        CallLogDatabaseHelper callLogDatabaseHelper = new CallLogDatabaseHelper(
-                mTestContext, databaseNameForTesting);
-        SQLiteDatabase db = callLogDatabaseHelper.getWritableDatabase();
-        // callLogDatabaseHelper.getOpenHelper().onCreate(db);
-        db.execSQL("DELETE FROM " + CallLogDatabaseHelper.Tables.CALLS);
-        {
-            final ContentValues values = new ContentValues();
-            values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME,
-                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
-            values.put(Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
-            values.put(Calls.PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
-            db.insert(CallLogDatabaseHelper.Tables.CALLS, null, values);
-        }
-        {
-            final ContentValues values = new ContentValues();
-            values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME,
-                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
-            values.put(Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
-            values.put(Calls.PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
-            db.insert(CallLogDatabaseHelper.Tables.CALLS, null, values);
-        }
-        {
-            final ContentValues values = new ContentValues();
-            values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME,
-                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
-            values.put(Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
-            values.put(Calls.PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
-            db.insert(CallLogDatabaseHelper.Tables.CALLS, null, values);
-        }
-        {
-            final ContentValues values = new ContentValues();
-            values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME, TEST_COMPONENT_NAME);
-            values.put(Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
-            values.put(Calls.PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
-            db.insert(CallLogDatabaseHelper.Tables.CALLS, null, values);
-        }
-        {
-            final ContentValues values = new ContentValues();
-            values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME,
-                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
-            values.put(Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
-            values.put(Calls.PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID2);
-            db.insert(CallLogDatabaseHelper.Tables.CALLS, null, values);
-        }
-        {
-            final ContentValues values = new ContentValues();
-            values.put(Calls.PHONE_ACCOUNT_COMPONENT_NAME,
-                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
-            values.put(Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
-            values.put(Calls.PHONE_ACCOUNT_ID, "FAKE_ICCID");
-            db.insert(CallLogDatabaseHelper.Tables.CALLS, null, values);
-        }
-        return callLogDatabaseHelper;
-    }
-
-    public void testPhoneAccountHandleMigrationSimEvent() throws IOException {
-        CallLogDatabaseHelper originalCallLogDatabaseHelper
-                = mCallLogProvider.getCallLogDatabaseHelperForTest();
-
-        // Mock SubscriptionManager
-        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(
-                TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1,
-                        1, "a", "b", 1, 1, "test", 1, null, null, null, null, false, null, null);
-        when(mSubscriptionManager.getActiveSubscriptionInfo(
-                eq(TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT))).thenReturn(subscriptionInfo);
-
-        // Mock CallLogDatabaseHelper
-        CallLogDatabaseHelper callLogDatabaseHelper = getMockCallLogDatabaseHelper(
-                "testCallLogPhoneAccountHandleMigrationSimEvent.db");
-        PhoneAccountHandleMigrationUtils phoneAccountHandleMigrationUtils = callLogDatabaseHelper
-                .getPhoneAccountHandleMigrationUtils();
-
-        // Test setPhoneAccountMigrationStatusPending as false
-        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(false);
-        assertFalse(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
-
-        // Test CallLogDatabaseHelper.isPhoneAccountMigrationPending as true
-        // and set for testing migration logic
-        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(true);
-        assertTrue(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
-
-        mCallLogProvider.setCallLogDatabaseHelperForTest(callLogDatabaseHelper);
-        final SQLiteDatabase sqLiteDatabase = callLogDatabaseHelper.getReadableDatabase();
-
-        // Check each entry in the Calls table has a new coloumn of
-        // Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING of 1
-        assertEquals(6, DatabaseUtils.longForQuery(sqLiteDatabase, "select count(*) from " +
-                CallLogDatabaseHelper.Tables.CALLS + " where " +
-                        Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING + " = 1", null));
-
-        // Prepare PhoneAccountHandle for the new sim event
-        PhoneAccountHandle phoneAccountHandle = new PhoneAccountHandle(
-                new ComponentName(TELEPHONY_PACKAGE, TELEPHONY_CLASS),
-                        TEST_PHONE_ACCOUNT_HANDLE_SUB_ID);
-        Intent intent = new Intent(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
-        intent.putExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, phoneAccountHandle);
-
-        mBroadcastReceiver.onReceive(mTestContext, intent);
-
-        // Wait for a while until the migration happens
-        long countMigrated = 0;
-
-        while (countMigrated != 4) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                // do nothing
-            }
-            countMigrated = DatabaseUtils.longForQuery(sqLiteDatabase, "select count(*) from " +
-                    CallLogDatabaseHelper.Tables.CALLS + " where " +
-                            Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING + " = 0", null);
-        }
-
-        // Check each entry in the CALLS that three coloumns of
-        // Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING that has migrated
-        assertEquals(4, countMigrated);
-        // Check each entry in the CALLS that one coloumns of
-        // Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING that is not expected to be migrated
-        assertEquals(2, DatabaseUtils.longForQuery(sqLiteDatabase, "select count(*) from " +
-                CallLogDatabaseHelper.Tables.CALLS + " where " +
-                        Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING + " = 1", null));
-
-        // Verify the pending status of phone account migration.
-        assertTrue(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
-
-        mCallLogProvider.setCallLogDatabaseHelperForTest(originalCallLogDatabaseHelper);
-    }
-
-
-    public void testPhoneAccountHandleMigrationInitiation() throws Exception {
-        CallLogDatabaseHelper originalCallLogDatabaseHelper
-                = mCallLogProvider.getCallLogDatabaseHelperForTest();
-
-        // Mock SubscriptionManager
-        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(
-                TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1,
-                        1, "a", "b", 1, 1, "test", 1, null, null, null, null, false, null, null);
-        List<SubscriptionInfo> subscriptionInfoList = new ArrayList<>();
-        subscriptionInfoList.add(subscriptionInfo);
-        when(mSubscriptionManager.getAllSubscriptionInfoList()).thenReturn(subscriptionInfoList);
-
-        // Mock CallLogDatabaseHelper
-        CallLogDatabaseHelper callLogDatabaseHelper = getMockCallLogDatabaseHelper(
-                "testCallLogPhoneAccountHandleMigrationInitiation.db");
-        PhoneAccountHandleMigrationUtils phoneAccountHandleMigrationUtils = callLogDatabaseHelper
-                .getPhoneAccountHandleMigrationUtils();
-
-        // Test setPhoneAccountMigrationStatusPending as false
-        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(false);
-        assertFalse(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
-
-        // Test CallLogDatabaseHelper.isPhoneAccountMigrationPending as true
-        // and set for testing migration logic
-        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(true);
-
-        mCallLogProvider.setCallLogDatabaseHelperForTest(callLogDatabaseHelper);
-        final SQLiteDatabase sqLiteDatabase = callLogDatabaseHelper.getReadableDatabase();
-
-        // Check each entry in the Calls table has a new coloumn of
-        // Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING as true
-        assertEquals(6, DatabaseUtils.longForQuery(sqLiteDatabase, "select count(*) from " +
-                CallLogDatabaseHelper.Tables.CALLS + " where " +
-                        Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING + " == 1", null));
-
-        // Prepare Task for BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES
-        mCallLogProvider.mReadAccessLatch = new CountDownLatch(1);
-        mCallLogProvider.performBackgroundTask(mCallLogProvider.BACKGROUND_TASK_INITIALIZE, null);
-        assertTrue(mCallLogProvider.mReadAccessLatch.await(TEST_TIMEOUT, TimeUnit.MILLISECONDS));
-
-        // Check each entry in the CALLS with a coloumn of
-        // Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING that has migrated
-        Cursor cursor = sqLiteDatabase.query(CallLogDatabaseHelper.Tables.CALLS, null,
-                Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING + " = 0", null, null, null, null);
-        assertEquals(4, cursor.getCount());
-        while (cursor.moveToNext()) {
-            assertEquals(TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT, cursor.getInt(cursor.getColumnIndex(Calls.PHONE_ACCOUNT_ID)));
-        }
-        assertEquals(2, DatabaseUtils.longForQuery(sqLiteDatabase, "select count(*) from " +
-                CallLogDatabaseHelper.Tables.CALLS + " where " +
-                        Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING + " = 1", null));
-
-        // Verify the pending status of phone account migration.
-        assertTrue(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
-
-        mCallLogProvider.setCallLogDatabaseHelperForTest(originalCallLogDatabaseHelper);
-    }
-
-    public void testPhoneAccountHandleMigrationPendingStatus() {
-        // Mock CallLogDatabaseHelper
-        CallLogDatabaseHelper callLogDatabaseHelper = getMockCallLogDatabaseHelper(
-                "testPhoneAccountHandleMigrationPendingStatus.db");
-        PhoneAccountHandleMigrationUtils phoneAccountHandleMigrationUtils = callLogDatabaseHelper
-                .getPhoneAccountHandleMigrationUtils();
-
-        // Test setPhoneAccountMigrationStatusPending as false
-        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(false);
-        assertFalse(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
-
-        // Test CallLogDatabaseHelper.isPhoneAccountMigrationPending as true
-        // and set for testing migration logic
-        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(true);
-        assertTrue(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
     }
 
     public void testInsert_RegularCallRecord() {
@@ -448,7 +237,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         ContactsPermissions.ALLOW_SELF_CALL = true;
         Uri uri = Calls.addCall(ci, getMockContext(), "1-800-263-7643",
                 Calls.PRESENTATION_ALLOWED, Calls.OUTGOING_TYPE, 0, subscription, 2000,
-                40, null, MISSED_REASON_NOT_MISSED, 0);
+                40, null, MISSED_REASON_NOT_MISSED);
         ContactsPermissions.ALLOW_SELF_CALL = false;
         assertNotNull(uri);
         assertEquals("0@" + CallLog.AUTHORITY, uri.getAuthority());
@@ -472,7 +261,6 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
         // parameters and the compiler needs a hint as to which form is correct.
         values.put(Calls.DATA_USAGE, (Long) null);
         values.put(Calls.MISSED_REASON, 0);
-        values.put(Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 0);
         assertStoredValues(uri, values);
     }
 
@@ -736,16 +524,6 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
                 getTestCallLogValues(0));
         assertEquals(0, mCallLogProvider.getLastSyncTime(/* forShadow =*/ true));
         assertEquals(10, mCallLogProvider.getLastSyncTime(/* forShadow =*/ false));
-    }
-
-    public void testNullSubscriptionInfo() {
-        PhoneAccountHandle handle = new PhoneAccountHandle(new ComponentName(
-                TELEPHONY_PACKAGE, TELEPHONY_CLASS), TEST_PHONE_ACCOUNT_HANDLE_SUB_ID);
-        when(mSubscriptionManager.getActiveSubscriptionInfo(eq(
-                Integer.parseInt(TEST_PHONE_ACCOUNT_HANDLE_SUB_ID)))).thenReturn(null);
-
-        mCallLogProvider.performBackgroundTask(
-                BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES, handle);
     }
 
     private ContentValues getDefaultValues(int callType) {

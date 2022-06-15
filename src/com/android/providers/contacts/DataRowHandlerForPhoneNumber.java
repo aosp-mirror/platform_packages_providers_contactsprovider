@@ -19,7 +19,6 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.telephony.PhoneNumberUtils;
 import android.text.TextUtils;
@@ -39,15 +38,9 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
         super(context, dbHelper, aggregator, Phone.CONTENT_ITEM_TYPE, Phone.TYPE, Phone.LABEL);
     }
 
-    private void applySimpleFieldMaxSize(ContentValues cv) {
-        applySimpleFieldMaxSize(cv, Phone.NUMBER);
-        applySimpleFieldMaxSize(cv, Phone.NORMALIZED_NUMBER);
-    }
-
     @Override
     public long insert(SQLiteDatabase db, TransactionContext txContext, long rawContactId,
             ContentValues values) {
-        applySimpleFieldMaxSize(values);
         fillNormalizedNumber(values);
 
         final long dataId = super.insert(db, txContext, rawContactId, values);
@@ -66,7 +59,6 @@ public class DataRowHandlerForPhoneNumber extends DataRowHandlerForCommonDataKin
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
             Cursor c, boolean callerIsSyncAdapter) {
-        applySimpleFieldMaxSize(values);
         fillNormalizedNumber(values);
 
         if (!super.update(db, txContext, values, c, callerIsSyncAdapter)) {

@@ -56,7 +56,6 @@ import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItems;
 import android.provider.VoicemailContract;
-import android.telephony.SubscriptionManager;
 import android.test.MoreAsserts;
 import android.test.mock.MockContentResolver;
 import android.util.Log;
@@ -79,9 +78,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
 /**
  * A common superclass for {@link ContactsProvider2}-related tests.
@@ -114,9 +110,6 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     protected final static String NO_STRING = new String("");
     protected final static Account NO_ACCOUNT = new Account("a", "b");
 
-    ContextWithServiceOverrides mTestContext;
-    @Mock SubscriptionManager mSubscriptionManager;
-
     /**
      * Use {@link MockClock#install()} to start using it.
      * It'll be automatically uninstalled by {@link #tearDown()}.
@@ -134,13 +127,9 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        MockitoAnnotations.initMocks(this);
-
-        mTestContext = new ContextWithServiceOverrides(getContext());
-        mTestContext.injectSystemService(SubscriptionManager.class, mSubscriptionManager);
 
         mActor = new ContactsActor(
-                mTestContext, getContextPackageName(), getProviderClass(), getAuthority());
+                getContext(), getContextPackageName(), getProviderClass(), getAuthority());
         mResolver = mActor.resolver;
         if (mActor.provider instanceof SynchronousContactsProvider2) {
             getContactsProvider().wipeData();
@@ -230,12 +219,12 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         return ContentUris.parseId(mResolver.insert(uri, values));
     }
 
-    protected Uri createSettings(Account account, String shouldSync, String ungroupedVisible) {
-        return createSettings(new AccountWithDataSet(account.name, account.type, null),
+    protected void createSettings(Account account, String shouldSync, String ungroupedVisible) {
+        createSettings(new AccountWithDataSet(account.name, account.type, null),
                 shouldSync, ungroupedVisible);
     }
 
-    protected Uri createSettings(AccountWithDataSet account, String shouldSync,
+    protected void createSettings(AccountWithDataSet account, String shouldSync,
             String ungroupedVisible) {
         ContentValues values = new ContentValues();
         values.put(Settings.ACCOUNT_NAME, account.getAccountName());
@@ -245,7 +234,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         }
         values.put(Settings.SHOULD_SYNC, shouldSync);
         values.put(Settings.UNGROUPED_VISIBLE, ungroupedVisible);
-        return mResolver.insert(Settings.CONTENT_URI, values);
+        mResolver.insert(Settings.CONTENT_URI, values);
     }
 
     protected Uri insertOrganization(long rawContactId, ContentValues values) {

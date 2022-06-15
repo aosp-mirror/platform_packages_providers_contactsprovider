@@ -19,12 +19,10 @@ package com.android.providers.contacts;
 import static com.android.providers.contacts.util.DbQueryUtils.checkForSupportedColumns;
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 import static com.android.providers.contacts.util.DbQueryUtils.getInequalityClause;
-import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.AppOpsManager;
-import android.content.BroadcastReceiver;
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -32,8 +30,6 @@ import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.OperationApplicationException;
 import android.content.UriMatcher;
 import android.database.Cursor;
@@ -54,8 +50,6 @@ import android.provider.CallLog.Calls;
 import android.telecom.PhoneAccount;
 import android.telecom.PhoneAccountHandle;
 import android.telecom.TelecomManager;
-import android.telephony.SubscriptionInfo;
-import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.ArrayMap;
@@ -80,12 +74,13 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -101,10 +96,8 @@ public class CallLogProvider extends ContentProvider {
 
     public static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
 
-    @VisibleForTesting
-    protected static final int BACKGROUND_TASK_INITIALIZE = 0;
+    private static final int BACKGROUND_TASK_INITIALIZE = 0;
     private static final int BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT = 1;
-    private static final int BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES = 2;
 
     /** Selection clause for selecting all calls that were made after a certain time */
     private static final String MORE_RECENT_THAN_SELECTION = Calls.DATE + "> ?";
@@ -252,42 +245,7 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.COMPOSER_PHOTO_URI, Calls.COMPOSER_PHOTO_URI);
         sCallsProjectionMap.put(Calls.SUBJECT, Calls.SUBJECT);
         sCallsProjectionMap.put(Calls.LOCATION, Calls.LOCATION);
-        sCallsProjectionMap.put(Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING,
-                Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING);
     }
-
-    /**
-     * Subscription change will trigger ACTION_PHONE_ACCOUNT_REGISTERED that broadcasts new
-     * PhoneAccountHandle that is created based on the new subscription. This receiver is used
-     * for listening new subscription change and migrating phone account handle if any pending.
-     *
-     * It is then used by the call log to un-hide any entries which were previously hidden after
-     * a backup-restore until its associated phone-account is registered with telecom. After a
-     * restore, we hide call log entries until the user inserts the corresponding SIM, registers
-     * the corresponding SIP account, or registers a corresponding alternative phone-account.
-     */
-    private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED.equals(intent.getAction())) {
-                PhoneAccountHandle phoneAccountHandle =
-                        (PhoneAccountHandle) intent.getParcelableExtra(
-                                TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE);
-                if (mDbHelper.getPhoneAccountHandleMigrationUtils()
-                        .isPhoneAccountMigrationPending()
-                        && TELEPHONY_COMPONENT_NAME.equals(
-                                phoneAccountHandle.getComponentName().flattenToString())
-                        && !mMigratedPhoneAccountHandles.contains(phoneAccountHandle)) {
-                    mMigratedPhoneAccountHandles.add(phoneAccountHandle);
-                    mTaskScheduler.scheduleTask(
-                            BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES, phoneAccountHandle);
-                } else {
-                    mTaskScheduler.scheduleTask(BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT,
-                            phoneAccountHandle);
-                }
-            }
-        }
-    };
 
     private static final String ALLOWED_PACKAGE_FOR_TESTING = "com.android.providers.contacts";
 
@@ -304,8 +262,7 @@ public class CallLogProvider extends ContentProvider {
 
     private ContactsTaskScheduler mTaskScheduler;
 
-    @VisibleForTesting
-    protected volatile CountDownLatch mReadAccessLatch;
+    private volatile CountDownLatch mReadAccessLatch;
 
     private CallLogDatabaseHelper mDbHelper;
     private DatabaseUtils.InsertHelper mCallsInserter;
@@ -313,12 +270,10 @@ public class CallLogProvider extends ContentProvider {
     private int mMinMatch;
     private VoicemailPermissions mVoicemailPermissions;
     private CallLogInsertionHelper mCallLogInsertionHelper;
-    private SubscriptionManager mSubscriptionManager;
 
     private final ThreadLocal<Boolean> mApplyingBatch = new ThreadLocal<>();
     private final ThreadLocal<Integer> mCallingUid = new ThreadLocal<>();
     private final ProviderAccessStats mStats = new ProviderAccessStats();
-    private final Set<PhoneAccountHandle> mMigratedPhoneAccountHandles = new HashSet<>();
 
     protected boolean isShadow() {
         return false;
@@ -361,13 +316,6 @@ public class CallLogProvider extends ContentProvider {
 
         mTaskScheduler.scheduleTask(BACKGROUND_TASK_INITIALIZE, null);
 
-        mSubscriptionManager = context.getSystemService(SubscriptionManager.class);
-
-        // Register a receiver to hear sim change event for migrating pending
-        // PhoneAccountHandle ID or/and unhides restored call logs
-        IntentFilter filter = new IntentFilter(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
-        context.registerReceiver(mBroadcastReceiver, filter);
-
         if (Log.isLoggable(Constants.PERFORMANCE_TAG, Log.DEBUG)) {
             Log.d(Constants.PERFORMANCE_TAG, getProviderName() + ".onCreate finish");
         }
@@ -387,25 +335,6 @@ public class CallLogProvider extends ContentProvider {
     @VisibleForTesting
     public int getMinMatchForTest() {
         return mMinMatch;
-    }
-
-    @NeededForTesting
-    public CallLogDatabaseHelper getCallLogDatabaseHelperForTest() {
-        return mDbHelper;
-    }
-
-    @NeededForTesting
-    public void setCallLogDatabaseHelperForTest(CallLogDatabaseHelper callLogDatabaseHelper) {
-        mDbHelper = callLogDatabaseHelper;
-    }
-
-    /**
-     * @return the currently registered BroadcastReceiver for listening
-     *         ACTION_PHONE_ACCOUNT_REGISTERED in the current process.
-     */
-    @NeededForTesting
-    public BroadcastReceiver getBroadcastReceiverForTest() {
-        return mBroadcastReceiver;
     }
 
     protected CallLogDatabaseHelper getDatabaseHelper(final Context context) {
@@ -992,6 +921,10 @@ public class CallLogProvider extends ContentProvider {
         }
     }
 
+    void adjustForNewPhoneAccount(PhoneAccountHandle handle) {
+        mTaskScheduler.scheduleTask(BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT, handle);
+    }
+
     /**
      * Returns a {@link DatabaseModifier} that takes care of sending necessary notifications
      * after the operation is performed.
@@ -1078,12 +1011,14 @@ public class CallLogProvider extends ContentProvider {
         }
 
         final UserManager userManager = UserUtils.getUserManager(getContext());
-        final int myUserId = userManager.getProcessUserId();
 
         // TODO: http://b/24944959
-        if (!Calls.shouldHaveSharedCallLogEntries(getContext(), userManager, myUserId)) {
+        if (!Calls.shouldHaveSharedCallLogEntries(getContext(), userManager,
+                userManager.getUserHandle())) {
             return;
         }
+
+        final int myUserId = userManager.getUserHandle();
 
         // See the comment in Calls.addCall() for the logic.
 
@@ -1199,6 +1134,7 @@ public class CallLogProvider extends ContentProvider {
                 // Keep going and get as many as we can.
             }
         }
+        
     }
     /**
      * Un-hides any hidden call log entries that are associated with the specified handle.
@@ -1238,6 +1174,7 @@ public class CallLogProvider extends ContentProvider {
                 cursor.close();
             }
         }
+
     }
 
     /**
@@ -1329,42 +1266,16 @@ public class CallLogProvider extends ContentProvider {
         }
     }
 
-    @VisibleForTesting
-    protected void performBackgroundTask(int task, Object arg) {
+    private void performBackgroundTask(int task, Object arg) {
         if (task == BACKGROUND_TASK_INITIALIZE) {
             try {
-                mDbHelper.updatePhoneAccountHandleMigrationPendingStatus();
-                if (mDbHelper.getPhoneAccountHandleMigrationUtils()
-                        .isPhoneAccountMigrationPending()) {
-                    Log.i(TAG, "performBackgroundTask for pending PhoneAccountHandle migration");
-                    mDbHelper.migrateIccIdToSubId();
-                }
                 syncEntries();
             } finally {
                 mReadAccessLatch.countDown();
+                mReadAccessLatch = null;
             }
         } else if (task == BACKGROUND_TASK_ADJUST_PHONE_ACCOUNT) {
-            Log.i(TAG, "performBackgroundTask for unhide PhoneAccountHandles");
             adjustForNewPhoneAccountInternal((PhoneAccountHandle) arg);
-        } else if (task == BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES) {
-            PhoneAccountHandle phoneAccountHandle = (PhoneAccountHandle) arg;
-            String iccId = null;
-            try {
-                SubscriptionInfo info = mSubscriptionManager.getActiveSubscriptionInfo(
-                        Integer.parseInt(phoneAccountHandle.getId()));
-                if (info != null) {
-                    iccId = info.getIccId();
-                }
-            } catch (NumberFormatException nfe) {
-                // Ignore the exception, iccId will remain null and be handled below.
-            }
-            if (iccId == null) {
-                Log.i(TAG, "ACTION_PHONE_ACCOUNT_REGISTERED received null IccId.");
-            } else {
-                Log.i(TAG, "ACTION_PHONE_ACCOUNT_REGISTERED received for migrating phone"
-                        + " account handle SubId: " + phoneAccountHandle.getId());
-                mDbHelper.migratePendingPhoneAccountHandles(iccId, phoneAccountHandle.getId());
-            }
         }
     }
 

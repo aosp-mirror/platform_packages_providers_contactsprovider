@@ -33,15 +33,9 @@ public class DataRowHandlerForEmail extends DataRowHandlerForCommonDataKind {
         super(context, dbHelper, aggregator, Email.CONTENT_ITEM_TYPE, Email.TYPE, Email.LABEL);
     }
 
-    private void applySimpleFieldMaxSize(ContentValues cv) {
-        applySimpleFieldMaxSize(cv, Email.DATA);
-    }
-
     @Override
     public long insert(SQLiteDatabase db, TransactionContext txContext, long rawContactId,
             ContentValues values) {
-        applySimpleFieldMaxSize(values);
-
         String email = values.getAsString(Email.DATA);
 
         long dataId = super.insert(db, txContext, rawContactId, values);
@@ -57,7 +51,6 @@ public class DataRowHandlerForEmail extends DataRowHandlerForCommonDataKind {
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
             Cursor c, boolean callerIsSyncAdapter) {
-        applySimpleFieldMaxSize(values);
         if (!super.update(db, txContext, values, c, callerIsSyncAdapter)) {
             return false;
         }

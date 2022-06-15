@@ -19,7 +19,6 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
@@ -44,23 +43,9 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
         mNameLookupBuilder = nameLookupBuilder;
     }
 
-    private void applySimpleFieldMaxSize(ContentValues cv) {
-        applySimpleFieldMaxSize(cv, StructuredName.DISPLAY_NAME);
-        applySimpleFieldMaxSize(cv, StructuredName.GIVEN_NAME);
-        applySimpleFieldMaxSize(cv, StructuredName.FAMILY_NAME);
-        applySimpleFieldMaxSize(cv, StructuredName.PREFIX);
-        applySimpleFieldMaxSize(cv, StructuredName.MIDDLE_NAME);
-        applySimpleFieldMaxSize(cv, StructuredName.SUFFIX);
-
-        applySimpleFieldMaxSize(cv, StructuredName.PHONETIC_GIVEN_NAME);
-        applySimpleFieldMaxSize(cv, StructuredName.PHONETIC_MIDDLE_NAME);
-        applySimpleFieldMaxSize(cv, StructuredName.PHONETIC_FAMILY_NAME);
-    }
-
     @Override
     public long insert(SQLiteDatabase db, TransactionContext txContext, long rawContactId,
             ContentValues values) {
-        applySimpleFieldMaxSize(values);
         fixStructuredNameComponents(values, values);
 
         long dataId = super.insert(db, txContext, rawContactId, values);
@@ -79,7 +64,6 @@ public class DataRowHandlerForStructuredName extends DataRowHandler {
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
             Cursor c, boolean callerIsSyncAdapter) {
-        applySimpleFieldMaxSize(values);
         final long dataId = c.getLong(DataUpdateQuery._ID);
         final long rawContactId = c.getLong(DataUpdateQuery.RAW_CONTACT_ID);
 
