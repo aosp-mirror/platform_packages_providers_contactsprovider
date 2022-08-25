@@ -19,7 +19,12 @@ package com.android.providers.contacts;
 import static com.android.providers.contacts.TestUtils.cv;
 import static com.android.providers.contacts.TestUtils.dumpCursor;
 
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.when;
+
 import android.accounts.Account;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentResolver;
@@ -27,8 +32,10 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Entity;
 import android.content.EntityIterator;
+import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
@@ -68,7 +75,10 @@ import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
 import android.provider.OpenableColumns;
+import android.telecom.PhoneAccountHandle;
+import android.telecom.TelecomManager;
 import android.telephony.PhoneNumberUtils;
+import android.telephony.SubscriptionInfo;
 import android.test.MoreAsserts;
 import android.test.suitebuilder.annotation.LargeTest;
 import android.text.TextUtils;
@@ -77,6 +87,7 @@ import android.util.ArraySet;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsActor.AlteringUserContext;
 import com.android.providers.contacts.ContactsActor.MockUserManager;
+import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.ContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataUsageStatColumns;
@@ -84,6 +95,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.tests.R;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 import com.android.providers.contacts.testutil.ContactUtil;
 import com.android.providers.contacts.testutil.DataUtil;
@@ -91,8 +103,8 @@ import com.android.providers.contacts.testutil.DatabaseAsserts;
 import com.android.providers.contacts.testutil.DeletedContactUtil;
 import com.android.providers.contacts.testutil.RawContactUtil;
 import com.android.providers.contacts.testutil.TestUtil;
-import com.android.providers.contacts.tests.R;
 import com.android.providers.contacts.util.NullContentProvider;
+import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 import com.android.providers.contacts.util.UserUtils;
 
 import com.google.android.collect.Lists;
@@ -125,27 +137,240 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     private static final int MIN_MATCH = 7;
 
+    static final String TELEPHONY_PACKAGE = "com.android.phone";
+    static final String TELEPHONY_CLASS
+            = "com.android.services.telephony.TelephonyConnectionService";
+    static final String TEST_PHONE_ACCOUNT_HANDLE_SUB_ID = "666";
+    static final int TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT = 666;
+    static final String TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1 = "T6E6S6T6I6C6C6I6D";
+    static final String TEST_PHONE_ACCOUNT_HANDLE_ICC_ID2 = "T5E5S5T5I5C5C5I5D";
+    static final String TEST_COMPONENT_NAME = "foo/bar";
+
     private int mOldMinMatch1;
     private int mOldMinMatch2;
+
+    ContactsDatabaseHelper mMockContactsDatabaseHelper;
+    private ContactsProvider2 mContactsProvider2;
+    private ContactsDatabaseHelper mDbHelper;
+    private BroadcastReceiver mBroadcastReceiver;
 
     @Override
     protected void setUp() throws Exception {
         super.setUp();
-        final ContactsProvider2 cp = (ContactsProvider2) getProvider();
-        final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
+        mContactsProvider2 = (ContactsProvider2) getProvider();
+        mDbHelper = mContactsProvider2.getThreadActiveDatabaseHelperForTest();
+        mBroadcastReceiver = mContactsProvider2.getBroadcastReceiverForTest();
         mOldMinMatch1 = PhoneNumberUtils.getMinMatchForTest();
-        mOldMinMatch2 = dbHelper.getMinMatchForTest();
+        mOldMinMatch2 = mDbHelper.getMinMatchForTest();
         PhoneNumberUtils.setMinMatchForTest(MIN_MATCH);
-        dbHelper.setMinMatchForTest(MIN_MATCH);
+        mDbHelper.setMinMatchForTest(MIN_MATCH);
     }
 
     @Override
     protected void tearDown() throws Exception {
         final ContactsProvider2 cp = (ContactsProvider2) getProvider();
-        final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
+        //final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
         PhoneNumberUtils.setMinMatchForTest(mOldMinMatch1);
-        dbHelper.setMinMatchForTest(mOldMinMatch2);
+        mDbHelper.setMinMatchForTest(mOldMinMatch2);
         super.tearDown();
+    }
+
+    private ContactsDatabaseHelper getMockContactsDatabaseHelper(String databaseNameForTesting) {
+        ContactsDatabaseHelper contactsDatabaseHelper = new ContactsDatabaseHelper(
+                mTestContext, databaseNameForTesting, true, /* isTestInstance=*/ false);
+        SQLiteDatabase db = contactsDatabaseHelper.getWritableDatabase();
+        db.execSQL("DELETE FROM " + ContactsDatabaseHelper.Tables.DATA);
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1);
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME,
+                    PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, "FAKE_ICCID");
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        {
+            final ContentValues values = new ContentValues();
+            values.put(ContactsDatabaseHelper.DataColumns.MIMETYPE_ID, 6666);
+            values.put(Data.RAW_CONTACT_ID, 6666);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_COMPONENT_NAME, TEST_COMPONENT_NAME);
+            values.put(Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING, 1);
+            values.put(Data.PREFERRED_PHONE_ACCOUNT_ID, "FAKE_ICCID");
+            long count = db.insert(ContactsDatabaseHelper.Tables.DATA, null, values);
+        }
+        return contactsDatabaseHelper;
+    }
+
+    public void testPhoneAccountHandleMigrationSimEvent() throws IOException {
+        ContactsDatabaseHelper originalContactsDatabaseHelper
+                = mContactsProvider2.getContactsDatabaseHelperForTest();
+
+        // Mock SubscriptionManager
+        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(
+                TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1,
+                        1, "a", "b", 1, 1, "test", 1, null, null, null, null, false, null, null);
+        when(mSubscriptionManager.getActiveSubscriptionInfo(
+                eq(TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT))).thenReturn(subscriptionInfo);
+
+        // Mock ContactsDatabaseHelper
+        ContactsDatabaseHelper contactsDatabaseHelper = getMockContactsDatabaseHelper(
+                "testContactsPhoneAccountHandleMigrationSimEvent.db");
+
+        // Test setPhoneAccountMigrationStatusPending as false
+        PhoneAccountHandleMigrationUtils phoneAccountHandleMigrationUtils
+                = contactsDatabaseHelper.getPhoneAccountHandleMigrationUtils();
+
+        // Test ContactsDatabaseHelper.isPhoneAccountMigrationPending as true
+        // and set for testing migration logic
+        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(true);
+
+        mContactsProvider2.setContactsDatabaseHelperForTest(contactsDatabaseHelper);
+        final SQLiteDatabase sqLiteDatabase = contactsDatabaseHelper.getReadableDatabase();
+
+        // Check each entry in the Data has a new coloumn of
+        // Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING that has a value of 1
+        assertEquals(6 /** pending migration entries in the preconfigured file */,
+                DatabaseUtils.longForQuery(sqLiteDatabase,
+                        "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                                + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                        + " = 1", null));
+
+        // Prepare PhoneAccountHandle for the new sim event
+        PhoneAccountHandle phoneAccountHandle = new PhoneAccountHandle(
+                new ComponentName(TELEPHONY_PACKAGE, TELEPHONY_CLASS),
+                        TEST_PHONE_ACCOUNT_HANDLE_SUB_ID);
+        Intent intent = new Intent(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
+        intent.putExtra(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, phoneAccountHandle);
+        mBroadcastReceiver.onReceive(mTestContext, intent);
+
+        // Check four coloumns of Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING have migrated
+        assertEquals(4 /** entries in the preconfigured database file */,
+                DatabaseUtils.longForQuery(sqLiteDatabase,
+                        "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                                + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                        + " = 0", null));
+        // Check two coloumns
+        // of Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING have not migrated
+        assertEquals(2 /** pending migration entries after migration in the preconfigured file */,
+                DatabaseUtils.longForQuery(sqLiteDatabase,
+                        "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                                + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                        + " = 1", null));
+
+        mContactsProvider2.setContactsDatabaseHelperForTest(originalContactsDatabaseHelper);
+    }
+
+    public void testPhoneAccountHandleMigrationInitiation() throws IOException {
+        ContactsDatabaseHelper originalContactsDatabaseHelper
+                = mContactsProvider2.getContactsDatabaseHelperForTest();
+
+        // Mock SubscriptionManager
+        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(
+                TEST_PHONE_ACCOUNT_HANDLE_SUB_ID_INT, TEST_PHONE_ACCOUNT_HANDLE_ICC_ID1,
+                        1, "a", "b", 1, 1, "test", 1, null, null, null, null, false, null, null);
+        List<SubscriptionInfo> subscriptionInfoList = new ArrayList<>();
+        subscriptionInfoList.add(subscriptionInfo);
+        when(mSubscriptionManager.getAllSubscriptionInfoList()).thenReturn(subscriptionInfoList);
+
+        // Mock ContactsDatabaseHelper
+        ContactsDatabaseHelper contactsDatabaseHelper = getMockContactsDatabaseHelper(
+                "testContactsPhoneAccountHandleMigrationInitiation.db");
+
+        // Test setPhoneAccountMigrationStatusPending as false
+        PhoneAccountHandleMigrationUtils phoneAccountHandleMigrationUtils
+                = contactsDatabaseHelper.getPhoneAccountHandleMigrationUtils();
+
+        // Test ContactsDatabaseHelper.isPhoneAccountMigrationPending as true
+        // and set for testing migration logic
+        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(true);
+
+        mContactsProvider2.setContactsDatabaseHelperForTest(contactsDatabaseHelper);
+        final SQLiteDatabase sqLiteDatabase = contactsDatabaseHelper.getReadableDatabase();
+
+        // Check each entry in the Data has a new coloumn of
+        // Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING that has a value of 1
+        assertEquals(6, DatabaseUtils.longForQuery(sqLiteDatabase,
+                "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                        + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                + " = 1", null));
+
+        // Prepare Task for BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES
+        mContactsProvider2.performBackgroundTask(
+                mContactsProvider2.BACKGROUND_TASK_MIGRATE_PHONE_ACCOUNT_HANDLES, null);
+
+        // Check four coloumns of Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING have migrated
+        assertEquals(4, DatabaseUtils.longForQuery(sqLiteDatabase,
+                "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                        + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                + " = 0", null));
+        // Check two coloumns of Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING have not migrated
+        assertEquals(2, DatabaseUtils.longForQuery(sqLiteDatabase,
+                "select count(*) from " + ContactsDatabaseHelper.Tables.DATA
+                        + " where " + Data.IS_PHONE_ACCOUNT_MIGRATION_PENDING
+                                + " = 1", null));
+
+        // Verify the pending status of phone account migration.
+        assertTrue(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
+
+        mContactsProvider2.setContactsDatabaseHelperForTest(originalContactsDatabaseHelper);
+    }
+
+    public void testPhoneAccountHandleMigrationPendingStatus() {
+        // Mock ContactsDatabaseHelper
+        ContactsDatabaseHelper contactsDatabaseHelper = getMockContactsDatabaseHelper(
+                "testPhoneAccountHandleMigrationPendingStatus.db");
+
+        // Test setPhoneAccountMigrationStatusPending as false
+        PhoneAccountHandleMigrationUtils phoneAccountHandleMigrationUtils
+                = contactsDatabaseHelper.getPhoneAccountHandleMigrationUtils();
+        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(false);
+        assertFalse(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
+
+        // Test ContactsDatabaseHelper.isPhoneAccountMigrationPending as true
+        // and set for testing migration logic
+        phoneAccountHandleMigrationUtils.setPhoneAccountMigrationStatusPending(true);
+        assertTrue(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
     }
 
     public void testConvertEnterpriseUriWithEnterpriseDirectoryToLocalUri() {
@@ -4242,6 +4467,136 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 new String[] {"c", "d", "plus"}, Settings.SHOULD_SYNC, "0");
     }
 
+    public void testSettingsDeletion() {
+        Account account = new Account("a", "b");
+        Uri settingUri = createSettings(account, "0", "1");
+        long rawContactId = RawContactUtil.createRawContact(mResolver, account);
+
+        int count = mResolver.delete(settingUri, null, null);
+
+        // Settings cannot be deleted when there are still raw contacts for the account.
+        assertEquals(0, count);
+
+        assertStoredValue(Settings.CONTENT_URI,
+                Settings.ACCOUNT_NAME + "= ? AND " + Settings.ACCOUNT_TYPE + "= ?",
+                new String[] {"a", "b"}, Settings.UNGROUPED_VISIBLE, "1");
+
+        RawContactUtil.delete(mResolver, rawContactId, true);
+
+        count = mResolver.delete(settingUri, null, null);
+
+        assertEquals(1, count);
+        assertRowCount(0, Settings.CONTENT_URI, null, null);
+    }
+
+    public void testSettingsUpdate() {
+        Account account1 = new Account("a", "b");
+        Account account2 = new Account("c", "d");
+        Account account3 = new Account("e", "f");
+        createSettings(account1, "0", "0");
+        createSettings(account2, "0", "0");
+        createSettings(account3, "0", "0");
+
+        ContentValues values = new ContentValues();
+        values.put(Settings.UNGROUPED_VISIBLE, 1);
+        int count = mResolver.update(Settings.CONTENT_URI, values, null, null);
+
+        assertEquals(3, count);
+        assertStoredValues(Settings.CONTENT_URI,
+                cv(Settings.UNGROUPED_VISIBLE, 1),
+                cv(Settings.UNGROUPED_VISIBLE, 1),
+                cv(Settings.UNGROUPED_VISIBLE, 1));
+
+        values.put(Settings.SHOULD_SYNC, 1);
+        count = mResolver.update(Settings.CONTENT_URI, values,
+                Settings.ACCOUNT_NAME  + "=?", new String[] {"a"});
+
+        assertEquals(1, count);
+        assertStoredValues(Settings.CONTENT_URI,
+                cv(Settings.ACCOUNT_NAME, "a",
+                        Settings.SHOULD_SYNC, 1),
+                cv(Settings.ACCOUNT_NAME, "c",
+                        Settings.SHOULD_SYNC, 0),
+                cv(Settings.ACCOUNT_NAME, "e",
+                        Settings.SHOULD_SYNC, 0));
+
+        values.clear();
+        // Settings are stored in the accounts table but updates shouldn't be allowed to modify
+        // the other non-Settings columns.
+        values.put(Settings.ACCOUNT_NAME, "x");
+        values.put(Settings.ACCOUNT_TYPE, "y");
+        values.put(Settings.DATA_SET, "z");
+        mResolver.update(Settings.CONTENT_URI, values, null, null);
+
+        values.put(AccountsColumns.SIM_EF_TYPE, 1);
+        values.put(AccountsColumns.SIM_SLOT_INDEX, 1);
+        try {
+            mResolver.update(Settings.CONTENT_URI, values, null, null);
+        } catch (Exception e) {
+            // ignored. We just care that the update didn't change the data
+        }
+
+        assertStoredValuesDb("SELECT * FROM " + Tables.ACCOUNTS, null,
+                cv(
+                        Settings.ACCOUNT_NAME, "a",
+                        Settings.ACCOUNT_TYPE, "b",
+                        Settings.DATA_SET, null,
+                        AccountsColumns.SIM_SLOT_INDEX, null,
+                        AccountsColumns.SIM_EF_TYPE, null
+                ),
+                cv(
+                        Settings.ACCOUNT_NAME, "c",
+                        Settings.ACCOUNT_TYPE, "d",
+                        Settings.DATA_SET, null,
+                        AccountsColumns.SIM_SLOT_INDEX, null,
+                        AccountsColumns.SIM_EF_TYPE, null
+                ),
+                cv(
+                        Settings.ACCOUNT_NAME, "e",
+                        Settings.ACCOUNT_TYPE, "f",
+                        Settings.DATA_SET, null,
+                        AccountsColumns.SIM_SLOT_INDEX, null,
+                        AccountsColumns.SIM_EF_TYPE, null
+                ));
+    }
+
+    public void testSettingsLocalAccount() {
+        AccountWithDataSet localAccount = AccountWithDataSet.LOCAL;
+
+        // It's not possible to insert the local account directly into settings but it will be
+        // created automatically when a raw contact is created for it.
+        RawContactUtil.createRawContactWithAccountDataSet(
+                mResolver, localAccount.getAccountName(),
+                localAccount.getAccountType(), localAccount.getDataSet());
+
+        ContentValues values = new ContentValues();
+        values.put(Settings.ACCOUNT_NAME, localAccount.getAccountName());
+        values.put(Settings.ACCOUNT_TYPE, localAccount.getAccountType());
+        values.put(Settings.DATA_SET, localAccount.getDataSet());
+        ContentValues expectedValues = new ContentValues(values);
+        // The defaults for the local account are opposite of other accounts.
+        expectedValues.put(Settings.UNGROUPED_VISIBLE, "1");
+        expectedValues.put(Settings.SHOULD_SYNC, "0");
+
+        assertStoredValues(Settings.CONTENT_URI, expectedValues);
+
+        values.put(Settings.SHOULD_SYNC, 1);
+        values.put(Settings.UNGROUPED_VISIBLE, 0);
+        mResolver.update(Settings.CONTENT_URI, values, null, null);
+
+        expectedValues.put(Settings.UNGROUPED_VISIBLE, "0");
+        expectedValues.put(Settings.SHOULD_SYNC, "1");
+        assertStoredValues(Settings.CONTENT_URI, expectedValues);
+
+        // Empty strings should also be the local account.
+        values.put(Settings.ACCOUNT_NAME, "");
+        values.put(Settings.ACCOUNT_TYPE, "");
+        values.put(Settings.DATA_SET, "");
+        mResolver.insert(Settings.CONTENT_URI, values);
+
+        assertRowCount(1, Settings.CONTENT_URI, null, null);
+    }
+
     public void testDisplayNameParsingWhenPartsUnspecified() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = new ContentValues();
@@ -6317,8 +6672,11 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mActor.setAccounts(new Account[]{mAccount, mAccountTwo});
         cp.onAccountsUpdated(new Account[]{mAccount, mAccountTwo});
         assertEquals(1, getCount(RawContacts.CONTENT_URI, null, null));
-        assertStoredValue(rawContact3, RawContacts.ACCOUNT_NAME, null);
-        assertStoredValue(rawContact3, RawContacts.ACCOUNT_TYPE, null);
+        assertStoredValue(
+                rawContact3, RawContacts.ACCOUNT_NAME,
+                AccountWithDataSet.LOCAL.getAccountName());
+        assertStoredValue(rawContact3, RawContacts.ACCOUNT_TYPE,
+                AccountWithDataSet.LOCAL.getAccountType());
 
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, mAccount);
         insertEmail(rawContactId1, "account1@email.com");
@@ -7327,6 +7685,55 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 ContentUris.withAppendedId(Contacts.CONTENT_URI, profileContactId),
                 Contacts.PHOTO_FILE_ID));
 
+    }
+
+    public void testCleanupDanglingContacts_noDanglingContacts() throws Exception {
+        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
+        RawContactUtil.createRawContactWithName(mResolver, "A", "B");
+        RawContactUtil.createRawContactWithName(mResolver, "C", "D");
+
+        provider.cleanupDanglingContacts();
+
+        Cursor contactCursor = mResolver.query(Contacts.CONTENT_URI, null, null, null, null);
+        Cursor rawContactCursor = mResolver.query(RawContacts.CONTENT_URI, null, null, null, null);
+
+        // No contacts should be deleted
+        assertEquals(2, contactCursor.getCount());
+        assertEquals(2, rawContactCursor.getCount());
+    }
+
+    public void testCleanupDanglingContacts_singleDanglingContacts() throws Exception {
+        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "A", "B");
+
+        // Change the contact_id to create dangling contact.
+        SQLiteDatabase db = provider.getDatabaseHelper().getWritableDatabase();
+        db.execSQL("UPDATE raw_contacts SET contact_id = 99999 WHERE _id = " + rawContactId + ";");
+
+        provider.cleanupDanglingContacts();
+
+        // Dangling contact should be deleted from contacts table.
+        assertEquals(0, mResolver.query(Contacts.CONTENT_URI, null, null, null, null).getCount());
+    }
+
+    public void testCleanupDanglingContacts_multipleDanglingContacts() throws Exception {
+        SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "A", "B");
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "C", "D");
+        RawContactUtil.createRawContactWithName(mResolver, "E", "F");
+
+        final ContactsDatabaseHelper helper = provider.getDatabaseHelper();
+        SQLiteDatabase db = helper.getWritableDatabase();
+
+        // Change contact_id of RawContact1 and RawContact2 to create dangling contacts.
+        db.execSQL("UPDATE raw_contacts SET contact_id = 99998 WHERE _id = " + rawContactId1 + ";");
+        db.execSQL("UPDATE raw_contacts SET contact_id = 99999 WHERE _id = " + rawContactId2 + ";");
+
+        provider.cleanupDanglingContacts();
+
+        // Should only be one contact left in the contacts table.
+        // RawContact1 and RawContact2 should be deleted from the contacts table.
+        assertEquals(1, mResolver.query(Contacts.CONTENT_URI, null, null, null, null).getCount());
     }
 
     public void testOverwritePhotoWithThumbnail() throws IOException {
@@ -8942,6 +9349,79 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 cv(Contacts._ID, cId4, Contacts.PINNED, PinnedPositions.UNPINNED),
                 cv(Contacts._ID, i5.mContactId, Contacts.PINNED, 6)
         );
+    }
+
+    public void testDefaultAccountSet_throwException() {
+        mActor.setAccounts(new Account[]{mAccount});
+        try {
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                    null, null);
+            fail();
+        } catch (SecurityException expected) {
+        }
+
+        mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
+        try {
+            Bundle bundle = new Bundle();
+            bundle.putString(Settings.ACCOUNT_NAME, "account1"); // no account type specified
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                    null, bundle);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+
+        try {
+            Bundle bundle = new Bundle();
+            bundle.putString(Settings.ACCOUNT_NAME, "account1");
+            bundle.putString(Settings.ACCOUNT_TYPE, "account type1");
+            bundle.putString(Settings.DATA_SET, "c"); // data set should not be set.
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                    null, bundle);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+
+        try {
+            Bundle bundle = new Bundle();
+            bundle.putString(Settings.ACCOUNT_NAME, "account2"); // invalid account
+            bundle.putString(Settings.ACCOUNT_TYPE, "account type2");
+            mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                null, bundle);
+            fail();
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    public void testDefaultAccountSetAndQuery() {
+        Bundle response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                Settings.QUERY_DEFAULT_ACCOUNT_METHOD, null, null);
+        Account account = response.getParcelable(Settings.KEY_DEFAULT_ACCOUNT);
+        assertNull(account);
+
+        mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
+        mActor.setAccounts(new Account[]{mAccount});
+        // Set ("account1", "account type1") account as the default account.
+        Bundle bundle = new Bundle();
+        bundle.putString(Settings.ACCOUNT_NAME, "account1");
+        bundle.putString(Settings.ACCOUNT_TYPE, "account type1");
+        mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+                null, bundle);
+
+        response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                Settings.QUERY_DEFAULT_ACCOUNT_METHOD, null, null);
+        account = response.getParcelable(Settings.KEY_DEFAULT_ACCOUNT);
+        assertEquals("account1", account.name);
+        assertEquals("account type1", account.type);
+
+        // Set NULL account as default account.
+        bundle = new Bundle();
+        mResolver.call(ContactsContract.AUTHORITY_URI, Settings.SET_DEFAULT_ACCOUNT_METHOD,
+            null, bundle);
+
+        response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                Settings.QUERY_DEFAULT_ACCOUNT_METHOD, null, null);
+        account = response.getParcelable(Settings.KEY_DEFAULT_ACCOUNT);
+        assertNull(account);
     }
 
     public void testPinnedPositionsDemoteIllegalArguments() {
