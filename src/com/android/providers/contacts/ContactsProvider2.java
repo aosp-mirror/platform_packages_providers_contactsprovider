@@ -18,11 +18,12 @@ package com.android.providers.contacts;
 
 import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
+import static android.Manifest.permission.READ_CALL_LOG;
+import static android.Manifest.permission.WRITE_CONTACTS;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
-import android.os.Looper;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
@@ -69,6 +70,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor.AutoCloseInputStream;
 import android.os.RemoteException;
@@ -179,7 +181,6 @@ import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.LogFields;
 import com.android.providers.contacts.util.LogUtils;
 import com.android.providers.contacts.util.NeededForTesting;
-import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 import com.android.providers.contacts.util.UserUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
@@ -1355,6 +1356,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         String authority;
         String accountName;
         String accountType;
+        String packageName;
     }
 
     /**
@@ -4212,7 +4214,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     protected int updateInTransaction(
             Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "updateInTransaction: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
@@ -5760,6 +5761,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         "  Caller=" + getCallingPackage() +
                         "  User=" + UserUtils.getCurrentUserHandle(getContext()));
             }
+            final String packageName = directoryInfo.packageName;
+            // enforce permissions
+            final int queryType = sUriMatcher.match(uri);
+            final PackageManager pm = getContext().getPackageManager();
+            if (queryType == PHONE_LOOKUP || queryType == PHONES_FILTER) {
+                if (pm.checkPermission(READ_CALL_LOG, packageName) != PERMISSION_GRANTED) {
+                    Log.w(TAG, "Package " + packageName
+                            + " does not have permission for phone lookup queries.");
+                    return null;
+                }
+            }
+            if (pm.checkPermission(WRITE_CONTACTS, packageName) != PERMISSION_GRANTED) {
+                Log.w(TAG, "Package " + packageName
+                        + " does not have permission for contact lookup queries.");
+                return null;
+            }
             cursor = getContext().getContentResolver().query(
                     directoryUri, projection, selection, selectionArgs, sortOrder);
             if (cursor == null) {
@@ -5862,7 +5879,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 Directory._ID,
                 Directory.DIRECTORY_AUTHORITY,
                 Directory.ACCOUNT_NAME,
-                Directory.ACCOUNT_TYPE
+                Directory.ACCOUNT_TYPE,
+                Directory.PACKAGE_NAME,
         };
 
         public static final int DIRECTORY_ID = 0;
@@ -5888,6 +5906,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         info.authority = cursor.getString(DirectoryQuery.AUTHORITY);
                         info.accountName = cursor.getString(DirectoryQuery.ACCOUNT_NAME);
                         info.accountType = cursor.getString(DirectoryQuery.ACCOUNT_TYPE);
+                        info.packageName =
+                                cursor.getString(cursor.getColumnIndex(Directory.PACKAGE_NAME));
                         mDirectoryCache.put(id, info);
                     }
                 } finally {
