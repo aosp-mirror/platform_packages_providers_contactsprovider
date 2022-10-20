@@ -32,7 +32,8 @@ import java.util.Locale;
 public class SynchronousContactsProvider2 extends ContactsProvider2 {
     public static final String READ_ONLY_ACCOUNT_TYPE = "ro";
 
-    private static Boolean sDataWiped = false;
+    private static final Object sDataWipedLock = new Object();
+    private static boolean sDataWiped = false;
     private static ContactsDatabaseHelper sDbHelper;
     private Account mAccount;
     private boolean mNetworkNotified;
@@ -93,7 +94,7 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     @Override
     public boolean onCreate() {
         boolean created = super.onCreate();
-        synchronized (sDataWiped) {
+        synchronized (sDataWipedLock) {
             if (!sDataWiped) {
                 sDataWiped = true;
                 wipeData();
