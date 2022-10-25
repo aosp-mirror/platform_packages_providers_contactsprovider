@@ -25,6 +25,7 @@ import android.accounts.AccountManagerFuture;
 import android.accounts.AuthenticatorException;
 import android.accounts.OnAccountsUpdateListener;
 import android.accounts.OperationCanceledException;
+import android.annotation.NonNull;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -37,6 +38,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.content.pm.UserInfo;
+import android.content.pm.UserProperties;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.Cursor;
@@ -252,6 +254,11 @@ public class ContactsActor {
         @Override
         public boolean isUserRunning(int userId) {
             return true;
+        }
+
+        @Override
+        public UserProperties getUserProperties(@NonNull UserHandle userHandle) {
+            return new UserProperties.Builder().build();
         }
     }
 
