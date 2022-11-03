@@ -5688,7 +5688,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * The ContactsProvider instance running in the clone profile should block inserts, updates
      * and deletes and hence should return false.
      */
-    private boolean areContactWritesEnabled() {
+    @VisibleForTesting
+    protected boolean areContactWritesEnabled() {
         // TODO(b/253449368) - The condition below should only be checked behind the app-cloning
         // feature flag
         return !UserUtils.shouldUseParentsContacts(getContext());
