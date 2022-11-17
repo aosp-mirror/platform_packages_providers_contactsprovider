@@ -17,9 +17,11 @@ package com.android.providers.contacts.util;
 
 import com.android.providers.contacts.ContactsProvider2;
 
+import android.annotation.SuppressLint;
 import android.app.admin.DevicePolicyManager;
 import android.content.Context;
 import android.content.pm.UserInfo;
+import android.content.pm.UserProperties;
 import android.os.UserManager;
 import android.util.Log;
 
@@ -77,5 +79,12 @@ public final class UserUtils {
     public static int getCorpUserId(Context context) {
         final UserInfo ui = getCorpUserInfo(context);
         return ui == null ? -1 : ui.id;
+    }
+
+    @SuppressLint("AndroidFrameworkRequiresPermission")
+    public static boolean shouldUseParentsContacts(Context context) {
+        final UserManager userManager = getUserManager(context);
+        final UserProperties userProperties = userManager.getUserProperties(context.getUser());
+        return userProperties.getUseParentsContacts();
     }
 }
