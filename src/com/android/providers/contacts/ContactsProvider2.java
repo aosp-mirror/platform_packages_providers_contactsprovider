@@ -18,11 +18,12 @@ package com.android.providers.contacts;
 
 import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
+import static android.Manifest.permission.READ_CALL_LOG;
+import static android.Manifest.permission.WRITE_CONTACTS;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
-import android.os.Looper;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
@@ -69,6 +70,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor.AutoCloseInputStream;
 import android.os.RemoteException;
@@ -179,7 +181,6 @@ import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.LogFields;
 import com.android.providers.contacts.util.LogUtils;
 import com.android.providers.contacts.util.NeededForTesting;
-import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 import com.android.providers.contacts.util.UserUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
@@ -1355,6 +1356,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         String authority;
         String accountName;
         String accountType;
+        String packageName;
     }
 
     /**
@@ -2305,6 +2307,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             mContactsHelper.validateContentValues(getCallingPackage(), values);
 
+            if (!areContactWritesEnabled()) {
+                // Returning fake uri since the insert was rejected
+                Log.w(TAG, "Blocked insert with uri [" + uri + "]. Contact writes not enabled "
+                        + "for the user");
+                return rejectInsert(uri, values);
+            }
             if (mapsToProfileDbWithInsertedValues(uri, values)) {
                 switchToProfileMode();
                 resultUri = mProfileProvider.insert(uri, values);
@@ -2339,6 +2347,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
             mContactsHelper.validateContentValues(getCallingPackage(), values);
             mContactsHelper.validateSql(getCallingPackage(), selection);
 
+            if (!areContactWritesEnabled()) {
+                // Returning 0, no rows were updated as writes are disabled
+                Log.w(TAG, "Blocked update with uri [" + uri + "]. Contact writes not enabled "
+                        + "for the user");
+                return 0;
+            }
             if (mapsToProfileDb(uri)) {
                 switchToProfileMode();
                 updates = mProfileProvider.update(uri, values, selection, selectionArgs);
@@ -2370,6 +2384,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             mContactsHelper.validateSql(getCallingPackage(), selection);
 
+            if (!areContactWritesEnabled()) {
+                // Returning 0, no rows were deleted as writes are disabled
+                Log.w(TAG, "Blocked delete with uri [" + uri + "]. Contact writes not enabled "
+                        + "for the user");
+                return 0;
+            }
             if (mapsToProfileDb(uri)) {
                 switchToProfileMode();
                 deletes = mProfileProvider.delete(uri, selection, selectionArgs);
@@ -2389,6 +2409,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
         waitForAccess(mReadAccessLatch);
+        if (!areContactWritesEnabled()) {
+            // Returning EMPTY Bundle since the call was rejected and no rows were affected
+            Log.w(TAG, "Blocked call to method [" + method + "], not enabled for the user");
+            return Bundle.EMPTY;
+        }
         switchToContactMode();
         if (Authorization.AUTHORIZATION_METHOD.equals(method)) {
             Uri uri = extras.getParcelable(Authorization.KEY_URI_TO_AUTHORIZE);
@@ -2607,6 +2632,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public int bulkInsert(Uri uri, ContentValues[] values) {
         waitForAccess(mWriteAccessLatch);
+        if (!areContactWritesEnabled()) {
+            // Returning 0, no rows were affected since writes are disabled
+            Log.w(TAG, "Blocked bulkInsert with uri [" + uri + "]. Contact writes not enabled "
+                    + "for the user");
+            return 0;
+        }
         return super.bulkInsert(uri, values);
     }
 
@@ -4212,7 +4243,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     protected int updateInTransaction(
             Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "updateInTransaction: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
@@ -5655,6 +5685,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 || context.checkCallingPermission(INTERACT_ACROSS_USERS) == PERMISSION_GRANTED;
     }
 
+    /**
+     * Returns true if the contact writes are enabled for the current instance of ContactsProvider.
+     * The ContactsProvider instance running in the clone profile should block inserts, updates
+     * and deletes and hence should return false.
+     */
+    private boolean areContactWritesEnabled() {
+        // TODO(b/253449368) - The condition below should only be checked behind the app-cloning
+        // feature flag
+        return !UserUtils.shouldUseParentsContacts(getContext());
+    }
+
     private Cursor queryDirectoryIfNecessary(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
@@ -5760,6 +5801,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         "  Caller=" + getCallingPackage() +
                         "  User=" + UserUtils.getCurrentUserHandle(getContext()));
             }
+            final String packageName = directoryInfo.packageName;
+            // enforce permissions
+            final int queryType = sUriMatcher.match(uri);
+            final PackageManager pm = getContext().getPackageManager();
+            if (queryType == PHONE_LOOKUP || queryType == PHONES_FILTER) {
+                if (pm.checkPermission(READ_CALL_LOG, packageName) != PERMISSION_GRANTED) {
+                    Log.w(TAG, "Package " + packageName
+                            + " does not have permission for phone lookup queries.");
+                    return null;
+                }
+            }
+            if (pm.checkPermission(WRITE_CONTACTS, packageName) != PERMISSION_GRANTED) {
+                Log.w(TAG, "Package " + packageName
+                        + " does not have permission for contact lookup queries.");
+                return null;
+            }
             cursor = getContext().getContentResolver().query(
                     directoryUri, projection, selection, selectionArgs, sortOrder);
             if (cursor == null) {
@@ -5862,7 +5919,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 Directory._ID,
                 Directory.DIRECTORY_AUTHORITY,
                 Directory.ACCOUNT_NAME,
-                Directory.ACCOUNT_TYPE
+                Directory.ACCOUNT_TYPE,
+                Directory.PACKAGE_NAME,
         };
 
         public static final int DIRECTORY_ID = 0;
@@ -5888,6 +5946,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         info.authority = cursor.getString(DirectoryQuery.AUTHORITY);
                         info.accountName = cursor.getString(DirectoryQuery.ACCOUNT_NAME);
                         info.accountType = cursor.getString(DirectoryQuery.ACCOUNT_TYPE);
+                        info.packageName =
+                                cursor.getString(cursor.getColumnIndex(Directory.PACKAGE_NAME));
                         mDirectoryCache.put(id, info);
                     }
                 } finally {
@@ -8702,6 +8762,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
         boolean success = false;
         try {
+            if (!mode.equals("r") && !areContactWritesEnabled()) {
+                Log.w(TAG, "Blocked openAssetFile with uri [" + uri + "]. Contact writes not "
+                        + "enabled for the user");
+                return null;
+            }
             if (!isDirectoryParamValid(uri)){
                 return null;
             }

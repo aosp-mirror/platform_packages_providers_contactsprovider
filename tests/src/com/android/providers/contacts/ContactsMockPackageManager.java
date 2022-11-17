@@ -149,4 +149,9 @@ public class ContactsMockPackageManager extends MockPackageManager {
         }
         return ret;
     }
+
+    @Override
+    public int checkPermission(String permission, String packageName) {
+        return PERMISSION_GRANTED;
+    }
 }
