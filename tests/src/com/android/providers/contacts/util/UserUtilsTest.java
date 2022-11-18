@@ -77,5 +77,38 @@ public class UserUtilsTest extends FixedAndroidTestCase {
 
         um.myUser = MockUserManager.SECONDARY_USER.id;
         assertEquals(-1, UserUtils.getCorpUserId(c));
+
+        // Primary + clone + corp
+        um.setUsers(MockUserManager.PRIMARY_USER, MockUserManager.CLONE_PROFILE_USER,
+                MockUserManager.CORP_USER);
+
+        um.myUser = MockUserManager.PRIMARY_USER.id;
+        assertEquals(MockUserManager.CORP_USER.id, UserUtils.getCorpUserId(c));
+
+        um.myUser = MockUserManager.CLONE_PROFILE_USER.id;
+        assertEquals(-1, UserUtils.getCorpUserId(c));
+
+        um.myUser = MockUserManager.CORP_USER.id;
+        assertEquals(-1, UserUtils.getCorpUserId(c));
+    }
+
+    public void testShouldUseParentsContacts() {
+        final Context c = mActor.getProviderContext();
+        final MockUserManager um = mActor.mockUserManager;
+
+        um.setUsers(MockUserManager.PRIMARY_USER, MockUserManager.SECONDARY_USER,
+                MockUserManager.CLONE_PROFILE_USER, MockUserManager.CORP_USER);
+
+        um.myUser = MockUserManager.PRIMARY_USER.id;
+        assertFalse(UserUtils.shouldUseParentsContacts(c));
+
+        um.myUser = MockUserManager.SECONDARY_USER.id;
+        assertFalse(UserUtils.shouldUseParentsContacts(c));
+
+        um.myUser = MockUserManager.CORP_USER.id;
+        assertFalse(UserUtils.shouldUseParentsContacts(c));
+
+        um.myUser = MockUserManager.CLONE_PROFILE_USER.id;
+        assertTrue(UserUtils.shouldUseParentsContacts(c));
     }
 }
