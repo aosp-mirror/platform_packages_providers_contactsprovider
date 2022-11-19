@@ -1381,6 +1381,25 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         assertEquals(timeStamp, time);
     }
 
+    /**
+     * Asserts the equality of two Uri objects, ignoring the order of the query parameters.
+     */
+    protected static void assertUriEquals(Uri expected, Uri actual) {
+        assertEquals(expected.getScheme(), actual.getScheme());
+        assertEquals(expected.getAuthority(), actual.getAuthority());
+        assertEquals(expected.getPath(), actual.getPath());
+        assertEquals(expected.getFragment(), actual.getFragment());
+        Set<String> expectedParameterNames = expected.getQueryParameterNames();
+        Set<String> actualParameterNames = actual.getQueryParameterNames();
+        assertEquals(expectedParameterNames.size(), actualParameterNames.size());
+        assertTrue(expectedParameterNames.containsAll(actualParameterNames));
+        for (String parameterName : expectedParameterNames) {
+            assertEquals(expected.getQueryParameter(parameterName),
+                    actual.getQueryParameter(parameterName));
+        }
+
+    }
+
     protected void setTimeForTest(Long time) {
         Uri uri = Calls.CONTENT_URI.buildUpon()
                 .appendQueryParameter(CallLogProvider.PARAM_KEY_QUERY_FOR_TESTING, "1")
