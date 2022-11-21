@@ -27,6 +27,7 @@ import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUti
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
+import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.WorkerThread;
 import android.app.AppOpsManager;
@@ -48,6 +49,7 @@ import android.content.UriMatcher;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ProviderInfo;
+import android.content.pm.UserInfo;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
@@ -5620,8 +5622,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         // If caller does not come from same profile, Check if it's privileged or allowed by
         // enterprise policy
-        if (!queryAllowedByEnterprisePolicy(uri)) {
+        if (!isCrossUserQueryAllowed(uri)) {
             return null;
+        }
+
+        // TODO(b/253449368) - The call below should be gated by the app-cloning feature flag.
+        if (UserUtils.shouldUseParentsContacts(getContext()) &&
+                isAppAllowedToUseParentUsersContacts(getCallingPackage())) {
+            return queryParentProfileContactsProvider(uri, projection, selection, selectionArgs,
+                    sortOrder, cancellationSignal);
         }
 
         // Query the profile DB if appropriate.
@@ -5643,7 +5652,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private boolean queryAllowedByEnterprisePolicy(Uri uri) {
+    private boolean isAppAllowedToUseParentUsersContacts(@Nullable String packageName) {
+        try {
+            for (String appName: getContext().getResources()
+                    .getStringArray(com.android.internal.R.array.cloneable_apps)) {
+                if (packageName != null && packageName.equals(appName)) {
+                    return true;
+                }
+            }
+        } catch (NotFoundException nfe) {
+            Log.w(TAG, "Resource corresponding to list of cloneable apps not found");
+        }
+        return false;
+    }
+
+    private boolean isCrossUserQueryAllowed(Uri uri) {
         if (isCallerFromSameUser()) {
             // Caller is on the same user; query allowed.
             return true;
@@ -5651,12 +5674,21 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (!doesCallerHoldInteractAcrossUserPermission()) {
             // Cross-user and the caller has no INTERACT_ACROSS_USERS; don't allow query.
             // Technically, in a cross-profile sharing case, this would be a valid query.
-            // But for now we don't allow it. (We never allowe it and no one complained about it.)
+            // But for now we don't allow it. (We never allowed it and no one complained about it.)
             return false;
         }
         if (isCallerAnotherSelf()) {
-            // The caller is the other CP2 (which has INTERACT_ACROSS_USERS), meaning the reuest
+            // The caller is the other CP2 (which has INTERACT_ACROSS_USERS), meaning the request
             // is on behalf of a "real" client app.
+
+            // TODO(b/253449368) - The condition below should only be checked behind the app-cloning
+            // feature flag
+            if (doesCallingProviderUseCurrentUsersContacts())  {
+                // The caller is the other CP2 (which has INTERACT_ACROSS_USERS), from the child
+                // user (of the current user) profile with the property of using parent's contacts
+                // set.
+                return true;
+            }
             // Consult the enterprise policy.
             return mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
         }
@@ -5665,6 +5697,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private boolean isCallerFromSameUser() {
         return UserHandle.getUserId(Binder.getCallingUid()) == UserHandle.myUserId();
+    }
+
+    /**
+     * Returns true if calling contacts provider instance uses current users contacts.
+     * This can happen when the current user is the parent of the calling user and the calling user
+     * has the corresponding user property to use parent's contacts set. Please note that this
+     * cross-profile contact access will only be allowed if the call is redirected from the child
+     * user's CP2.
+     */
+    private boolean doesCallingProviderUseCurrentUsersContacts() {
+        UserHandle callingUserHandle = UserHandle.getUserHandleForUid(Binder.getCallingUid());
+        UserHandle currentUserHandle = android.os.Process.myUserHandle();
+        boolean isCallerFromSameUser = callingUserHandle.equals(currentUserHandle);
+        return isCallerFromSameUser ||
+                (UserUtils.shouldUseParentsContacts(getContext(), callingUserHandle) &&
+                UserUtils.isParentUser(getContext(), currentUserHandle, callingUserHandle));
     }
 
     /**
@@ -5862,11 +5910,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return createEmptyCursor(localUri, projection);
         }
         // Make sure authority is CP2 not other providers
-        if (!ContactsContract.AUTHORITY.equals(localUri.getAuthority())) {
-            Log.w(TAG, "Invalid authority: " + localUri.getAuthority());
-            throw new IllegalArgumentException(
-                    "Authority " + localUri.getAuthority() + " is not a valid CP2 authority.");
-        }
+        validateAuthority(localUri.getAuthority());
         // Add the "user-id @" to the URI, and also pass the caller package name.
         final Uri remoteUri = maybeAddUserId(localUri, corpUserId).buildUpon()
                 .appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY, getCallingPackage())
@@ -5877,6 +5921,58 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return createEmptyCursor(localUri, projection);
         }
         return cursor;
+    }
+
+    private Uri getParentProviderUri(Uri uri, @NonNull UserInfo parentUserInfo) {
+        // Add the "user-id @" of the parent to the URI
+        final Builder remoteUriBuilder =
+                maybeAddUserId(uri, parentUserInfo.getUserHandle().getIdentifier())
+                        .buildUpon();
+        // Pass the caller package name query param and build the uri
+        return remoteUriBuilder
+                .appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY,
+                        getRealCallerPackageName(uri))
+                .build();
+    }
+
+    protected AssetFileDescriptor openAssetFileThroughParentProvider(Uri uri, String mode)
+            throws FileNotFoundException {
+        final UserInfo parentUserInfo = UserUtils.getProfileParentUser(getContext());
+        if (parentUserInfo == null) {
+            return null;
+        }
+        validateAuthority(uri.getAuthority());
+        final Uri remoteUri = getParentProviderUri(uri, parentUserInfo);
+        return getContext().getContentResolver().openAssetFile(remoteUri, mode, null);
+    }
+
+    /**
+     * A helper function to query parent CP2, should only be called from users that are allowed to
+     * use parents contacts
+     */
+    private Cursor queryParentProfileContactsProvider(Uri uri, String[] projection,
+            String selection, String[] selectionArgs, String sortOrder,
+            CancellationSignal cancellationSignal) {
+        final UserInfo parentUserInfo = UserUtils.getProfileParentUser(getContext());
+        if (parentUserInfo == null) {
+            return createEmptyCursor(uri, projection);
+        }
+        final Uri remoteUri = getParentProviderUri(uri, parentUserInfo);
+        Cursor cursor = getContext().getContentResolver().query(remoteUri, projection, selection,
+                selectionArgs, sortOrder, cancellationSignal);
+        if (cursor == null) {
+            Log.w(TAG, "null cursor returned from primary CP2");
+            return createEmptyCursor(uri, projection);
+        }
+        return cursor;
+    }
+
+    private void validateAuthority(String authority) {
+        if (!ContactsContract.AUTHORITY.equals(authority)) {
+            Log.w(TAG, "Invalid authority: " + authority);
+            throw new IllegalArgumentException(
+                    "Authority " + authority + " is not a valid CP2 authority.");
+        }
     }
 
     private Cursor addSnippetExtrasToCursor(Uri uri, Cursor cursor) {
@@ -8771,10 +8867,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (!isDirectoryParamValid(uri)){
                 return null;
             }
-            if (!queryAllowedByEnterprisePolicy(uri)) {
+            if (!isCrossUserQueryAllowed(uri)) {
                 return null;
             }
             waitForAccess(mode.equals("r") ? mReadAccessLatch : mWriteAccessLatch);
+
+            // Redirect reads to parent provider if the corresponding user property is set and app
+            // is allow-listed to access parent's contacts
+            // TODO(b/253449368) - The call below should be gated by the app-cloning feature flag
+            if (mode.equals("r") &&
+                    UserUtils.shouldUseParentsContacts(getContext()) &&
+                    isAppAllowedToUseParentUsersContacts(getCallingPackage())) {
+                return openAssetFileThroughParentProvider(uri, mode);
+            }
+
             final AssetFileDescriptor ret;
             if (mapsToProfileDb(uri)) {
                 switchToProfileMode();
