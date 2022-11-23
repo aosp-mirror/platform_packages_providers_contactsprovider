@@ -5652,7 +5652,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private boolean isAppAllowedToUseParentUsersContacts(@Nullable String packageName) {
+    @VisibleForTesting
+    protected boolean isAppAllowedToUseParentUsersContacts(@Nullable String packageName) {
         try {
             for (String appName: getContext().getResources()
                     .getStringArray(com.android.internal.R.array.cloneable_apps)) {
@@ -5745,7 +5746,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return !UserUtils.shouldUseParentsContacts(getContext());
     }
 
-    private Cursor queryDirectoryIfNecessary(Uri uri, String[] projection, String selection,
+    @VisibleForTesting
+    protected Cursor queryDirectoryIfNecessary(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         final long directoryId =
@@ -5950,21 +5952,32 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * A helper function to query parent CP2, should only be called from users that are allowed to
      * use parents contacts
      */
-    private Cursor queryParentProfileContactsProvider(Uri uri, String[] projection,
+    @VisibleForTesting
+    protected Cursor queryParentProfileContactsProvider(Uri uri, String[] projection,
             String selection, String[] selectionArgs, String sortOrder,
             CancellationSignal cancellationSignal) {
         final UserInfo parentUserInfo = UserUtils.getProfileParentUser(getContext());
         if (parentUserInfo == null) {
             return createEmptyCursor(uri, projection);
         }
-        final Uri remoteUri = getParentProviderUri(uri, parentUserInfo);
-        Cursor cursor = getContext().getContentResolver().query(remoteUri, projection, selection,
-                selectionArgs, sortOrder, cancellationSignal);
+        // Make sure authority is CP2 not other providers
+        validateAuthority(uri.getAuthority());
+        Cursor cursor = queryContactsProviderForUser(uri, projection, selection, selectionArgs,
+                sortOrder, cancellationSignal, parentUserInfo);
         if (cursor == null) {
             Log.w(TAG, "null cursor returned from primary CP2");
             return createEmptyCursor(uri, projection);
         }
         return cursor;
+    }
+
+    @VisibleForTesting
+    protected Cursor queryContactsProviderForUser(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal,
+            UserInfo parentUserInfo) {
+        final Uri remoteUri = getParentProviderUri(uri, parentUserInfo);
+        return getContext().getContentResolver().query(remoteUri, projection, selection,
+                selectionArgs, sortOrder, cancellationSignal);
     }
 
     private void validateAuthority(String authority) {
