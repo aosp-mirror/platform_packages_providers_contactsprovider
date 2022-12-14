@@ -8163,50 +8163,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals("default", helper.getProperty("existent1", "default"));
     }
 
-    private class VCardTestUriCreator {
-        private String mLookup1;
-        private String mLookup2;
-
-        public VCardTestUriCreator(String lookup1, String lookup2) {
-            super();
-            mLookup1 = lookup1;
-            mLookup2 = lookup2;
-        }
-
-        public Uri getUri1() {
-            return Uri.withAppendedPath(Contacts.CONTENT_VCARD_URI, mLookup1);
-        }
-
-        public Uri getUri2() {
-            return Uri.withAppendedPath(Contacts.CONTENT_VCARD_URI, mLookup2);
-        }
-
-        public Uri getCombinedUri() {
-            return Uri.withAppendedPath(Contacts.CONTENT_MULTI_VCARD_URI,
-                    Uri.encode(mLookup1 + ":" + mLookup2));
-        }
-    }
-
-    private VCardTestUriCreator createVCardTestContacts() {
-        final long rawContactId1 = RawContactUtil.createRawContact(mResolver, mAccount,
-                RawContacts.SOURCE_ID, "4:12");
-        DataUtil.insertStructuredName(mResolver, rawContactId1, "John", "Doe");
-
-        final long rawContactId2 = RawContactUtil.createRawContact(mResolver, mAccount,
-                RawContacts.SOURCE_ID, "3:4%121");
-        DataUtil.insertStructuredName(mResolver, rawContactId2, "Jane", "Doh");
-
-        final long contactId1 = queryContactId(rawContactId1);
-        final long contactId2 = queryContactId(rawContactId2);
-        final Uri contact1Uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId1);
-        final Uri contact2Uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId2);
-        final String lookup1 =
-            Uri.encode(Contacts.getLookupUri(mResolver, contact1Uri).getPathSegments().get(2));
-        final String lookup2 =
-            Uri.encode(Contacts.getLookupUri(mResolver, contact2Uri).getPathSegments().get(2));
-        return new VCardTestUriCreator(lookup1, lookup2);
-    }
-
     public void testQueryMultiVCard() {
         // No need to create any contacts here, because the query for multiple vcards
         // does not go into the database at all
@@ -9686,27 +9642,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Data.MIMETYPE + "=?", new String[] {GroupMembership.CONTENT_ITEM_TYPE},
                 GroupMembership.GROUP_SOURCE_ID);
         return c;
-    }
-
-    private String readToEnd(FileInputStream inputStream) {
-        try {
-            System.out.println("DECLARED INPUT STREAM LENGTH: " + inputStream.available());
-            int ch;
-            StringBuilder stringBuilder = new StringBuilder();
-            int index = 0;
-            while (true) {
-                ch = inputStream.read();
-                System.out.println("READ CHARACTER: " + index + " " + ch);
-                if (ch == -1) {
-                    break;
-                }
-                stringBuilder.append((char)ch);
-                index++;
-            }
-            return stringBuilder.toString();
-        } catch (IOException e) {
-            return null;
-        }
     }
 
     private void assertQueryParameter(String uriString, String parameter, String expectedValue) {

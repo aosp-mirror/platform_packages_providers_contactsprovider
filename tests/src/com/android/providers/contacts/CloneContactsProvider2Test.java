@@ -17,28 +17,50 @@
 package com.android.providers.contacts;
 
 import static com.android.providers.contacts.ContactsActor.MockUserManager.CLONE_PROFILE_USER;
+import static com.android.providers.contacts.ContactsActor.MockUserManager.PRIMARY_USER;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.spy;
 
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.OperationApplicationException;
+import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.RemoteException;
+import android.provider.CallLog;
 import android.provider.ContactsContract;
+import android.util.Log;
+
 import androidx.test.filters.MediumTest;
 import androidx.test.filters.SdkSuppress;
 
+import com.android.providers.contacts.testutil.DataUtil;
+import com.android.providers.contacts.testutil.RawContactUtil;
+
+import org.junit.Assert;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Set;
 
 @MediumTest
 @SdkSuppress(minSdkVersion = Build.VERSION_CODES.UPSIDE_DOWN_CAKE, codeName = "UpsideDownCake")
 public class CloneContactsProvider2Test extends BaseContactsProvider2Test {
 
     private ContactsActor mCloneContactsActor;
+    private SynchronousContactsProvider2 mCloneContactsProvider;
 
     private SynchronousContactsProvider2 getCloneContactsProvider() {
         return (SynchronousContactsProvider2) mCloneContactsActor.provider;
@@ -55,7 +77,8 @@ public class CloneContactsProvider2Test extends BaseContactsProvider2Test {
         mCloneContactsActor.mockUserManager.setUsers(ContactsActor.MockUserManager.PRIMARY_USER,
                 CLONE_PROFILE_USER);
         mCloneContactsActor.mockUserManager.myUser = CLONE_PROFILE_USER.id;
-        getCloneContactsProvider().wipeData();
+        mCloneContactsProvider = spy(getCloneContactsProvider());
+        mCloneContactsProvider.wipeData();
     }
 
     private ContentValues getSampleContentValues() {
@@ -67,17 +90,43 @@ public class CloneContactsProvider2Test extends BaseContactsProvider2Test {
         return values;
     }
 
+    private void getCloneContactsProviderWithMockedCallToParent(Uri uri) {
+        Cursor primaryProfileCursor = mActor.provider.query(uri,
+                null /* projection */, null /* queryArgs */, null /* cancellationSignal */);
+        assertNotNull(primaryProfileCursor);
+        doReturn(primaryProfileCursor).when(mCloneContactsProvider)
+                .queryContactsProviderForUser(eq(uri), any(), any(), any(), any(),
+                        any(), eq(PRIMARY_USER));
+    }
+
+    private void getCloneContactsProviderWithMockedOpenAssetFileCall(Uri uri)
+            throws FileNotFoundException {
+        AssetFileDescriptor fileDescriptor = mActor.provider.openAssetFile(uri, "r");
+        doReturn(fileDescriptor).when(mCloneContactsProvider)
+                .openAssetFileThroughParentProvider(eq(uri), eq("r"));
+    }
+
+    private String getCursorValue(Cursor c, String columnName) {
+        return c.getString(c.getColumnIndex(columnName));
+    }
+
     private void assertEqualContentValues(ContentValues contentValues, Cursor cursor) {
-        assertEquals(contentValues.get(ContactsContract.RawContacts.ACCOUNT_NAME),
-                cursor.getString(cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_NAME)));
-        assertEquals(contentValues.get(ContactsContract.RawContacts.ACCOUNT_TYPE),
-                cursor.getString(cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_TYPE)));
-        assertEquals(contentValues.get(ContactsContract.RawContacts.CUSTOM_RINGTONE),
-                cursor.getString(cursor.getColumnIndex(
-                        ContactsContract.RawContacts.CUSTOM_RINGTONE)));
-        assertEquals(contentValues.get(ContactsContract.RawContacts.STARRED),
-                cursor.getString(cursor.getColumnIndex(
-                        ContactsContract.RawContacts.STARRED)));
+        for (String key: contentValues.getValues().keySet()) {
+            assertEquals(contentValues.get(key), getCursorValue(cursor, key));
+        }
+    }
+
+    private void assertRawContactsCursorEquals(Cursor expectedCursor, Cursor actualCursor,
+            Set<String> columnNames) {
+        assertNotNull(actualCursor);
+        assertEquals(expectedCursor.getCount(), actualCursor.getCount());
+        while (actualCursor.moveToNext()) {
+            expectedCursor.moveToNext();
+            for (String key: columnNames) {
+                assertEquals(getCursorValue(expectedCursor, key),
+                        getCursorValue(actualCursor, key));
+            }
+        }
     }
 
     private void assertRejectedApplyBatchResults(ContentProviderResult[] res,
@@ -278,5 +327,129 @@ public class CloneContactsProvider2Test extends BaseContactsProvider2Test {
                 uriBundle);
         assertNotNull(authResponse);
         assertEquals(Bundle.EMPTY, authResponse);
+    }
+
+    public void testCloneContactsProviderReads_callerNotInAllowlist() {
+        // Insert raw contact through the primary clone provider
+        ContentValues inputContentValues = getSampleContentValues();
+        long rawContactId = insertRawContactsThroughPrimaryProvider(inputContentValues);
+        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
+                rawContactId);
+
+        // Mock call to parent profile contacts provider to return the correct result containing all
+        // contacts in the parent profile.
+        getCloneContactsProviderWithMockedCallToParent(uri);
+
+        // Mock call to ensure the caller package is not in the app-cloning allowlist
+        doReturn(false)
+                .when(mCloneContactsProvider).isAppAllowedToUseParentUsersContacts(any());
+
+        // Test clone contacts provider read with the uri of the contact added above
+        mCloneContactsProvider.query(uri,
+                null /* projection */, null /* queryArgs */, null /* cancellationSignal */);
+
+        // Check that the call passed through to the local query instead of redirecting to the
+        // parent provider
+        verify(mCloneContactsProvider, times(1))
+                .queryDirectoryIfNecessary(any(), any(), any(), any(), any(), any());
+    }
+
+    public void testContactsProviderReads_callerInAllowlist() {
+        // Insert raw contact through the primary clone provider
+        ContentValues inputContentValues = getSampleContentValues();
+        long rawContactId = insertRawContactsThroughPrimaryProvider(inputContentValues);
+        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
+                rawContactId);
+
+        // Mock call to parent profile contacts provider to return the correct result containing all
+        // contacts in the parent profile.
+        getCloneContactsProviderWithMockedCallToParent(uri);
+
+        // Mock call to ensure the caller package is in the app-cloning allowlist
+        doReturn(true)
+                .when(mCloneContactsProvider).isAppAllowedToUseParentUsersContacts(any());
+
+        // Test clone contacts provider read with the uri of the contact added above
+        Cursor cursor = mCloneContactsProvider.query(uri,
+                null /* projection */, null /* queryArgs */, null /* cancellationSignal */);
+
+        // Check that the call did not pass through to the local query and instead redirected to the
+        // parent provider
+        verify(mCloneContactsProvider, times(0))
+                .queryDirectoryIfNecessary(any(), any(), any(), any(), any(), any());
+        assertNotNull(cursor);
+        Cursor primaryProfileCursor = mActor.provider.query(uri,
+                null /* projection */, null /* queryArgs */, null /* cancellationSignal */);
+        assertNotNull(primaryProfileCursor);
+        assertRawContactsCursorEquals(primaryProfileCursor, cursor,
+                inputContentValues.getValues().keySet());
+    }
+
+    public void testQueryPrimaryProfileProvider_callingFromParentUser() {
+        ContentValues inputContentValues = getSampleContentValues();
+        long rawContactId = insertRawContactsThroughPrimaryProvider(inputContentValues);
+        Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
+                rawContactId);
+
+        // Fetch primary contacts provider and call method to redirect to parent provider
+        final ContactsProvider2 primaryCP2 = (ContactsProvider2) getProvider();
+        Cursor cursor = primaryCP2.queryParentProfileContactsProvider(uri,
+                null /* projection */, null /* selection */, null /* selectionArgs */,
+                null /* sortOrder */, null /* cancellationSignal */);
+
+        // Assert that empty cursor is returned
+        assertNotNull(cursor);
+        assertEquals(0, cursor.getCount());
+    }
+
+    public void testQueryPrimaryProfileProvider_incorrectAuthority() {
+        ContentValues inputContentValues = getSampleContentValues();
+        insertRawContactsThroughPrimaryProvider(inputContentValues);
+
+        Assert.assertThrows(IllegalArgumentException.class, () ->
+                mCloneContactsProvider.queryParentProfileContactsProvider(CallLog.CONTENT_URI,
+                null /* projection */, null /* selection */, null /* selectionArgs */,
+                null /* sortOrder */, null /* cancellationSignal */));
+    }
+
+    public void testOpenAssetFileMultiVCard() throws IOException {
+        final VCardTestUriCreator contacts = createVCardTestContacts();
+
+        // Mock call to parent profile contacts provider to return the correct asset file
+        getCloneContactsProviderWithMockedOpenAssetFileCall(contacts.getCombinedUri());
+
+        // Mock call to ensure the caller package is in the app-cloning allowlist
+        doReturn(true)
+                .when(mCloneContactsProvider).isAppAllowedToUseParentUsersContacts(any());
+
+        final AssetFileDescriptor descriptor =
+                mCloneContactsProvider.openAssetFile(contacts.getCombinedUri(), "r");
+        final FileInputStream inputStream = descriptor.createInputStream();
+        String data = readToEnd(inputStream);
+        inputStream.close();
+        descriptor.close();
+
+        // Ensure that the resulting VCard has both contacts
+        assertTrue(data.contains("N:Doe;John;;;"));
+        assertTrue(data.contains("N:Doh;Jane;;;"));
+    }
+
+    public void testOpenAssetFileMultiVCard_callerNotInAllowlist() throws IOException {
+        final VCardTestUriCreator contacts = createVCardTestContacts();
+
+        // Mock call to parent profile contacts provider to return the correct asset file
+        getCloneContactsProviderWithMockedOpenAssetFileCall(contacts.getCombinedUri());
+
+        // Mock call to ensure the caller package is not in the app-cloning allowlist
+        doReturn(false)
+                .when(mCloneContactsProvider).isAppAllowedToUseParentUsersContacts(any());
+
+        final AssetFileDescriptor descriptor =
+                mCloneContactsProvider.openAssetFile(contacts.getCombinedUri(), "r");
+
+        // Check that the call passed through to the local call instead of redirecting to the
+        // parent provider
+        verify(mCloneContactsProvider, times(1))
+                .openAssetFile(eq(contacts.getCombinedUri()), any());
     }
 }
