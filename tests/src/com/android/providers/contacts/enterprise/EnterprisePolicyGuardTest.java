@@ -17,6 +17,7 @@ package com.android.providers.contacts.enterprise;
 
 import android.app.admin.DevicePolicyManager;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.pm.UserInfo;
 import android.net.Uri;
 import android.os.UserHandle;
@@ -30,6 +31,9 @@ import org.mockito.Matchers;
 
 import java.util.Arrays;
 import java.util.List;
+
+import static android.Manifest.permission.INTERACT_ACROSS_USERS;
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -49,6 +53,7 @@ public class EnterprisePolicyGuardTest extends FixedAndroidTestCase {
     private static final String CONTACT_EMAIL = "david.green@android.com";
     private static final String CONTACT_PHONE = "+1234567890";
     private static final long DIRECTORY_ID = Directory.ENTERPRISE_DEFAULT;
+    private static final String CALLING_PACKAGE = "package";
 
     private static final Uri URI_CONTACTS_ID_PHOTO =
             Uri.parse("content://com.android.contacts/contacts/" + CONTACT_ID + "/photo");
@@ -231,13 +236,13 @@ public class EnterprisePolicyGuardTest extends FixedAndroidTestCase {
         }
     }
 
-    private static void checkCrossProfile(EnterprisePolicyGuard guard, Uri uri, boolean expected) {
+    private void checkCrossProfile(EnterprisePolicyGuard guard, Uri uri, boolean expected) {
         if (expected) {
             assertTrue("Expected true but got false for uri: " + uri,
-                    guard.isCrossProfileAllowed(uri));
+                    guard.isCrossProfileAllowed(uri, CALLING_PACKAGE));
         } else {
             assertFalse("Expected false but got true for uri: " + uri,
-                    guard.isCrossProfileAllowed(uri));
+                    guard.isCrossProfileAllowed(uri, CALLING_PACKAGE));
         }
     }
 
@@ -269,7 +274,11 @@ public class EnterprisePolicyGuardTest extends FixedAndroidTestCase {
         when(mockUm.getProfiles(Matchers.anyInt())).thenReturn(userInfos);
         when(mockUm.getProfileParent(WORK_USER_ID)).thenReturn(CURRENT_USER_INFO);
 
-        Context mockContext = new TestMockContext(getContext(), mockDpm, mockUm);
+        PackageManager mockPm = mock(PackageManager.class);
+        when(mockPm.checkPermission(INTERACT_ACROSS_USERS, CALLING_PACKAGE))
+                .thenReturn(PERMISSION_GRANTED);
+
+        Context mockContext = new TestMockContext(getContext(), mockDpm, mockUm, mockPm);
 
         return mockContext;
     }
@@ -278,11 +287,19 @@ public class EnterprisePolicyGuardTest extends FixedAndroidTestCase {
         private Context mRealContext;
         private DevicePolicyManager mDpm;
         private UserManager mUm;
+        private PackageManager mPm;
 
-        public TestMockContext(Context realContext, DevicePolicyManager dpm, UserManager um) {
+        public TestMockContext(
+                Context realContext, DevicePolicyManager dpm, UserManager um, PackageManager pm) {
             mRealContext = realContext;
             mDpm = dpm;
             mUm = um;
+            mPm = pm;
+        }
+
+        @Override
+        public PackageManager getPackageManager() {
+            return mPm;
         }
 
         public Object getSystemService(String name) {

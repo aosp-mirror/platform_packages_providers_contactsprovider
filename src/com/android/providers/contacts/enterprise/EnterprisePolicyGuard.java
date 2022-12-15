@@ -19,6 +19,7 @@ package com.android.providers.contacts.enterprise;
 import android.annotation.NonNull;
 import android.app.admin.DevicePolicyManager;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.UserHandle;
 import android.provider.ContactsContract;
@@ -29,8 +30,11 @@ import android.util.Log;
 import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.ProfileAwareUriMatcher;
 import com.android.providers.contacts.util.UserUtils;
+
 import com.google.common.annotations.VisibleForTesting;
 
+import static android.Manifest.permission.INTERACT_ACROSS_USERS;
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.provider.Settings.Secure.MANAGED_PROFILE_CONTACT_REMOTE_SEARCH;
 
 /**
@@ -44,22 +48,25 @@ public class EnterprisePolicyGuard {
 
     final private Context mContext;
     final private DevicePolicyManager mDpm;
+    final private PackageManager mPm;
 
     public EnterprisePolicyGuard(Context context) {
         mContext = context;
         mDpm = context.getSystemService(DevicePolicyManager.class);
+        mPm = context.getPackageManager();
     }
 
     /**
      * Check if cross profile query is allowed for the given uri
      *
      * @param uri Uri that we want to check.
+     * @param callingPackage Name of the client package that called CP2 in the other profile
      * @return True if cross profile query is allowed for this uri
      */
-    public boolean isCrossProfileAllowed(@NonNull Uri uri) {
+    public boolean isCrossProfileAllowed(@NonNull Uri uri, @NonNull String callingPackage) {
         final int uriCode = sUriMatcher.match(uri);
         final UserHandle currentHandle = new UserHandle(UserUtils.getCurrentUserHandle(mContext));
-        if (uriCode == -1 || currentHandle == null) {
+        if (uriCode == -1) {
             return false;
         }
 
@@ -67,6 +74,7 @@ public class EnterprisePolicyGuard {
             return true;
         }
 
+        // TODO(b/240954287): replace these by new DPM APIs that take package name into account
         final boolean isCallerIdEnabled = !mDpm.getCrossProfileCallerIdDisabled(currentHandle);
         final boolean isContactsSearchPolicyEnabled =
                 !mDpm.getCrossProfileContactsSearchDisabled(currentHandle);
@@ -95,10 +103,17 @@ public class EnterprisePolicyGuard {
             }
         }
 
+        final boolean isAllowedByCallerIdPolicy = isCallerIdGuarded(uriCode) && isCallerIdEnabled;
+        final boolean isAllowedByContactSearchPolicy =
+                isContactsSearchGuarded(uriCode) && isContactsSearchPolicyEnabled;
+        final boolean isAllowedByBluetoothSharingPolicy =
+                isBluetoothContactSharing(uriCode) && isBluetoothContactSharingEnabled
+                        // Only allow apps with INTERACT_ACROSS_USERS to access the bluetooth APIs
+                        && mPm.checkPermission(INTERACT_ACROSS_USERS, callingPackage)
+                        == PERMISSION_GRANTED;
         // If either guard policy allows access, return true.
-        return (isCallerIdGuarded(uriCode) && isCallerIdEnabled)
-                || (isContactsSearchGuarded(uriCode) && isContactsSearchPolicyEnabled)
-                || (isBluetoothContactSharing(uriCode) && isBluetoothContactSharingEnabled);
+        return isAllowedByCallerIdPolicy || isAllowedByContactSearchPolicy
+                || isAllowedByBluetoothSharingPolicy;
     }
 
     private boolean isUriWhitelisted(int uriCode) {
@@ -148,7 +163,9 @@ public class EnterprisePolicyGuard {
         switch (uriCode) {
             case ContactsProvider2.PHONE_LOOKUP_ENTERPRISE:
             case ContactsProvider2.EMAILS_LOOKUP_ENTERPRISE:
+            case ContactsProvider2.CONTACTS_ENTERPRISE:
             case ContactsProvider2.CONTACTS_FILTER_ENTERPRISE:
+            case ContactsProvider2.PHONES_ENTERPRISE:
             case ContactsProvider2.PHONES_FILTER_ENTERPRISE:
             case ContactsProvider2.CALLABLES_FILTER_ENTERPRISE:
             case ContactsProvider2.EMAILS_FILTER_ENTERPRISE:
@@ -180,8 +197,10 @@ public class EnterprisePolicyGuard {
         switch(uriCode) {
             case ContactsProvider2.DIRECTORIES:
             case ContactsProvider2.DIRECTORIES_ID:
+            case ContactsProvider2.CONTACTS:
             case ContactsProvider2.CONTACTS_FILTER:
             case ContactsProvider2.CALLABLES_FILTER:
+            case ContactsProvider2.PHONES:
             case ContactsProvider2.PHONES_FILTER:
             case ContactsProvider2.EMAILS_FILTER:
             case ContactsProvider2.CONTACTS_ID_PHOTO:
