@@ -28,7 +28,7 @@
     <string name="debug_dump_title" msgid="4916885724165570279">"కాంటాక్ట్‌ల డేటాబేస్‌ను కాపీ చేయండి"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"మీరు 1) అన్ని కాంటాక్ట్‌లకు సంబంధించిన సమాచారాన్ని మరియు మొత్తం కాల్ లాగ్‌ను కలిగి ఉండే మీ డేటాబేస్ యొక్క కాపీని అంతర్గత స్టోరేజ్‌లో రూపొందించి 2) దాన్ని ఈమెయిల్‌ చేయబోతున్నారు. మీరు దాన్ని పరికరం నుండి విజయవంతంగా కాపీ చేసిన తర్వాత లేదా ఈమెయిల్‌ను స్వీకరించిన తర్వాత కాపీని తొలగించడం మర్చిపోవద్దు."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"ఇప్పుడే తొలగించు"</string>
-    <string name="debug_dump_start_button" msgid="2837506913757600001">"ప్రారంభించు"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"ప్రారంభించండి"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"మీ పైల్‌ను పంపడానికి ప్రోగ్రామ్‌ను ఎంచుకోండి"</string>
     <string name="debug_dump_email_subject" msgid="108188398416385976">"కాంటాక్ట్‌ల Db జోడించబడింది"</string>
     <string name="debug_dump_email_body" msgid="4577749800871444318">"జోడింపు నా అన్ని కాంటాక్ట్‌ల సమాచారాన్ని కలిగి ఉన్న నా కాంటాక్ట్‌ల డేటాబేస్. జాగ్రత్తగా వ్యవహరించండి."</string>
