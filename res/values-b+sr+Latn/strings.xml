@@ -16,20 +16,20 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core апликације"</string>
-    <string name="app_label" msgid="3389954322874982620">"Складиште контаката"</string>
-    <string name="provider_label" msgid="6012150850819899907">"Контакти"</string>
-    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"За ажурирање контаката потребно је више меморије."</string>
-    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Надограђивање меморије за контакте"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"Додирните да бисте довршили надоградњу."</string>
-    <string name="default_directory" msgid="93961630309570294">"Контакти"</string>
-    <string name="local_invisible_directory" msgid="705244318477396120">"Другo"</string>
-    <string name="voicemail_from_column" msgid="435732568832121444">"Говорна пошта од "</string>
-    <string name="debug_dump_title" msgid="4916885724165570279">"Копирање базе података са контактима"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"Управо ћете 1) направити копију базе података која садржи све информације у вези са контактима и целокупну евиденцију позива у интерној меморији и 2) послати је имејлом. Не заборавите да избришете копију чим је будете копирали са уређаја или чим будете примили имејл."</string>
-    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Избриши одмах"</string>
-    <string name="debug_dump_start_button" msgid="2837506913757600001">"Покрени"</string>
-    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Изаберите програм за слање датотеке"</string>
-    <string name="debug_dump_email_subject" msgid="108188398416385976">"База података са контактима је у прилогу"</string>
-    <string name="debug_dump_email_body" msgid="4577749800871444318">"У прилогу је база података са мојим контактима и свим информацијама о њима. Рукујте пажљиво."</string>
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core aplikacije"</string>
+    <string name="app_label" msgid="3389954322874982620">"Skladište kontakata"</string>
+    <string name="provider_label" msgid="6012150850819899907">"Kontakti"</string>
+    <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"Za ažuriranje kontakata potrebno je više memorije."</string>
+    <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"Nadograđivanje memorije za kontakte"</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"Dodirnite da biste dovršili nadogradnju."</string>
+    <string name="default_directory" msgid="93961630309570294">"Kontakti"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"Drugo"</string>
+    <string name="voicemail_from_column" msgid="435732568832121444">"Govorna pošta od "</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"Kopiranje baze podataka sa kontaktima"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"Upravo ćete 1) napraviti kopiju baze podataka koja sadrži sve informacije u vezi sa kontaktima i celokupnu evidenciju poziva u internoj memoriji i 2) poslati je imejlom. Ne zaboravite da izbrišete kopiju čim je budete kopirali sa uređaja ili čim budete primili imejl."</string>
+    <string name="debug_dump_delete_button" msgid="7832879421132026435">"Izbriši odmah"</string>
+    <string name="debug_dump_start_button" msgid="2837506913757600001">"Pokreni"</string>
+    <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"Izaberite program za slanje datoteke"</string>
+    <string name="debug_dump_email_subject" msgid="108188398416385976">"Baza podataka sa kontaktima je u prilogu"</string>
+    <string name="debug_dump_email_body" msgid="4577749800871444318">"U prilogu je baza podataka sa mojim kontaktima i svim informacijama o njima. Rukujte pažljivo."</string>
 </resources>
