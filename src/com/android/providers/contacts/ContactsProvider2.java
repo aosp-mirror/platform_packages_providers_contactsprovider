@@ -7466,8 +7466,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private Cursor queryMergedContacts(String[] projection, String selection,
             String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
         final Uri localUri = Contacts.CONTENT_URI;
-        try (final Cursor primaryCursor = queryLocal(localUri, projection, selection, selectionArgs,
-                sortOrder, Directory.DEFAULT, cancellationSignal)) {;
+        final Cursor primaryCursor = queryLocal(localUri, projection, selection, selectionArgs,
+                sortOrder, Directory.DEFAULT, cancellationSignal);
+        try {
             final int managedUserId = UserUtils.getCorpUserId(getContext());
             if (managedUserId < 0) {
                 // No managed profile or policy not allowed
@@ -7480,6 +7481,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     primaryCursor, managedCursor
             };
             return new MergeCursor(cursorArray);
+        } catch (Throwable th) {
+            if (primaryCursor != null) {
+                primaryCursor.close();
+            }
+            throw th;
         }
     }
 
