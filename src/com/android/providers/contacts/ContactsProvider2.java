@@ -79,7 +79,6 @@ import android.os.RemoteException;
 import android.os.StrictMode;
 import android.os.SystemClock;
 import android.os.UserHandle;
-import android.os.UserManager;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
@@ -138,6 +137,7 @@ import android.util.Log;
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.common.io.MoreCloseables;
+import com.android.internal.config.appcloning.AppCloningDeviceConfigHelper;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
@@ -1500,6 +1500,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private Set<PhoneAccountHandle> mMigratedPhoneAccountHandles;
 
+    private AppCloningDeviceConfigHelper mAppCloningDeviceConfigHelper;
+
     /**
      * Subscription change will trigger ACTION_PHONE_ACCOUNT_REGISTERED that broadcasts new
      * PhoneAccountHandle that is created based on the new subscription. This receiver is used
@@ -1575,6 +1577,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         mFastScrollingIndexCache = FastScrollingIndexCache.getInstance(getContext());
         mSubscriptionManager = getContext().getSystemService(SubscriptionManager.class);
+        mAppCloningDeviceConfigHelper = AppCloningDeviceConfigHelper.getInstance(getContext());
         mContactsHelper = getDatabaseHelper();
         mDbHelper.set(mContactsHelper);
 
@@ -2142,6 +2145,19 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     /* package */ PhotoStore getProfilePhotoStore() {
         return mProfilePhotoStore;
+    }
+
+    /**
+     * Returned whether the feature flag for contacts sharing for clone profile is set. If true,
+     * the clone contacts provider would use the parent contacts providers contacts data to serve
+     * its requests.
+     * @return true/false if contact sharing is enabled/disabled
+     */
+    @VisibleForTesting
+    protected boolean isContactSharingEnabledForCloneProfile() {
+        // TODO(b/253449368): This method should also check for the config controlling
+        // all app-cloning features.
+        return mAppCloningDeviceConfigHelper.getEnableAppCloningBuildingBlocks();
     }
 
     /**
@@ -5629,9 +5645,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return null;
         }
 
-        // TODO(b/253449368) - The call below should be gated by the app-cloning feature flag.
-        if (UserUtils.shouldUseParentsContacts(getContext()) &&
-                isAppAllowedToUseParentUsersContacts(getCallingPackage())) {
+        if (shouldRedirectQueryToParentProvider()) {
             return queryParentProfileContactsProvider(uri, projection, selection, selectionArgs,
                     sortOrder, cancellationSignal);
         }
@@ -5655,6 +5669,19 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
+    /**
+     * Check if the query should be redirected to the parent profile's contacts provider.
+     */
+    private boolean shouldRedirectQueryToParentProvider() {
+        return isContactSharingEnabledForCloneProfile() &&
+                UserUtils.shouldUseParentsContacts(getContext()) &&
+                isAppAllowedToUseParentUsersContacts(getCallingPackage());
+    }
+
+    /**
+     * Check if the app with the given package name is allowed to use parent user's contacts to
+     * serve the contacts read queries.
+     */
     @VisibleForTesting
     protected boolean isAppAllowedToUseParentUsersContacts(@Nullable String packageName) {
         try {
@@ -5685,9 +5712,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // The caller is the other CP2 (which has INTERACT_ACROSS_USERS), meaning the request
             // is on behalf of a "real" client app.
 
-            // TODO(b/253449368) - The condition below should only be checked behind the app-cloning
-            // feature flag
-            if (doesCallingProviderUseCurrentUsersContacts())  {
+            if (isContactSharingEnabledForCloneProfile() &&
+                    doesCallingProviderUseCurrentUsersContacts())  {
                 // The caller is the other CP2 (which has INTERACT_ACROSS_USERS), from the child
                 // user (of the current user) profile with the property of using parent's contacts
                 // set.
@@ -5744,9 +5770,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     @VisibleForTesting
     protected boolean areContactWritesEnabled() {
-        // TODO(b/253449368) - The condition below should only be checked behind the app-cloning
-        // feature flag
-        return !UserUtils.shouldUseParentsContacts(getContext());
+        return !isContactSharingEnabledForCloneProfile() ||
+                !UserUtils.shouldUseParentsContacts(getContext());
     }
 
     @VisibleForTesting
@@ -8906,10 +8931,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             // Redirect reads to parent provider if the corresponding user property is set and app
             // is allow-listed to access parent's contacts
-            // TODO(b/253449368) - The call below should be gated by the app-cloning feature flag
-            if (mode.equals("r") &&
-                    UserUtils.shouldUseParentsContacts(getContext()) &&
-                    isAppAllowedToUseParentUsersContacts(getCallingPackage())) {
+            if (mode.equals("r") && shouldRedirectQueryToParentProvider()) {
                 return openAssetFileThroughParentProvider(uri, mode);
             }
 
