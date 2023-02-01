@@ -54,7 +54,6 @@ public class LogUtils {
 
     private static final int STATSD_LOG_ATOM_ID = 301;
 
-
     // The write methods must be called in the same order as the order of fields in the
     // atom (frameworks/proto_logging/stats/atoms.proto) definition.
     public static void log(LogFields logFields) {
@@ -92,5 +91,3 @@ public class LogUtils {
         return (SystemClock.elapsedRealtimeNanos() - startNanos) / 1000;
     }
 }
-
-

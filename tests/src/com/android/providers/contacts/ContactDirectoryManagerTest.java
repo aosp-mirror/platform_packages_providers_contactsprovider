@@ -16,8 +16,6 @@
 
 package com.android.providers.contacts;
 
-import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
-
 import android.accounts.Account;
 import android.content.ContentValues;
 import android.content.Context;
@@ -29,6 +27,7 @@ import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Process;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
@@ -38,9 +37,14 @@ import android.test.mock.MockContentProvider;
 import android.test.suitebuilder.annotation.MediumTest;
 import android.util.Log;
 
+import androidx.test.platform.app.InstrumentationRegistry;
+
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 
 import com.google.android.collect.Lists;
+
+import java.util.Arrays;
+import java.util.Set;
 
 /**
  * Unit tests for {@link ContactDirectoryManager}. Run the test like this:
@@ -548,6 +552,11 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
                         createPackage("test.packageX", "authorityX", false)));
+//        mPackageManager.grantRuntimePermission("test.package1", "android.permission.WRITE_CONTACTS",
+//                Process.myUserHandle());
+//        mPackageManager.grantRuntimePermission("test.package1", "android.permission.READ_CALL_LOG",
+//                Process.myUserHandle());
+
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -582,12 +591,20 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         assertEquals("account-name1", cursor.getString(cursor.getColumnIndex("accountName")));
         assertEquals("account-type1", cursor.getString(cursor.getColumnIndex("accountType")));
         cursor.close();
+//        mPackageManager.revokeRuntimePermission("test.package1", "android.permission.WRITE_CONTACTS",
+//                Process.myUserHandle());
+//        mPackageManager.revokeRuntimePermission("test.package1", "android.permission.READ_CALL_LOG",
+//                Process.myUserHandle());
     }
 
     public void testProjectionPopulated() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
                         createPackage("test.packageX", "authorityX", false)));
+//        mPackageManager.grantRuntimePermission("test.package1", "android.permission.WRITE_CONTACTS",
+//                Process.myUserHandle());
+//        mPackageManager.grantRuntimePermission("test.package1", "android.permission.READ_CALL_LOG",
+//                Process.myUserHandle());
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -616,6 +633,10 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 AggregationExceptions.RAW_CONTACT_ID1,
                 AggregationExceptions.RAW_CONTACT_ID2,
         });
+//        mPackageManager.revokeRuntimePermission("test.package1", "android.permission.WRITE_CONTACTS",
+//                Process.myUserHandle());
+//        mPackageManager.revokeRuntimePermission("test.package1", "android.permission.READ_CALL_LOG",
+//                Process.myUserHandle());
     }
 
     /**
@@ -634,8 +655,17 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
             return;
         }
 
+        try {
+            InstrumentationRegistry.getInstrumentation().getUiAutomation()
+                    .executeShellCommand("am wait-for-broadcast-idle");
+            Thread.sleep(1000); // wait for the system
+        } catch (Exception ignored) { }
+
         // If installed, getDirectoryProviderPackages() should return it.
-        assertTrue(ContactDirectoryManager.getDirectoryProviderPackages(pm).contains(googleSync));
+        Set<String> dirProviderPackages = ContactDirectoryManager.getDirectoryProviderPackages(pm);
+        assertTrue(googleSync + " package not found in the list of directory provider packages: "
+                        + Arrays.toString(dirProviderPackages.toArray()),
+                        dirProviderPackages.contains(googleSync));
     }
 
     protected PackageInfo createProviderPackage(String packageName, String authority) {
