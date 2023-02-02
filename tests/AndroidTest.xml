@@ -14,7 +14,7 @@
      limitations under the License.
 -->
 <configuration description="Runs Contacts Provider Tests.">
-    <target_preparer class="com.android.tradefed.targetprep.TestAppInstallSetup">
+    <target_preparer class="com.android.tradefed.targetprep.suite.SuiteApkInstaller">
         <option name="test-file-name" value="ContactsProviderTests.apk" />
     </target_preparer>
 
