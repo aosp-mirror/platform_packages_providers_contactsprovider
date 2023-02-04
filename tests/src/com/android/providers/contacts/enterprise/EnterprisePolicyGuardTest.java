@@ -184,6 +184,32 @@ public class EnterprisePolicyGuardTest extends FixedAndroidTestCase {
         checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO, false);
         checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO, false);
         checkCrossProfile(guard, URI_OTHER, false);
+
+        // ManagedProfile is paused
+        context = getMockContext(true, true, false);
+        guard = new EnterprisePolicyGuardTestable(context, true);
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_PHONE_LOOKUP), false);
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_EMAILS_LOOKUP), false);
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_CONTACTS_FILTER), false);
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_PHONES_FILTER), false);
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_CALLABLES_FILTER), false);
+        checkCrossProfile(guard, appendRemoteDirectoryId(URI_EMAILS_FILTER), false);
+        checkCrossProfile(guard, URI_DIRECTORY_FILE, false);
+
+        // Always allow uri with no directory support.
+        checkCrossProfile(guard, URI_DIRECTORIES, true);
+        checkCrossProfile(guard, URI_DIRECTORIES_ID, true);
+        checkCrossProfile(guard, URI_CONTACTS_ID_PHOTO, true);
+        checkCrossProfile(guard, URI_CONTACTS_ID_DISPLAY_PHOTO, true);
+        checkCrossProfile(guard, URI_OTHER, false);
+
+        // Always allow uri with no remote directory id.
+        checkCrossProfile(guard, URI_PHONE_LOOKUP, true);
+        checkCrossProfile(guard, URI_EMAILS_LOOKUP, true);
+        checkCrossProfile(guard, URI_CONTACTS_FILTER, true);
+        checkCrossProfile(guard, URI_PHONES_FILTER, true);
+        checkCrossProfile(guard, URI_CALLABLES_FILTER, true);
+        checkCrossProfile(guard, URI_EMAILS_FILTER, true);
     }
 
     public void testCrossProfile_userSettingOff() {
@@ -214,6 +240,7 @@ public class EnterprisePolicyGuardTest extends FixedAndroidTestCase {
         checkCrossProfile(guard, URI_CALLABLES_FILTER, true);
         checkCrossProfile(guard, URI_EMAILS_FILTER, true);
     }
+
 
     private static Uri appendRemoteDirectoryId(Uri uri) {
         return appendDirectoryId(uri, REMOTE_DIRECTORY_ID);
@@ -261,11 +288,16 @@ public class EnterprisePolicyGuardTest extends FixedAndroidTestCase {
 
 
     private Context getMockContext(boolean isCallerIdEnabled, boolean isContactsSearchEnabled) {
+        return getMockContext(isCallerIdEnabled, isContactsSearchEnabled, true);
+    }
+
+    private Context getMockContext(boolean isCallerIdEnabled, boolean isContactsSearchEnabled,
+            boolean isManagedProfileEnabled) {
         DevicePolicyManager mockDpm = mock(DevicePolicyManager.class);
-        when(mockDpm.getCrossProfileCallerIdDisabled(Matchers.<UserHandle>any()))
-                .thenReturn(!isCallerIdEnabled);
-        when(mockDpm.getCrossProfileContactsSearchDisabled(Matchers.<UserHandle>any()))
-                .thenReturn(!isContactsSearchEnabled);
+        when(mockDpm.hasManagedProfileCallerIdAccess(Matchers.any(),Matchers.any()))
+                .thenReturn(isCallerIdEnabled);
+        when(mockDpm.hasManagedProfileContactsAccess(Matchers.any(),Matchers.any()))
+                .thenReturn(isContactsSearchEnabled);
 
         List<UserInfo> userInfos = MANAGED_USERINFO_LIST;
         UserManager mockUm = mock(UserManager.class);
@@ -273,6 +305,8 @@ public class EnterprisePolicyGuardTest extends FixedAndroidTestCase {
         when(mockUm.getUsers()).thenReturn(userInfos);
         when(mockUm.getProfiles(Matchers.anyInt())).thenReturn(userInfos);
         when(mockUm.getProfileParent(WORK_USER_ID)).thenReturn(CURRENT_USER_INFO);
+        when(mockUm.isQuietModeEnabled(UserHandle.of(WORK_USER_ID)))
+                .thenReturn(!isManagedProfileEnabled);
 
         PackageManager mockPm = mock(PackageManager.class);
         when(mockPm.checkPermission(INTERACT_ACROSS_USERS, CALLING_PACKAGE))
