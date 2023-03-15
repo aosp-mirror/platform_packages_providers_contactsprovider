@@ -1589,7 +1589,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
                 .isPhoneAccountMigrationPending()) {
-            IntentFilter filter = new IntentFilter(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE);
+            IntentFilter filter = new IntentFilter(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
             getContext().registerReceiver(mBroadcastReceiver, filter);
         }
 
