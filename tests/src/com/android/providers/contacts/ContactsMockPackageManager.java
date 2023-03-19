@@ -24,6 +24,7 @@ import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
 import android.os.Binder;
+import android.os.UserHandle;
 import android.test.mock.MockPackageManager;
 
 import java.util.ArrayList;
@@ -153,5 +154,11 @@ public class ContactsMockPackageManager extends MockPackageManager {
     @Override
     public int checkPermission(String permission, String packageName) {
         return PERMISSION_GRANTED;
+    }
+
+    @Override
+    public List<ResolveInfo> queryIntentActivitiesAsUser(Intent intent, ResolveInfoFlags flags,
+            UserHandle user) {
+        return new ArrayList<>();
     }
 }
