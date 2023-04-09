@@ -22,7 +22,6 @@ import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.CommonDataKinds.Organization;
 import android.provider.ContactsContract.Data;
-
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.SearchIndexManager.IndexBuilder;
 import com.android.providers.contacts.aggregation.AbstractContactAggregator;
@@ -38,15 +37,9 @@ public class DataRowHandlerForOrganization extends DataRowHandlerForCommonDataKi
                 Organization.CONTENT_ITEM_TYPE, Organization.TYPE, Organization.LABEL);
     }
 
-    private void applySimpleFieldMaxSize(ContentValues cv) {
-        applySimpleFieldMaxSize(cv, Organization.COMPANY);
-        applySimpleFieldMaxSize(cv, Organization.TITLE);
-    }
-
     @Override
     public long insert(SQLiteDatabase db, TransactionContext txContext, long rawContactId,
             ContentValues values) {
-        applySimpleFieldMaxSize(values);
         String company = values.getAsString(Organization.COMPANY);
         String title = values.getAsString(Organization.TITLE);
 
@@ -59,7 +52,6 @@ public class DataRowHandlerForOrganization extends DataRowHandlerForCommonDataKi
     @Override
     public boolean update(SQLiteDatabase db, TransactionContext txContext, ContentValues values,
             Cursor c, boolean callerIsSyncAdapter) {
-        applySimpleFieldMaxSize(values);
         if (!super.update(db, txContext, values, c, callerIsSyncAdapter)) {
             return false;
         }
