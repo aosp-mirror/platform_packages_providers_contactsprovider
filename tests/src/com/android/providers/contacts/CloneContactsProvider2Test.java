@@ -34,18 +34,16 @@ import android.content.OperationApplicationException;
 import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.RemoteException;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
-import android.util.Log;
+import android.util.SparseArray;
 
 import androidx.test.filters.MediumTest;
 import androidx.test.filters.SdkSuppress;
-
-import com.android.providers.contacts.testutil.DataUtil;
-import com.android.providers.contacts.testutil.RawContactUtil;
 
 import org.junit.Assert;
 
@@ -142,10 +140,10 @@ public class CloneContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     /**
-     * Asserts that no contacts are returned when queried by the given contacts actor
+     * Asserts that no contacts are returned when queried by the given contacts provider
      */
-    private void assertContactsProviderEmpty(ContactsActor contactsActor) {
-        Cursor cursor = contactsActor.resolver.query(ContactsContract.RawContacts.CONTENT_URI,
+    private void assertContactsProviderEmpty(ContactsProvider2 contactsProvider2) {
+        Cursor cursor = contactsProvider2.query(ContactsContract.RawContacts.CONTENT_URI,
                 new String[]{ContactsContract.RawContactsEntity._ID},
                 null /* queryArgs */, null /* cancellationSignal */);
         assertNotNull(cursor);
@@ -180,7 +178,12 @@ public class CloneContactsProvider2Test extends BaseContactsProvider2Test {
                 .appendPath("0")
                 .build();
         assertUriEquals(expectedUri, resultUri);
-        assertContactsProviderEmpty(mCloneContactsActor);
+        // No contacts should be present in both clone and primary providers
+        assertContactsProviderEmpty(getContactsProvider());
+        doReturn(false)
+                .when(mCloneContactsProvider).isAppAllowedToUseParentUsersContacts(any());
+        assertContactsProviderEmpty(mCloneContactsProvider);
+
     }
 
     public void testPrimaryContactsProviderInsert() {
@@ -257,7 +260,11 @@ public class CloneContactsProvider2Test extends BaseContactsProvider2Test {
 
         // Check results, no rows should have been affected
         assertEquals(0, bulkInsertResult);
-        assertContactsProviderEmpty(mCloneContactsActor);
+        // No contacts should be present in both clone and primary providers
+        assertContactsProviderEmpty(getContactsProvider());
+        doReturn(false)
+                .when(mCloneContactsProvider).isAppAllowedToUseParentUsersContacts(any());
+        assertContactsProviderEmpty(mCloneContactsProvider);
     }
 
     public void testCloneContactsApplyBatch()
@@ -294,8 +301,10 @@ public class CloneContactsProvider2Test extends BaseContactsProvider2Test {
         assertRejectedApplyBatchResults(res, ops);
 
         // No contacts should be present in both clone and primary providers
-        assertContactsProviderEmpty(mCloneContactsActor);
-        assertContactsProviderEmpty(mActor);
+        assertContactsProviderEmpty(getContactsProvider());
+        doReturn(false)
+                .when(mCloneContactsProvider).isAppAllowedToUseParentUsersContacts(any());
+        assertContactsProviderEmpty(mCloneContactsProvider);
     }
 
     public void testCloneContactsCallOperation() {
@@ -451,5 +460,45 @@ public class CloneContactsProvider2Test extends BaseContactsProvider2Test {
         // parent provider
         verify(mCloneContactsProvider, times(1))
                 .openAssetFile(eq(contacts.getCombinedUri()), any());
+    }
+
+    public void testIsAppAllowedToUseParentUsersContacts_AppInAllowlistCacheEmpty()
+            throws InterruptedException {
+        String testPackageName = mCloneContactsActor.packageName;
+        int processUid = Binder.getCallingUid();
+        doReturn(true)
+                .when(mCloneContactsProvider)
+                .doesPackageHaveALauncherActivity(eq(testPackageName), any());
+
+        SparseArray<ContactsProvider2.LaunchableCloneAppsCacheEntry> launchableCloneAppsCache =
+                mCloneContactsProvider.getLaunchableCloneAppsCacheForTesting();
+        launchableCloneAppsCache.clear();
+        boolean appAllowedToUseParentUsersContacts =
+                mCloneContactsProvider.isAppAllowedToUseParentUsersContacts(testPackageName);
+        assertTrue(appAllowedToUseParentUsersContacts);
+
+        // Check that the cache has been updated with an entry corresponding to current app uid
+        ContactsProvider2.LaunchableCloneAppsCacheEntry cacheEntry =
+                launchableCloneAppsCache.get(processUid);
+        assertNotNull(cacheEntry);
+        assertEquals(1, launchableCloneAppsCache.size());
+        assertTrue(cacheEntry.doesAppHaveLaunchableActivity);
+    }
+
+    public void testIsAppAllowedToUseParentUsersContacts_AppNotInAllowlistCacheEmtpy() {
+        String testPackageName = mCloneContactsActor.packageName;
+        int processUid = Binder.getCallingUid();
+
+        SparseArray<ContactsProvider2.LaunchableCloneAppsCacheEntry> launchableCloneAppsCache =
+                mCloneContactsProvider.getLaunchableCloneAppsCacheForTesting();
+        launchableCloneAppsCache.clear();
+        assertFalse(mCloneContactsProvider.isAppAllowedToUseParentUsersContacts(testPackageName));
+
+        // Check that the cache has been updated with an entry corresponding to current app uid
+        ContactsProvider2.LaunchableCloneAppsCacheEntry cacheEntry =
+                launchableCloneAppsCache.get(processUid);
+        assertNotNull(cacheEntry);
+        assertEquals(1, launchableCloneAppsCache.size());
+        assertFalse(cacheEntry.doesAppHaveLaunchableActivity);
     }
 }
