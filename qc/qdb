@@ -1,0 +1,100 @@
+#!/bin/bash
+
+set -e
+
+html=0
+output=""
+prefix=""
+time=""
+local=0
+
+verbose=0
+
+filter="cat"
+pager="${QDB_PAGER:-${PAGER:-cat}}"
+
+# Table output mode by default
+sep="〠"
+output="-list -separator $sep"
+filter="column -t -s $sep"
+
+while getopts "lcheqtv" opt; do
+  case "$opt" in
+    l)
+      local=1
+      ;;
+    h)
+      html=1
+      output="-html"
+      filter="cat"
+      pager="${HTML_VIEWER:-$pager}"
+      ;;
+    e)
+      prefix="EXPLAIN "
+      ;;
+    q)
+      prefix="EXPLAIN QUERY PLAN "
+      ;;
+    t) # Run with the time command.
+      time="time"
+      ;;
+    v)
+      verbose=1
+      ;;
+    *)
+      exit 1
+  esac
+done
+shift $(($OPTIND - 1))
+
+db="$1"
+shift
+
+if ! [[ -t 1 ]] ; then
+  pager="cat"
+fi
+
+if (( $verbose )) ; then
+  echo "DB: $db" 1>&2
+fi
+
+query="$*"
+
+run_query() {
+  if (( $local )) ; then
+    test -f "$db" && $time sqlite3 $output -nullvalue "[NULL]" -header "$db" "$prefix$query"
+  else
+    query=$(sed -e "s!'!\'\\\'\'!g" <<<"$query") # Escape for shell
+    adb shell -T "(" test -f "$db" "&&" $time sqlite3 $output -nullvalue "[NULL]" -header "$db" \'"$prefix$query"\' ")" "2>&1"
+  fi
+}
+
+{
+  if (( $html )) ; then
+    cat <<EOF
+<head>
+<style>
+body {
+    font:8pt monospace;
+}
+
+table {
+    border: 1px solid black;
+    border-collapse: collapse;
+}
+</style>
+</head>
+<body>
+<table border="1">
+EOF
+
+    run_query
+
+    cat <<EOF
+</table>
+<body>
+EOF
+  else
+    run_query
+  fi
+} | $filter | $pager
