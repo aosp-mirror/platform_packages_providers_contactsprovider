@@ -140,6 +140,7 @@ import android.util.SparseArray;
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.common.io.MoreCloseables;
+import com.android.internal.R;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.config.appcloning.AppCloningDeviceConfigHelper;
 import com.android.internal.util.ArrayUtils;
@@ -2194,16 +2195,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Returned whether the feature flag for contacts sharing for clone profile is set. If true,
-     * the clone contacts provider would use the parent contacts providers contacts data to serve
-     * its requests.
+     * Returns whether contacts sharing is enabled allowing the clone contacts provider to use the
+     * parent contacts providers contacts data to serve its requests. The method returns true if
+     * the device supports clone profile contacts sharing and the feature flag for the same is
+     * turned on.
+     *
      * @return true/false if contact sharing is enabled/disabled
      */
     @VisibleForTesting
     protected boolean isContactSharingEnabledForCloneProfile() {
-        // TODO(b/253449368): This method should also check for the config controlling
-        // all app-cloning features.
-        return mAppCloningDeviceConfigHelper.getEnableAppCloningBuildingBlocks();
+        return getContext().getResources().getBoolean(R.bool.config_enableAppCloningBuildingBlocks)
+                && mAppCloningDeviceConfigHelper.getEnableAppCloningBuildingBlocks();
     }
 
     /**
