@@ -32,6 +32,7 @@ import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.annotation.WorkerThread;
 import android.app.AppOpsManager;
+import android.app.BroadcastOptions;
 import android.app.SearchManager;
 import android.content.BroadcastReceiver;
 import android.content.ContentProviderOperation;
@@ -2472,6 +2473,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
+    private void notifySimAccountsChanged() {
+        // This allows us to discard older broadcasts still waiting to be delivered.
+        final Bundle options = BroadcastOptions.makeBasic()
+                .setDeliveryGroupPolicy(BroadcastOptions.DELIVERY_GROUP_POLICY_MOST_RECENT)
+                .setDeferralPolicy(BroadcastOptions.DEFERRAL_POLICY_UNTIL_ACTIVE)
+                .toBundle();
+
+        getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED), null,
+                options);
+    }
+
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
         waitForAccess(mReadAccessLatch);
@@ -2529,7 +2541,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             } finally {
                 db.endTransaction();
             }
-            getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
+            notifySimAccountsChanged();
             return response;
         } else if (SimContacts.REMOVE_SIM_ACCOUNT_METHOD.equals(method)) {
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
@@ -2549,7 +2561,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             } finally {
                 db.endTransaction();
             }
-            getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
+            notifySimAccountsChanged();
             return response;
         } else if (SimContacts.QUERY_SIM_ACCOUNTS_METHOD.equals(method)) {
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
