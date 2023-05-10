@@ -29,8 +29,10 @@ import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.annotation.WorkerThread;
 import android.app.AppOpsManager;
+import android.app.BroadcastOptions;
 import android.app.SearchManager;
 import android.content.BroadcastReceiver;
 import android.content.ContentProviderOperation;
@@ -133,10 +135,13 @@ import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
+import android.util.SparseArray;
 
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.common.io.MoreCloseables;
+import com.android.internal.R;
+import com.android.internal.annotations.GuardedBy;
 import com.android.internal.config.appcloning.AppCloningDeviceConfigHelper;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
@@ -285,6 +290,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     /** Rate limit (in milliseconds) for dangling contacts cleanup.  Do it at most once per day. */
     private static final int DANGLING_CONTACTS_CLEANUP_RATE_LIMIT = 24 * 60 * 60 * 1000;
+
+    /** Time after which an entry in the launchable clone packages cache is invalidated and needs to
+     * be refreshed.
+     */
+    private static final int LAUNCHABLE_CLONE_APPS_CACHE_ENTRY_REFRESH_INTERVAL = 10 * 60 * 1000;
+
+    /** This value indicates the frequency of cleanup of the launchable clone apps cache */
+    private static final int LAUNCHABLE_CLONE_APPS_CACHE_CLEANUP_LIMIT = 7 * 24 * 60 * 60 * 1000;
 
     /** Maximum length of a phone number that can be inserted into the database */
     private static final int PHONE_NUMBER_LENGTH_LIMIT = 1000;
@@ -1375,6 +1388,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
         long groupId;
     }
 
+    @VisibleForTesting
+    protected static class LaunchableCloneAppsCacheEntry {
+        boolean doesAppHaveLaunchableActivity;
+        long lastUpdatedAt;
+
+        public LaunchableCloneAppsCacheEntry(boolean doesAppHaveLaunchableActivity,
+                long lastUpdatedAt) {
+            this.doesAppHaveLaunchableActivity = doesAppHaveLaunchableActivity;
+            this.lastUpdatedAt = lastUpdatedAt;
+        }
+    }
+
     /**
      * The thread-local holder of the active transaction.  Shared between this and the profile
      * provider, to keep transactions on both databases synchronized.
@@ -1438,6 +1463,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private ArrayMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache = new ArrayMap<>();
 
     /**
+     * Cache to store info on whether a cloned app has a launchable activity. This will be used to
+     * provide it access to query cross-profile contacts.
+     * The key to this map is the uid of the cloned app. The entries in the cache are refreshed
+     * after {@link LAUNCHABLE_CLONE_APPS_CACHE_ENTRY_REFRESH_INTERVAL} to ensure the uid values
+     * stored in the cache aren't stale.
+     */
+    @VisibleForTesting
+    @GuardedBy("mLaunchableCloneAppsCache")
+    protected final SparseArray<LaunchableCloneAppsCacheEntry> mLaunchableCloneAppsCache =
+            new SparseArray<>();
+
+    /**
      * Sub-provider for handling profile requests against the profile database.
      */
     private ProfileProvider mProfileProvider;
@@ -1487,6 +1524,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private long mLastPhotoCleanup = 0;
 
     private long mLastDanglingContactsCleanup = 0;
+
+    @GuardedBy("mLaunchableCloneAppsCache")
+    private long mLastLaunchableCloneAppsCacheCleanup = 0;
 
     private FastScrollingIndexCache mFastScrollingIndexCache;
 
@@ -1589,7 +1629,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
                 .isPhoneAccountMigrationPending()) {
-            IntentFilter filter = new IntentFilter(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE);
+            IntentFilter filter = new IntentFilter(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
             getContext().registerReceiver(mBroadcastReceiver, filter);
         }
 
@@ -1728,6 +1768,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     PhotoPriorityResolver createPhotoPriorityResolver(Context context) {
         return new PhotoPriorityResolver(context);
+    }
+
+    @VisibleForTesting
+    protected SparseArray<LaunchableCloneAppsCacheEntry> getLaunchableCloneAppsCacheForTesting() {
+        synchronized (mLaunchableCloneAppsCache) {
+            return mLaunchableCloneAppsCache;
+        }
     }
 
     protected void scheduleBackgroundTask(int task) {
@@ -2148,16 +2195,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
-     * Returned whether the feature flag for contacts sharing for clone profile is set. If true,
-     * the clone contacts provider would use the parent contacts providers contacts data to serve
-     * its requests.
+     * Returns whether contacts sharing is enabled allowing the clone contacts provider to use the
+     * parent contacts providers contacts data to serve its requests. The method returns true if
+     * the device supports clone profile contacts sharing and the feature flag for the same is
+     * turned on.
+     *
      * @return true/false if contact sharing is enabled/disabled
      */
     @VisibleForTesting
     protected boolean isContactSharingEnabledForCloneProfile() {
-        // TODO(b/253449368): This method should also check for the config controlling
-        // all app-cloning features.
-        return mAppCloningDeviceConfigHelper.getEnableAppCloningBuildingBlocks();
+        return getContext().getResources().getBoolean(R.bool.config_enableAppCloningBuildingBlocks)
+                && mAppCloningDeviceConfigHelper.getEnableAppCloningBuildingBlocks();
     }
 
     /**
@@ -2427,6 +2475,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
+    private void notifySimAccountsChanged() {
+        // This allows us to discard older broadcasts still waiting to be delivered.
+        final Bundle options = BroadcastOptions.makeBasic()
+                .setDeliveryGroupPolicy(BroadcastOptions.DELIVERY_GROUP_POLICY_MOST_RECENT)
+                .setDeferralPolicy(BroadcastOptions.DEFERRAL_POLICY_UNTIL_ACTIVE)
+                .toBundle();
+
+        getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED), null,
+                options);
+    }
+
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
         waitForAccess(mReadAccessLatch);
@@ -2484,7 +2543,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             } finally {
                 db.endTransaction();
             }
-            getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
+            notifySimAccountsChanged();
             return response;
         } else if (SimContacts.REMOVE_SIM_ACCOUNT_METHOD.equals(method)) {
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
@@ -2504,7 +2563,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             } finally {
                 db.endTransaction();
             }
-            getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
+            notifySimAccountsChanged();
             return response;
         } else if (SimContacts.QUERY_SIM_ACCOUNTS_METHOD.equals(method)) {
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
@@ -5684,17 +5743,50 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     @VisibleForTesting
     protected boolean isAppAllowedToUseParentUsersContacts(@Nullable String packageName) {
-        try {
-            for (String appName: getContext().getResources()
-                    .getStringArray(com.android.internal.R.array.cloneable_apps)) {
-                if (packageName != null && packageName.equals(appName)) {
-                    return true;
-                }
+        final int callingUid = Binder.getCallingUid();
+        final UserHandle user = Binder.getCallingUserHandle();
+
+        synchronized (mLaunchableCloneAppsCache) {
+            maybeCleanupLaunchableCloneAppsCacheLocked();
+
+            final long now = System.currentTimeMillis();
+            LaunchableCloneAppsCacheEntry cacheEntry = mLaunchableCloneAppsCache.get(callingUid);
+            if (cacheEntry == null || ((now - cacheEntry.lastUpdatedAt)
+                    >= LAUNCHABLE_CLONE_APPS_CACHE_ENTRY_REFRESH_INTERVAL)) {
+                boolean result = doesPackageHaveALauncherActivity(packageName, user);
+                mLaunchableCloneAppsCache.put(callingUid,
+                        new LaunchableCloneAppsCacheEntry(result, now));
             }
-        } catch (NotFoundException nfe) {
-            Log.w(TAG, "Resource corresponding to list of cloneable apps not found");
+            return mLaunchableCloneAppsCache.get(callingUid).doesAppHaveLaunchableActivity;
         }
-        return false;
+    }
+
+    /**
+     * Clean up the launchable clone apps cache to ensure it doesn't have any stale entries taking
+     * up additional space. The frequency of the cleanup is governed by {@link
+     * LAUNCHABLE_CLONE_APPS_CACHE_CLEANUP_LIMIT}.
+     */
+    @GuardedBy("mLaunchableCloneAppsCache")
+    private void maybeCleanupLaunchableCloneAppsCacheLocked() {
+        long now = System.currentTimeMillis();
+        if (now - mLastLaunchableCloneAppsCacheCleanup
+                >= LAUNCHABLE_CLONE_APPS_CACHE_CLEANUP_LIMIT) {
+            mLaunchableCloneAppsCache.clear();
+            mLastLaunchableCloneAppsCacheCleanup = now;
+        }
+    }
+
+    @VisibleForTesting
+    @SuppressLint("AndroidFrameworkRequiresPermission")
+    protected boolean doesPackageHaveALauncherActivity(String packageName, UserHandle user) {
+        Intent launcherCategoryIntent = new Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
+                .setPackage(packageName);
+        final PackageManager pm = getContext().getPackageManager();
+        return !pm.queryIntentActivitiesAsUser(launcherCategoryIntent,
+                        PackageManager.ResolveInfoFlags.of(PackageManager.GET_ACTIVITIES),
+                        user)
+                .isEmpty();
     }
 
     private boolean isCrossUserQueryAllowed(Uri uri) {
