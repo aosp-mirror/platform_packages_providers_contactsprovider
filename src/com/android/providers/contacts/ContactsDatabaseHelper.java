@@ -155,7 +155,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1700-1799 V
      * </pre>
      */
-    static final int DATABASE_VERSION = 1700;
+    static final int DATABASE_VERSION = 1701;
     private static final int MINIMUM_SUPPORTED_VERSION = 700;
 
     @VisibleForTesting
@@ -2665,9 +2665,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1604;
         }
 
-        if(isUpgradeRequired(oldVersion, newVersion, 1700)){
+        if (isUpgradeRequired(oldVersion, newVersion, 1700)){
             upgradeToVersion1700(db);
             oldVersion = 1700;
+        }
+
+        if (isUpgradeRequired(oldVersion, newVersion, 1701)) {
+            upgradeLocaleSpecificData = true;
+            oldVersion = 1701;
         }
 
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
@@ -3987,16 +3992,24 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return id;
     }
 
+    public long getMimeTypeIdForStructuredName(SQLiteDatabase db) {
+        return lookupMimeTypeId(db, StructuredName.CONTENT_ITEM_TYPE);
+    }
+
     public long getMimeTypeIdForStructuredName() {
-        return lookupMimeTypeId(getWritableDatabase(), StructuredName.CONTENT_ITEM_TYPE);
+        return getMimeTypeIdForStructuredName(getWritableDatabase());
     }
 
     public long getMimeTypeIdForStructuredPostal() {
         return lookupMimeTypeId(getWritableDatabase(), StructuredPostal.CONTENT_ITEM_TYPE);
     }
 
+    public long getMimeTypeIdForOrganization(SQLiteDatabase db) {
+        return lookupMimeTypeId(db, Organization.CONTENT_ITEM_TYPE);
+    }
+
     public long getMimeTypeIdForOrganization() {
-        return lookupMimeTypeId(getWritableDatabase(), Organization.CONTENT_ITEM_TYPE);
+        return getMimeTypeIdForOrganization(getWritableDatabase());
     }
 
     public long getMimeTypeIdForIm() {
@@ -4831,7 +4844,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     continue;
                 }
 
-                if (mimeType == getMimeTypeIdForStructuredName()) {
+                if (mimeType == getMimeTypeIdForStructuredName(db)) {
                     NameSplitter.Name name;
                     if (bestName != null) {
                         name = new NameSplitter.Name();
@@ -4857,7 +4870,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         bestDisplayNameSource = source;
                         bestName = name;
                     }
-                } else if (mimeType == getMimeTypeIdForOrganization()) {
+                } else if (mimeType == getMimeTypeIdForOrganization(db)) {
                     mCharArrayBuffer.sizeCopied = 0;
                     c.copyStringToBuffer(RawContactNameQuery.DATA1, mCharArrayBuffer);
                     if (mCharArrayBuffer.sizeCopied != 0) {
@@ -4942,11 +4955,17 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             if (displayNameAlternative == null) {
                 displayNameAlternative = bestPhoneticName;
             }
-            // Phonetic names disregard name order so displayNamePrimary and displayNameAlternative
-            // are the same.
-            sortKeyPrimary = sortKeyAlternative = bestPhoneticName;
+            /* Phonetic names disregard name order so displayNamePrimary and displayNameAlternative
+               are the same.
+               Logographic phonetic names(example Japanese), if present, will be used for ordering
+               of contacts in the list. Otherwise, the deduced primary name is used.
+            */
+            sortKeyPrimary = sortKeyAlternative = sortNamePrimary;
             if (bestPhoneticNameStyle == PhoneticNameStyle.UNDEFINED) {
                 bestPhoneticNameStyle = mNameSplitter.guessPhoneticNameStyle(bestPhoneticName);
+            }
+            if (bestPhoneticNameStyle == PhoneticNameStyle.JAPANESE) {
+                sortKeyPrimary = sortKeyAlternative = bestPhoneticName;
             }
         } else {
             bestPhoneticNameStyle = PhoneticNameStyle.UNDEFINED;
