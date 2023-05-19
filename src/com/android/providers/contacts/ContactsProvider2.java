@@ -140,6 +140,7 @@ import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.common.io.MoreCloseables;
 import com.android.internal.R;
 import com.android.internal.annotations.GuardedBy;
+import com.android.internal.config.appcloning.AppCloningDeviceConfigHelper;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
@@ -1537,6 +1538,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private Set<PhoneAccountHandle> mMigratedPhoneAccountHandles;
 
+    private AppCloningDeviceConfigHelper mAppCloningDeviceConfigHelper;
+
     /**
      * Subscription change will trigger ACTION_PHONE_ACCOUNT_REGISTERED that broadcasts new
      * PhoneAccountHandle that is created based on the new subscription. This receiver is used
@@ -1612,6 +1615,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         mFastScrollingIndexCache = FastScrollingIndexCache.getInstance(getContext());
         mSubscriptionManager = getContext().getSystemService(SubscriptionManager.class);
+        mAppCloningDeviceConfigHelper = AppCloningDeviceConfigHelper.getInstance(getContext());
         mContactsHelper = getDatabaseHelper();
         mDbHelper.set(mContactsHelper);
 
@@ -2198,7 +2202,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      */
     @VisibleForTesting
     protected boolean isContactSharingEnabledForCloneProfile() {
-        return getContext().getResources().getBoolean(R.bool.config_enableAppCloningBuildingBlocks);
+        return getContext().getResources().getBoolean(R.bool.config_enableAppCloningBuildingBlocks)
+                && mAppCloningDeviceConfigHelper.getEnableAppCloningBuildingBlocks();
     }
 
     /**
