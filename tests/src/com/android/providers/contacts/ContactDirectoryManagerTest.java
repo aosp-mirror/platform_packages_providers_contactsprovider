@@ -27,7 +27,6 @@ import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Process;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
@@ -552,11 +551,6 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
                         createPackage("test.packageX", "authorityX", false)));
-//        mPackageManager.grantRuntimePermission("test.package1", "android.permission.WRITE_CONTACTS",
-//                Process.myUserHandle());
-//        mPackageManager.grantRuntimePermission("test.package1", "android.permission.READ_CALL_LOG",
-//                Process.myUserHandle());
-
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -591,20 +585,12 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         assertEquals("account-name1", cursor.getString(cursor.getColumnIndex("accountName")));
         assertEquals("account-type1", cursor.getString(cursor.getColumnIndex("accountType")));
         cursor.close();
-//        mPackageManager.revokeRuntimePermission("test.package1", "android.permission.WRITE_CONTACTS",
-//                Process.myUserHandle());
-//        mPackageManager.revokeRuntimePermission("test.package1", "android.permission.READ_CALL_LOG",
-//                Process.myUserHandle());
     }
 
     public void testProjectionPopulated() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
                         createPackage("test.packageX", "authorityX", false)));
-//        mPackageManager.grantRuntimePermission("test.package1", "android.permission.WRITE_CONTACTS",
-//                Process.myUserHandle());
-//        mPackageManager.grantRuntimePermission("test.package1", "android.permission.READ_CALL_LOG",
-//                Process.myUserHandle());
 
         MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
                 MockContactDirectoryProvider.class, "authority1");
@@ -633,10 +619,6 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 AggregationExceptions.RAW_CONTACT_ID1,
                 AggregationExceptions.RAW_CONTACT_ID2,
         });
-//        mPackageManager.revokeRuntimePermission("test.package1", "android.permission.WRITE_CONTACTS",
-//                Process.myUserHandle());
-//        mPackageManager.revokeRuntimePermission("test.package1", "android.permission.READ_CALL_LOG",
-//                Process.myUserHandle());
     }
 
     /**
