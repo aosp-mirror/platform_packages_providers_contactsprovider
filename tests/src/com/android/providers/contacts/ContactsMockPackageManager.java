@@ -156,4 +156,9 @@ public class ContactsMockPackageManager extends MockPackageManager {
             UserHandle user) {
         return new ArrayList<>();
     }
+
+    @Override
+    public int getPackageUid(String packageName, int flags) throws NameNotFoundException {
+        return 123;
+    }
 }
