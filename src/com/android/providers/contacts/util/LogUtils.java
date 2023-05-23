@@ -37,6 +37,8 @@ public class LogUtils {
         int INSERT = 2;
         int UPDATE = 3;
         int DELETE = 4;
+        int CALL = 5;
+        int GAL_CALL = 6;
     }
 
     // Keep in sync with ContactsProviderStatus#TaskType in
@@ -66,6 +68,8 @@ public class LogUtils {
                 .writeInt(logFields.getResultCount())
                 .writeLong(getLatencyMicros(logFields.getStartNanos()))
                 .writeInt(logFields.getTaskType())
+                .writeInt(0) // Not used yet.
+                .writeInt(logFields.getUid())
                 .usePooledBuffer()
                 .build());
     }
