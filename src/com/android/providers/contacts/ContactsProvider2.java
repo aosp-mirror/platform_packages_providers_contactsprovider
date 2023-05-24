@@ -1373,6 +1373,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         String authority;
         String accountName;
         String accountType;
+        String packageName;
     }
 
     /**
@@ -2366,7 +2367,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
         Uri resultUri = null;
 
         try {
@@ -2405,7 +2407,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
         int updates = 0;
 
         try {
@@ -2443,7 +2446,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
         int deletes = 0;
 
         try {
@@ -5661,7 +5665,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
 
         Cursor cursor = null;
         try {
@@ -5960,8 +5965,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (projection == null) {
             projection = getDefaultProjection(uri);
         }
+        int galUid = -1;
+        try {
+            galUid = getContext().getPackageManager().getPackageUid(directoryInfo.packageName,
+                    PackageManager.MATCH_ALL);
+        } catch (NameNotFoundException e) {
+            // Shouldn't happen, but just in case.
+            Log.w(TAG, "getPackageUid() failed", e);
+        }
+        final LogFields.Builder logBuilder = LogFields.Builder.aLogFields()
+                .setApiType(LogUtils.ApiType.GAL_CALL)
+                .setUriType(sUriMatcher.match(uri))
+                .setUid(galUid);
 
-        Cursor cursor;
+        Cursor cursor = null;
         try {
             if (VERBOSE_LOGGING) {
                 Log.v(TAG, "Making directory query: uri=" + directoryUri +
@@ -5979,6 +5996,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         } catch (RuntimeException e) {
             Log.w(TAG, "Directory query failed", e);
             return null;
+        } finally {
+            LogUtils.log(
+                    logBuilder.setResultCount(cursor == null ? 0 : cursor.getCount()).build());
         }
 
         if (cursor.getCount() > 0) {
@@ -6132,7 +6152,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 Directory._ID,
                 Directory.DIRECTORY_AUTHORITY,
                 Directory.ACCOUNT_NAME,
-                Directory.ACCOUNT_TYPE
+                Directory.ACCOUNT_TYPE,
+                Directory.PACKAGE_NAME
         };
 
         public static final int DIRECTORY_ID = 0;
@@ -6158,6 +6179,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         info.authority = cursor.getString(DirectoryQuery.AUTHORITY);
                         info.accountName = cursor.getString(DirectoryQuery.ACCOUNT_NAME);
                         info.accountType = cursor.getString(DirectoryQuery.ACCOUNT_TYPE);
+                        info.packageName =
+                                cursor.getString(cursor.getColumnIndex(Directory.PACKAGE_NAME));
                         mDirectoryCache.put(id, info);
                     }
                 } finally {
