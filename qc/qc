@@ -6,6 +6,8 @@ user_path=data
 file=contacts2.db
 pass=""
 
+adb root && adb wait-for-device
+
 while getopts "theqvpu:" opt; do
   case "$opt" in
     t|h|e|q|v)
