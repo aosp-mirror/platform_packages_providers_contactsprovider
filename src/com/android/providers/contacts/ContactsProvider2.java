@@ -18,8 +18,6 @@ package com.android.providers.contacts;
 
 import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
-import static android.Manifest.permission.READ_CALL_LOG;
-import static android.Manifest.permission.WRITE_CONTACTS;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
@@ -189,6 +187,7 @@ import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.LogFields;
 import com.android.providers.contacts.util.LogUtils;
 import com.android.providers.contacts.util.NeededForTesting;
+import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 import com.android.providers.contacts.util.UserUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
@@ -2368,7 +2367,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
         Uri resultUri = null;
 
         try {
@@ -2407,7 +2407,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
         int updates = 0;
 
         try {
@@ -2445,7 +2446,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
         int deletes = 0;
 
         try {
@@ -4323,6 +4325,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     protected int updateInTransaction(
             Uri uri, ContentValues values, String selection, String[] selectionArgs) {
+
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "updateInTransaction: uri=" + uri +
                     "  selection=[" + selection + "]  args=" + Arrays.toString(selectionArgs) +
@@ -5662,7 +5665,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
 
         Cursor cursor = null;
         try {
@@ -5961,8 +5965,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (projection == null) {
             projection = getDefaultProjection(uri);
         }
+        int galUid = -1;
+        try {
+            galUid = getContext().getPackageManager().getPackageUid(directoryInfo.packageName,
+                    PackageManager.MATCH_ALL);
+        } catch (NameNotFoundException e) {
+            // Shouldn't happen, but just in case.
+            Log.w(TAG, "getPackageUid() failed", e);
+        }
+        final LogFields.Builder logBuilder = LogFields.Builder.aLogFields()
+                .setApiType(LogUtils.ApiType.GAL_CALL)
+                .setUriType(sUriMatcher.match(uri))
+                .setUid(galUid);
 
-        Cursor cursor;
+        Cursor cursor = null;
         try {
             if (VERBOSE_LOGGING) {
                 Log.v(TAG, "Making directory query: uri=" + directoryUri +
@@ -5972,22 +5988,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         "  Caller=" + getCallingPackage() +
                         "  User=" + UserUtils.getCurrentUserHandle(getContext()));
             }
-            final String packageName = directoryInfo.packageName;
-            // enforce permissions
-            final int queryType = sUriMatcher.match(uri);
-            final PackageManager pm = getContext().getPackageManager();
-            if (queryType == PHONE_LOOKUP || queryType == PHONES_FILTER) {
-                if (pm.checkPermission(READ_CALL_LOG, packageName) != PERMISSION_GRANTED) {
-                    Log.w(TAG, "Package " + packageName
-                            + " does not have permission for phone lookup queries.");
-                    return null;
-                }
-            }
-            if (pm.checkPermission(WRITE_CONTACTS, packageName) != PERMISSION_GRANTED) {
-                Log.w(TAG, "Package " + packageName
-                        + " does not have permission for contact lookup queries.");
-                return null;
-            }
             cursor = getContext().getContentResolver().query(
                     directoryUri, projection, selection, selectionArgs, sortOrder);
             if (cursor == null) {
@@ -5996,6 +5996,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         } catch (RuntimeException e) {
             Log.w(TAG, "Directory query failed", e);
             return null;
+        } finally {
+            LogUtils.log(
+                    logBuilder.setResultCount(cursor == null ? 0 : cursor.getCount()).build());
         }
 
         if (cursor.getCount() > 0) {
@@ -6150,7 +6153,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 Directory.DIRECTORY_AUTHORITY,
                 Directory.ACCOUNT_NAME,
                 Directory.ACCOUNT_TYPE,
-                Directory.PACKAGE_NAME,
+                Directory.PACKAGE_NAME
         };
 
         public static final int DIRECTORY_ID = 0;
