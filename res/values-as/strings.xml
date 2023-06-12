@@ -16,7 +16,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core এপসমূহ"</string>
+    <string name="sharedUserLabel" msgid="8024311725474286801">"Android Core এপ্‌সমূহ"</string>
     <string name="app_label" msgid="3389954322874982620">"সম্পৰ্কসমূহৰ ষ্ট’ৰেজ"</string>
     <string name="provider_label" msgid="6012150850819899907">"সম্পর্কবোৰ"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"সম্পৰ্কসূচী আপগ্ৰেড কৰিবলৈ অধিক মেম\'ৰিৰ প্ৰয়োজন।"</string>
