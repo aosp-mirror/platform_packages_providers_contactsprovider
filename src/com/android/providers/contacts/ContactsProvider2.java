@@ -1499,7 +1499,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
-    private CommonNicknameCache mCommonNicknameCache;
     private SearchIndexManager mSearchIndexManager;
 
     private int mProviderStatus = STATUS_NORMAL;
@@ -1677,9 +1676,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public void setNewAggregatorForTest(boolean enabled) {
         mContactAggregator = (enabled)
                 ? new ContactAggregator2(this, mContactsHelper,
-                createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache)
+                createPhotoPriorityResolver(getContext()), mNameSplitter)
                 : new ContactAggregator(this, mContactsHelper,
-                createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache);
+                createPhotoPriorityResolver(getContext()), mNameSplitter);
         mContactAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         initDataRowHandlers(mDataRowHandlers, mContactsHelper, mContactAggregator,
                 mContactsPhotoStore);
@@ -1696,7 +1695,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mNameSplitter = mContactsHelper.createNameSplitter(mCurrentLocales.getPrimaryLocale());
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
         mPostalSplitter = new PostalSplitter(mCurrentLocales.getPrimaryLocale());
-        mCommonNicknameCache = new CommonNicknameCache(mContactsHelper.getReadableDatabase());
         ContactLocaleUtils.setLocales(mCurrentLocales);
 
         int value = android.provider.Settings.Global.getInt(context.getContentResolver(),
@@ -1708,13 +1706,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 : AGGREGATION_ALGORITHM_NEW_VERSION;
         mContactAggregator = (value == 0)
                 ? new ContactAggregator(this, mContactsHelper,
-                        createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache)
+                        createPhotoPriorityResolver(context), mNameSplitter)
                 : new ContactAggregator2(this, mContactsHelper,
-                        createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
+                        createPhotoPriorityResolver(context), mNameSplitter);
 
         mContactAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         mProfileAggregator = new ProfileAggregator(this, mProfileHelper,
-                createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
+                createPhotoPriorityResolver(context), mNameSplitter);
         mProfileAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         mSearchIndexManager = new SearchIndexManager(this);
         mContactsPhotoStore = new PhotoStore(getContext().getFilesDir(), mContactsHelper);
@@ -9829,11 +9827,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         protected void insertNameLookup(long rawContactId, long dataId, int lookupType,
                 String name) {
             mDbHelper.get().insertNameLookup(rawContactId, dataId, lookupType, name);
-        }
-
-        @Override
-        protected String[] getCommonNicknameClusters(String normalizedName) {
-            return mCommonNicknameCache.getCommonNicknameClusters(normalizedName);
         }
     }
 
