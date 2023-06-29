@@ -26,6 +26,7 @@ import com.android.i18n.phonenumbers.NumberParseException;
 import com.android.i18n.phonenumbers.PhoneNumberUtil;
 import com.android.i18n.phonenumbers.Phonenumber.PhoneNumber;
 import com.android.i18n.phonenumbers.geocoding.PhoneNumberOfflineGeocoder;
+import com.android.internal.annotations.VisibleForTesting;
 
 import com.google.android.collect.Sets;
 
@@ -57,8 +58,20 @@ import java.util.Set;
         return sInstance;
     }
 
+    @VisibleForTesting
+    public static DefaultCallLogInsertionHelper getTestInstance(Context context,
+            CountryMonitor countryMonitor) {
+        return new DefaultCallLogInsertionHelper(context, countryMonitor);
+    }
+
+
     private DefaultCallLogInsertionHelper(Context context) {
         mCountryMonitor = new CountryMonitor(context);
+        mLocale = context.getResources().getConfiguration().locale;
+    }
+
+    private DefaultCallLogInsertionHelper(Context context, CountryMonitor countryMonitor) {
+        mCountryMonitor = countryMonitor;
         mLocale = context.getResources().getConfiguration().locale;
     }
 
