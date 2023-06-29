@@ -104,8 +104,6 @@ public class RawContactMatcher {
     static {
         setScoreRange(NameLookupType.NAME_EXACT,
                 NameLookupType.NAME_EXACT, 99, 99);
-        setScoreRange(NameLookupType.NAME_VARIANT,
-                NameLookupType.NAME_VARIANT, 90, 90);
         setScoreRange(NameLookupType.NAME_COLLATION_KEY,
                 NameLookupType.NAME_COLLATION_KEY, 50, 80);
 
