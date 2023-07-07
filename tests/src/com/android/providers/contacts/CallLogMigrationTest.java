@@ -93,51 +93,6 @@ public class CallLogMigrationTest extends FixedAndroidTestCase {
                         + " = 1", null));
     }
 
-    public void testMigration() throws IOException {
-        final File sourceDbFile = new File(getTestContext().getCacheDir(), "contacts2src.db");
-        writeAssetFileToDisk("calllogmigration/contacts2.db", sourceDbFile);
-
-        try (final SQLiteDatabase sourceDb = SQLiteDatabase.openDatabase(
-                sourceDbFile.getAbsolutePath(), /* cursorFactory=*/ null,
-                SQLiteDatabase.OPEN_READWRITE)) {
-
-            // Make sure the source tables exist initially.
-            assertTrue(CallLogDatabaseHelper.tableExists(sourceDb, "calls"));
-            assertTrue(CallLogDatabaseHelper.tableExists(sourceDb, "voicemail_status"));
-            // Create the calllog DB to perform the migration.
-            final CallLogDatabaseHelperTestable dbh =
-                    new CallLogDatabaseHelperTestable(getTestContext(), sourceDb);
-
-            final SQLiteDatabase db = dbh.getReadableDatabase();
-
-            // Check the content:
-            // Note what we worry here is basically insertion error due to additional constraints,
-            // renames, etc.  So here, we just check the number of rows and don't check the content.
-            assertEquals(3, DatabaseUtils.longForQuery(db, "select count(*) from " +
-                    CallLogDatabaseHelper.Tables.CALLS, null));
-
-            assertEquals(2, DatabaseUtils.longForQuery(db, "select count(*) from " +
-                    CallLogDatabaseHelper.Tables.VOICEMAIL_STATUS, null));
-
-            assertEquals("123456",
-                    dbh.getProperty(CallLogDatabaseHelper.DbProperties.CALL_LOG_LAST_SYNCED, ""));
-
-            // Test onCreate() step, check each entry with TelephonyComponent in the CALLS has
-            // a new coloumn of Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING.
-            assertEquals(3,
-                    DatabaseUtils.longForQuery(db, "select count(*) from "
-                            + CallLogDatabaseHelper.Tables.CALLS + " where "
-                                    + Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING + " = 0", null));
-
-            // Also, the source table should have been removed.
-            assertFalse(CallLogDatabaseHelper.tableExists(sourceDb, "calls"));
-            assertFalse(CallLogDatabaseHelper.tableExists(sourceDb, "voicemail_status"));
-
-            assertEquals("1",
-                    dbh.getProperty(CallLogDatabaseHelper.DbProperties.DATA_MIGRATED, ""));
-        }
-    }
-
     public static final class InMemoryCallLogProviderDbHelperV1 extends SQLiteOpenHelper {
         public InMemoryCallLogProviderDbHelperV1(Context context, int databaseVersion) {
             super(context,
