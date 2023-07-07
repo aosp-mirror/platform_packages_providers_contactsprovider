@@ -37,6 +37,8 @@ public class LogUtils {
         int INSERT = 2;
         int UPDATE = 3;
         int DELETE = 4;
+        int CALL = 5;
+        int GAL_CALL = 6;
     }
 
     // Keep in sync with ContactsProviderStatus#TaskType in
@@ -54,7 +56,6 @@ public class LogUtils {
 
     private static final int STATSD_LOG_ATOM_ID = 301;
 
-
     // The write methods must be called in the same order as the order of fields in the
     // atom (frameworks/proto_logging/stats/atoms.proto) definition.
     public static void log(LogFields logFields) {
@@ -67,6 +68,8 @@ public class LogUtils {
                 .writeInt(logFields.getResultCount())
                 .writeLong(getLatencyMicros(logFields.getStartNanos()))
                 .writeInt(logFields.getTaskType())
+                .writeInt(0) // Not used yet.
+                .writeInt(logFields.getUid())
                 .usePooledBuffer()
                 .build());
     }
@@ -92,5 +95,3 @@ public class LogUtils {
         return (SystemClock.elapsedRealtimeNanos() - startNanos) / 1000;
     }
 }
-
-

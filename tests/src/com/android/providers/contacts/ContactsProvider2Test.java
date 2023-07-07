@@ -8163,50 +8163,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals("default", helper.getProperty("existent1", "default"));
     }
 
-    private class VCardTestUriCreator {
-        private String mLookup1;
-        private String mLookup2;
-
-        public VCardTestUriCreator(String lookup1, String lookup2) {
-            super();
-            mLookup1 = lookup1;
-            mLookup2 = lookup2;
-        }
-
-        public Uri getUri1() {
-            return Uri.withAppendedPath(Contacts.CONTENT_VCARD_URI, mLookup1);
-        }
-
-        public Uri getUri2() {
-            return Uri.withAppendedPath(Contacts.CONTENT_VCARD_URI, mLookup2);
-        }
-
-        public Uri getCombinedUri() {
-            return Uri.withAppendedPath(Contacts.CONTENT_MULTI_VCARD_URI,
-                    Uri.encode(mLookup1 + ":" + mLookup2));
-        }
-    }
-
-    private VCardTestUriCreator createVCardTestContacts() {
-        final long rawContactId1 = RawContactUtil.createRawContact(mResolver, mAccount,
-                RawContacts.SOURCE_ID, "4:12");
-        DataUtil.insertStructuredName(mResolver, rawContactId1, "John", "Doe");
-
-        final long rawContactId2 = RawContactUtil.createRawContact(mResolver, mAccount,
-                RawContacts.SOURCE_ID, "3:4%121");
-        DataUtil.insertStructuredName(mResolver, rawContactId2, "Jane", "Doh");
-
-        final long contactId1 = queryContactId(rawContactId1);
-        final long contactId2 = queryContactId(rawContactId2);
-        final Uri contact1Uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId1);
-        final Uri contact2Uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId2);
-        final String lookup1 =
-            Uri.encode(Contacts.getLookupUri(mResolver, contact1Uri).getPathSegments().get(2));
-        final String lookup2 =
-            Uri.encode(Contacts.getLookupUri(mResolver, contact2Uri).getPathSegments().get(2));
-        return new VCardTestUriCreator(lookup1, lookup2);
-    }
-
     public void testQueryMultiVCard() {
         // No need to create any contacts here, because the query for multiple vcards
         // does not go into the database at all
@@ -9688,27 +9644,6 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         return c;
     }
 
-    private String readToEnd(FileInputStream inputStream) {
-        try {
-            System.out.println("DECLARED INPUT STREAM LENGTH: " + inputStream.available());
-            int ch;
-            StringBuilder stringBuilder = new StringBuilder();
-            int index = 0;
-            while (true) {
-                ch = inputStream.read();
-                System.out.println("READ CHARACTER: " + index + " " + ch);
-                if (ch == -1) {
-                    break;
-                }
-                stringBuilder.append((char)ch);
-                index++;
-            }
-            return stringBuilder.toString();
-        } catch (IOException e) {
-            return null;
-        }
-    }
-
     private void assertQueryParameter(String uriString, String parameter, String expectedValue) {
         assertEquals(expectedValue, ContactsProvider2.getQueryParameter(
                 Uri.parse(uriString), parameter));
@@ -9907,25 +9842,5 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
             }
         }
         return false;
-    }
-
-
-    /**
-     * Asserts the equality of two Uri objects, ignoring the order of the query parameters.
-     */
-    public static void assertUriEquals(Uri expected, Uri actual) {
-        assertEquals(expected.getScheme(), actual.getScheme());
-        assertEquals(expected.getAuthority(), actual.getAuthority());
-        assertEquals(expected.getPath(), actual.getPath());
-        assertEquals(expected.getFragment(), actual.getFragment());
-        Set<String> expectedParameterNames = expected.getQueryParameterNames();
-        Set<String> actualParameterNames = actual.getQueryParameterNames();
-        assertEquals(expectedParameterNames.size(), actualParameterNames.size());
-        assertTrue(expectedParameterNames.containsAll(actualParameterNames));
-        for (String parameterName : expectedParameterNames) {
-            assertEquals(expected.getQueryParameter(parameterName),
-                    actual.getQueryParameter(parameterName));
-        }
-
     }
 }
