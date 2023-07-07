@@ -16,8 +16,6 @@
 
 package com.android.providers.contacts;
 
-import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
-
 import android.accounts.Account;
 import android.content.ContentValues;
 import android.content.Context;
@@ -38,9 +36,14 @@ import android.test.mock.MockContentProvider;
 import android.test.suitebuilder.annotation.MediumTest;
 import android.util.Log;
 
+import androidx.test.platform.app.InstrumentationRegistry;
+
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 
 import com.google.android.collect.Lists;
+
+import java.util.Arrays;
+import java.util.Set;
 
 /**
  * Unit tests for {@link ContactDirectoryManager}. Run the test like this:
@@ -634,8 +637,17 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
             return;
         }
 
+        try {
+            InstrumentationRegistry.getInstrumentation().getUiAutomation()
+                    .executeShellCommand("am wait-for-broadcast-idle");
+            Thread.sleep(1000); // wait for the system
+        } catch (Exception ignored) { }
+
         // If installed, getDirectoryProviderPackages() should return it.
-        assertTrue(ContactDirectoryManager.getDirectoryProviderPackages(pm).contains(googleSync));
+        Set<String> dirProviderPackages = ContactDirectoryManager.getDirectoryProviderPackages(pm);
+        assertTrue(googleSync + " package not found in the list of directory provider packages: "
+                        + Arrays.toString(dirProviderPackages.toArray()),
+                        dirProviderPackages.contains(googleSync));
     }
 
     protected PackageInfo createProviderPackage(String packageName, String authority) {
