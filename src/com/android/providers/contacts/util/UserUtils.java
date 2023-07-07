@@ -17,9 +17,12 @@ package com.android.providers.contacts.util;
 
 import com.android.providers.contacts.ContactsProvider2;
 
+import android.annotation.SuppressLint;
 import android.app.admin.DevicePolicyManager;
 import android.content.Context;
 import android.content.pm.UserInfo;
+import android.content.pm.UserProperties;
+import android.os.UserHandle;
 import android.os.UserManager;
 import android.util.Log;
 
@@ -77,5 +80,51 @@ public final class UserUtils {
     public static int getCorpUserId(Context context) {
         final UserInfo ui = getCorpUserInfo(context);
         return ui == null ? -1 : ui.id;
+    }
+
+    @SuppressLint("AndroidFrameworkRequiresPermission")
+    public static boolean shouldUseParentsContacts(Context context) {
+        try {
+            final UserManager userManager = getUserManager(context);
+            final UserProperties userProperties = userManager.getUserProperties(context.getUser());
+            return userProperties.getUseParentsContacts();
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "Trying to fetch user properties for non-existing/partial user "
+                    + context.getUser());
+            return false;
+        }
+    }
+
+    @SuppressLint("AndroidFrameworkRequiresPermission")
+    public static boolean shouldUseParentsContacts(Context context, UserHandle userHandle) {
+        try {
+            final UserManager userManager = getUserManager(context);
+            final UserProperties userProperties = userManager.getUserProperties(userHandle);
+            return userProperties.getUseParentsContacts();
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "Trying to fetch user properties for non-existing/partial user "
+                    + userHandle);
+            return false;
+        }
+    }
+
+    /**
+     * Checks if the input profile user is the parent of the other user
+     * @return True if user1 is the parent profile of user2, false otherwise
+     */
+    @SuppressLint("AndroidFrameworkRequiresPermission")
+    public static boolean isParentUser(Context context, UserHandle user1, UserHandle user2) {
+        if (user1 == null || user2 == null) return false;
+        final UserManager userManager = getUserManager(context);
+        UserInfo parentUserInfo = userManager.getProfileParent(user2.getIdentifier());
+        return parentUserInfo != null
+                && parentUserInfo.getUserHandle() != null
+                && parentUserInfo.getUserHandle().equals(user1);
+    }
+
+    @SuppressLint("AndroidFrameworkRequiresPermission")
+    public static UserInfo getProfileParentUser(Context context) {
+        final UserManager userManager = getUserManager(context);
+        return userManager.getProfileParent(context.getUserId());
     }
 }
