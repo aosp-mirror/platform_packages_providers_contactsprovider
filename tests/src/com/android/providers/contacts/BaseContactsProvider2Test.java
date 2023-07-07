@@ -70,6 +70,8 @@ import com.android.providers.contacts.util.Hex;
 import com.android.providers.contacts.util.MockClock;
 import com.google.android.collect.Sets;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -1381,6 +1383,25 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         assertEquals(timeStamp, time);
     }
 
+    /**
+     * Asserts the equality of two Uri objects, ignoring the order of the query parameters.
+     */
+    protected static void assertUriEquals(Uri expected, Uri actual) {
+        assertEquals(expected.getScheme(), actual.getScheme());
+        assertEquals(expected.getAuthority(), actual.getAuthority());
+        assertEquals(expected.getPath(), actual.getPath());
+        assertEquals(expected.getFragment(), actual.getFragment());
+        Set<String> expectedParameterNames = expected.getQueryParameterNames();
+        Set<String> actualParameterNames = actual.getQueryParameterNames();
+        assertEquals(expectedParameterNames.size(), actualParameterNames.size());
+        assertTrue(expectedParameterNames.containsAll(actualParameterNames));
+        for (String parameterName : expectedParameterNames) {
+            assertEquals(expected.getQueryParameter(parameterName),
+                    actual.getQueryParameter(parameterName));
+        }
+
+    }
+
     protected void setTimeForTest(Long time) {
         Uri uri = Calls.CONTENT_URI.buildUpon()
                 .appendQueryParameter(CallLogProvider.PARAM_KEY_QUERY_FOR_TESTING, "1")
@@ -1398,6 +1419,71 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     protected Uri insertProfileRawContact(ContentValues values) {
         return TestUtils.insertProfileRawContact(mResolver,
                 getContactsProvider().getProfileProviderForTest().getDatabaseHelper(), values);
+    }
+
+    protected class VCardTestUriCreator {
+        private String mLookup1;
+        private String mLookup2;
+
+        public VCardTestUriCreator(String lookup1, String lookup2) {
+            super();
+            mLookup1 = lookup1;
+            mLookup2 = lookup2;
+        }
+
+        public Uri getUri1() {
+            return Uri.withAppendedPath(Contacts.CONTENT_VCARD_URI, mLookup1);
+        }
+
+        public Uri getUri2() {
+            return Uri.withAppendedPath(Contacts.CONTENT_VCARD_URI, mLookup2);
+        }
+
+        public Uri getCombinedUri() {
+            return Uri.withAppendedPath(Contacts.CONTENT_MULTI_VCARD_URI,
+                    Uri.encode(mLookup1 + ":" + mLookup2));
+        }
+    }
+
+    protected VCardTestUriCreator createVCardTestContacts() {
+        final long rawContactId1 = RawContactUtil.createRawContact(mResolver, mAccount,
+                RawContacts.SOURCE_ID, "4:12");
+        DataUtil.insertStructuredName(mResolver, rawContactId1, "John", "Doe");
+
+        final long rawContactId2 = RawContactUtil.createRawContact(mResolver, mAccount,
+                RawContacts.SOURCE_ID, "3:4%121");
+        DataUtil.insertStructuredName(mResolver, rawContactId2, "Jane", "Doh");
+
+        final long contactId1 = queryContactId(rawContactId1);
+        final long contactId2 = queryContactId(rawContactId2);
+        final Uri contact1Uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId1);
+        final Uri contact2Uri = ContentUris.withAppendedId(Contacts.CONTENT_URI, contactId2);
+        final String lookup1 =
+                Uri.encode(Contacts.getLookupUri(mResolver, contact1Uri).getPathSegments().get(2));
+        final String lookup2 =
+                Uri.encode(Contacts.getLookupUri(mResolver, contact2Uri).getPathSegments().get(2));
+        return new VCardTestUriCreator(lookup1, lookup2);
+    }
+
+    protected String readToEnd(FileInputStream inputStream) {
+        try {
+            System.out.println("DECLARED INPUT STREAM LENGTH: " + inputStream.available());
+            int ch;
+            StringBuilder stringBuilder = new StringBuilder();
+            int index = 0;
+            while (true) {
+                ch = inputStream.read();
+                System.out.println("READ CHARACTER: " + index + " " + ch);
+                if (ch == -1) {
+                    break;
+                }
+                stringBuilder.append((char)ch);
+                index++;
+            }
+            return stringBuilder.toString();
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /**
