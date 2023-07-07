@@ -228,7 +228,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
                     if (++opCount >= BULK_INSERTS_PER_YIELD_POINT) {
                         opCount = 0;
                         try {
-                            yield(transaction);
+                            this.yield(transaction);
                         } catch (RuntimeException re) {
                             transaction.markYieldFailed();
                             throw re;
@@ -274,7 +274,7 @@ public abstract class AbstractContactsProvider extends ContentProvider
                         }
                         opCount = 0;
                         try {
-                            if (yield(transaction)) {
+                            if (this.yield(transaction)) {
                                 ypCount++;
                             }
                         } catch (RuntimeException re) {
