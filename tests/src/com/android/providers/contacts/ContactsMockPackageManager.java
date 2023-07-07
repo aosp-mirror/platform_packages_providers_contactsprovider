@@ -152,13 +152,13 @@ public class ContactsMockPackageManager extends MockPackageManager {
     }
 
     @Override
-    public int checkPermission(String permission, String packageName) {
-        return PERMISSION_GRANTED;
-    }
-
-    @Override
     public List<ResolveInfo> queryIntentActivitiesAsUser(Intent intent, ResolveInfoFlags flags,
             UserHandle user) {
         return new ArrayList<>();
+    }
+
+    @Override
+    public int getPackageUid(String packageName, int flags) throws NameNotFoundException {
+        return 123;
     }
 }
