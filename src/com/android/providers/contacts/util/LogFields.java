@@ -37,6 +37,8 @@ public final class LogFields {
 
     private int resultCount;
 
+    private int uid;
+
     public LogFields(
             int apiType, int uriType, int taskType, boolean callerIsSyncAdapter, long startNanos) {
         this.apiType = apiType;
@@ -78,6 +80,10 @@ public final class LogFields {
         return resultCount;
     }
 
+    public int getUid() {
+        return uid;
+    }
+
     public static final class Builder {
         private int apiType;
         private int uriType;
@@ -87,6 +93,8 @@ public final class LogFields {
         private Exception exception;
         private Uri resultUri;
         private int resultCount;
+
+        private int uid;
 
         private Builder() {
         }
@@ -135,12 +143,18 @@ public final class LogFields {
             return this;
         }
 
+        public Builder setUid(int uid) {
+            this.uid = uid;
+            return this;
+        }
+
         public LogFields build() {
             LogFields logFields =
                     new LogFields(apiType, uriType, taskType, callerIsSyncAdapter, startNanos);
             logFields.resultCount = this.resultCount;
             logFields.exception = this.exception;
             logFields.resultUri = this.resultUri;
+            logFields.uid = this.uid;
             return logFields;
         }
     }
