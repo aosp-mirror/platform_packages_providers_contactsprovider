@@ -21,6 +21,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
+import android.database.sqlite.SQLiteCantOpenDatabaseException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.preference.PreferenceManager;
@@ -203,7 +204,6 @@ public class CallLogDatabaseHelper {
                     VoicemailContract.Status.SOURCE_TYPE + " TEXT" +
                     ");");
 
-            migrateFromLegacyTables(db);
         }
 
         @Override
@@ -532,87 +532,6 @@ public class CallLogDatabaseHelper {
         mPhoneAccountHandleMigrationUtils.migrateIccIdToSubId(db);
     }
 
-    /**
-     * Perform the migration from the contacts2.db (of the latest version) to the current calllog/
-     * voicemail status tables.
-     */
-    private void migrateFromLegacyTables(SQLiteDatabase calllog) {
-        final SQLiteDatabase contacts = getContactsWritableDatabaseForMigration();
-
-        if (contacts == null) {
-            Log.w(TAG, "Contacts DB == null, skipping migration. (running tests?)");
-            return;
-        }
-        if (DEBUG) {
-            Log.d(TAG, "migrateFromLegacyTables");
-        }
-
-        if ("1".equals(PropertyUtils.getProperty(calllog, DbProperties.DATA_MIGRATED, ""))) {
-            return;
-        }
-
-        Log.i(TAG, "Migrating from old tables...");
-
-        contacts.beginTransaction();
-        try {
-            if (!tableExists(contacts, LegacyConstants.CALLS_LEGACY)
-                    || !tableExists(contacts, LegacyConstants.VOICEMAIL_STATUS_LEGACY)) {
-                // This is fine on new devices. (or after a "clear data".)
-                Log.i(TAG, "Source tables don't exist.");
-                return;
-            }
-            calllog.beginTransaction();
-            try {
-
-                final ContentValues cv = new ContentValues();
-
-                try (Cursor source = contacts.rawQuery(
-                        "SELECT * FROM " + LegacyConstants.CALLS_LEGACY, null)) {
-                    while (source.moveToNext()) {
-                        cv.clear();
-
-                        DatabaseUtils.cursorRowToContentValues(source, cv);
-
-                        calllog.insertOrThrow(Tables.CALLS, null, cv);
-                    }
-                }
-
-                try (Cursor source = contacts.rawQuery("SELECT * FROM " +
-                        LegacyConstants.VOICEMAIL_STATUS_LEGACY, null)) {
-                    while (source.moveToNext()) {
-                        cv.clear();
-
-                        DatabaseUtils.cursorRowToContentValues(source, cv);
-
-                        calllog.insertOrThrow(Tables.VOICEMAIL_STATUS, null, cv);
-                    }
-                }
-
-                contacts.execSQL("DROP TABLE " + LegacyConstants.CALLS_LEGACY + ";");
-                contacts.execSQL("DROP TABLE " + LegacyConstants.VOICEMAIL_STATUS_LEGACY + ";");
-
-                // Also copy the last sync time.
-                PropertyUtils.setProperty(calllog, DbProperties.CALL_LOG_LAST_SYNCED,
-                        PropertyUtils.getProperty(contacts,
-                                LegacyConstants.CALL_LOG_LAST_SYNCED_LEGACY, null));
-
-                Log.i(TAG, "Migration completed.");
-
-                calllog.setTransactionSuccessful();
-            } finally {
-                calllog.endTransaction();
-            }
-
-            contacts.setTransactionSuccessful();
-        } catch (RuntimeException e) {
-            // We don't want to be stuck here, so we just swallow exceptions...
-            Log.w(TAG, "Exception caught during migration", e);
-        } finally {
-            contacts.endTransaction();
-        }
-        PropertyUtils.setProperty(calllog, DbProperties.DATA_MIGRATED, "1");
-    }
-
     @VisibleForTesting
     static boolean tableExists(SQLiteDatabase db, String table) {
         return DatabaseUtils.longForQuery(db,
@@ -621,9 +540,15 @@ public class CallLogDatabaseHelper {
     }
 
     @VisibleForTesting
-    @Nullable // We return null during tests when migration is not needed.
+    @Nullable // We return null during tests when migration is not needed or database
+              // is unavailable.
     SQLiteDatabase getContactsWritableDatabaseForMigration() {
-        return ContactsDatabaseHelper.getInstance(mContext).getWritableDatabase();
+        try {
+            return ContactsDatabaseHelper.getInstance(mContext).getWritableDatabase();
+        } catch (SQLiteCantOpenDatabaseException e) {
+            Log.i(TAG, "Exception caught during opening database for migration: " + e);
+            return null;
+        }
     }
 
     public PhoneAccountHandleMigrationUtils getPhoneAccountHandleMigrationUtils() {
