@@ -36,7 +36,7 @@ function sqlite3-pull () {
 }
 
 function sqlitebrowser-pull () {
-    dir="$(get-diri $1)"
+    dir="$(get-dir $1)"
     contacts-pull $dir
     sqlitebrowser $dir/$CONTACTS_DB
 }
