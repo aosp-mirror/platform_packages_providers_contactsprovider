@@ -60,6 +60,7 @@ import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.EventLog;
+import android.util.LocalLog;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -314,6 +315,7 @@ public class CallLogProvider extends ContentProvider {
     private VoicemailPermissions mVoicemailPermissions;
     private CallLogInsertionHelper mCallLogInsertionHelper;
     private SubscriptionManager mSubscriptionManager;
+    private LocalLog mLocalLog = new LocalLog(20);
 
     private final ThreadLocal<Boolean> mApplyingBatch = new ThreadLocal<>();
     private final ThreadLocal<Integer> mCallingUid = new ThreadLocal<>();
@@ -751,6 +753,10 @@ public class CallLogProvider extends ContentProvider {
         mCallLogInsertionHelper.addComputedValues(copiedValues);
 
         long rowId = createDatabaseModifier(mCallsInserter).insert(copiedValues);
+        String insertLog = String.format("insert uid/pid=%d/%d, uri=%s, rowId=%d",
+                Binder.getCallingUid(), Binder.getCallingPid(), uri, rowId);
+        Log.i(TAG, insertLog);
+        mLocalLog.log(insertLog);
         if (rowId > 0) {
             return ContentUris.withAppendedId(uri, rowId);
         }
@@ -1376,6 +1382,9 @@ public class CallLogProvider extends ContentProvider {
     @Override
     public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
         mStats.dump(writer, "  ");
+        writer.println();
+        writer.println("Latest call log activity:");
+        mLocalLog.dump(writer);
     }
 
     /**
