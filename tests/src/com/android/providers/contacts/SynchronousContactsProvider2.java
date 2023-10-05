@@ -179,6 +179,11 @@ public class SynchronousContactsProvider2 extends ContactsProvider2 {
     }
 
     @Override
+    protected boolean isContactSharingEnabledForCloneProfile() {
+        return true;
+    }
+
+    @Override
     public boolean isWritableAccountWithDataSet(String accountType) {
         return !READ_ONLY_ACCOUNT_TYPE.equals(accountType);
     }
