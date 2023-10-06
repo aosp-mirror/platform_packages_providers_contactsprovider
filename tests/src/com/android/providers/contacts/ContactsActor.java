@@ -16,6 +16,10 @@
 
 package com.android.providers.contacts;
 
+import static android.content.pm.UserProperties.SHOW_IN_LAUNCHER_WITH_PARENT;
+import static com.android.providers.contacts.ContactsActor.MockUserManager.CLONE_PROFILE_USER;
+import static com.android.providers.contacts.ContactsActor.MockUserManager.PRIMARY_USER;
+
 import static org.mockito.Mockito.when;
 
 import android.accounts.Account;
@@ -25,6 +29,7 @@ import android.accounts.AccountManagerFuture;
 import android.accounts.AuthenticatorException;
 import android.accounts.OnAccountsUpdateListener;
 import android.accounts.OperationCanceledException;
+import android.annotation.NonNull;
 import android.content.ContentProvider;
 import android.content.ContentResolver;
 import android.content.ContentUris;
@@ -37,6 +42,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.content.pm.UserInfo;
+import android.content.pm.UserProperties;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.Cursor;
@@ -170,6 +176,8 @@ public class ContactsActor {
         public static final UserInfo CORP_USER = createUserInfo("corp", 10, 0,
                 UserInfo.FLAG_MANAGED_PROFILE);
         public static final UserInfo SECONDARY_USER = createUserInfo("2nd", 11, 11, 0);
+        public static final UserInfo CLONE_PROFILE_USER = createUserInfo("clone", 12, 0,
+                UserInfo.FLAG_PROFILE);
 
         /** "My" user.  Set it to change the current user. */
         public int myUser = DEFAULT_USER_ID;
@@ -252,6 +260,18 @@ public class ContactsActor {
         @Override
         public boolean isUserRunning(int userId) {
             return true;
+        }
+
+        @Override
+        public UserProperties getUserProperties(@NonNull UserHandle userHandle) {
+            if (CLONE_PROFILE_USER.getUserHandle().equals(userHandle)) {
+                return new UserProperties.Builder()
+                        .setUseParentsContacts(true)
+                        .setShowInLauncher(SHOW_IN_LAUNCHER_WITH_PARENT)
+                        .setStartWithParent(true)
+                        .build();
+            }
+            return new UserProperties.Builder().build();
         }
     }
 
@@ -408,6 +428,15 @@ public class ContactsActor {
                 } else {
                     return DEFAULT_USER_ID;
                 }
+            }
+
+            @Override
+            public UserHandle getUser() {
+                if (mockUserManager != null &&
+                        mockUserManager.getProcessUserId() == CLONE_PROFILE_USER.id) {
+                    return CLONE_PROFILE_USER.getUserHandle();
+                }
+                return PRIMARY_USER.getUserHandle();
             }
 
             @Override
