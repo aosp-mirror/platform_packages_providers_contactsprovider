@@ -21,6 +21,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
+import android.database.sqlite.SQLiteCantOpenDatabaseException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.preference.PreferenceManager;
@@ -539,9 +540,15 @@ public class CallLogDatabaseHelper {
     }
 
     @VisibleForTesting
-    @Nullable // We return null during tests when migration is not needed.
+    @Nullable // We return null during tests when migration is not needed or database
+              // is unavailable.
     SQLiteDatabase getContactsWritableDatabaseForMigration() {
-        return ContactsDatabaseHelper.getInstance(mContext).getWritableDatabase();
+        try {
+            return ContactsDatabaseHelper.getInstance(mContext).getWritableDatabase();
+        } catch (SQLiteCantOpenDatabaseException e) {
+            Log.i(TAG, "Exception caught during opening database for migration: " + e);
+            return null;
+        }
     }
 
     public PhoneAccountHandleMigrationUtils getPhoneAccountHandleMigrationUtils() {
