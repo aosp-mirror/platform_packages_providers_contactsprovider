@@ -55,11 +55,13 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.Settings;
 import android.provider.ContactsContract.StatusUpdates;
 import android.provider.ContactsContract.StreamItems;
-import android.provider.VoicemailContract;
 import android.telephony.SubscriptionManager;
 import android.test.MoreAsserts;
 import android.test.mock.MockContentResolver;
 import android.util.Log;
+
+import androidx.test.platform.app.InstrumentationRegistry;
+
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
@@ -68,7 +70,11 @@ import com.android.providers.contacts.testutil.RawContactUtil;
 import com.android.providers.contacts.testutil.TestUtil;
 import com.android.providers.contacts.util.Hex;
 import com.android.providers.contacts.util.MockClock;
+
 import com.google.android.collect.Sets;
+
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -76,14 +82,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 
 /**
  * A common superclass for {@link ContactsProvider2}-related tests.
@@ -103,6 +105,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     static final String WRITE_VOICEMAIL_PERMISSION =
             "com.android.voicemail.permission.WRITE_VOICEMAIL";
 
+    protected Context mContext;
     protected static final String PACKAGE = "ContactsProvider2Test";
     public static final String READ_ONLY_ACCOUNT_TYPE =
             SynchronousContactsProvider2.READ_ONLY_ACCOUNT_TYPE;
@@ -136,9 +139,11 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
     @Override
     protected void setUp() throws Exception {
         super.setUp();
+        mContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
+
         MockitoAnnotations.initMocks(this);
 
-        mTestContext = new ContextWithServiceOverrides(getContext());
+        mTestContext = new ContextWithServiceOverrides(mContext);
         mTestContext.injectSystemService(SubscriptionManager.class, mSubscriptionManager);
 
         mActor = new ContactsActor(

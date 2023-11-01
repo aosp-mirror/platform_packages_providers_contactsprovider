@@ -9,6 +9,8 @@ android_test {
         "ContactsProviderTestUtils",
         "androidx.test.rules",
         "mockito-target-minus-junit4",
+        "flag-junit",
+        "android.content.pm.flags-aconfig-java",
     ],
     libs: [
         "android.test.runner",
