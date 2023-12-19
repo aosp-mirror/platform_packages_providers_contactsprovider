@@ -23,16 +23,10 @@ import static com.android.providers.contacts.ContactsProvider2.BACKGROUND_TASK_M
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
 
-import android.content.ContentResolver;
-import android.telecom.CallerInfo;
-import com.android.providers.contacts.testutil.CommonDatabaseUtils;
-import com.android.providers.contacts.util.ContactsPermissions;
-import com.android.providers.contacts.util.FileUtilities;
-import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
-
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentProvider;
+import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Intent;
@@ -46,10 +40,17 @@ import android.provider.CallLog.Calls;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
 import android.provider.VoicemailContract.Voicemails;
+import android.telecom.CallerInfo;
 import android.telecom.PhoneAccountHandle;
 import android.telecom.TelecomManager;
 import android.telephony.SubscriptionInfo;
-import android.test.suitebuilder.annotation.MediumTest;
+
+import androidx.test.filters.MediumTest;
+
+import com.android.providers.contacts.testutil.CommonDatabaseUtils;
+import com.android.providers.contacts.util.ContactsPermissions;
+import com.android.providers.contacts.util.FileUtilities;
+import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 
 import org.junit.Assert;
 

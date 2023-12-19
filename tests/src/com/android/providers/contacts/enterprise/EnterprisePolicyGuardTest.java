@@ -15,6 +15,12 @@
  */
 package com.android.providers.contacts.enterprise;
 
+import static android.Manifest.permission.INTERACT_ACROSS_USERS;
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import android.app.admin.DevicePolicyManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -25,21 +31,15 @@ import android.os.UserManager;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.Directory;
 import android.test.mock.MockContext;
-import android.test.suitebuilder.annotation.SmallTest;
+
+import androidx.test.filters.SmallTest;
+
+import com.android.providers.contacts.FixedAndroidTestCase;
 
 import org.mockito.Matchers;
 
 import java.util.Arrays;
 import java.util.List;
-
-import static android.Manifest.permission.INTERACT_ACROSS_USERS;
-import static android.content.pm.PackageManager.PERMISSION_GRANTED;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-import com.android.providers.contacts.FixedAndroidTestCase;
-
 
 /**
  * Unit tests for {@link EnterprisePolicyGuard}.
