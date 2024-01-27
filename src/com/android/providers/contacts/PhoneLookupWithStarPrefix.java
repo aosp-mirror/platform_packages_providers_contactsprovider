@@ -154,7 +154,7 @@ import android.util.Log;
      * Check each phone number in the given cursor to detemine if it's a match with the given phone
      * number. Return the matching ones in a new cursor.
      * @param number phone number to be match
-     * @param cursor contains a series of number s to be match
+     * @param cursor contains a series of numbers to be matched
      * @param defaultCountryIso The lowercase two letter ISO 3166-1 country code. It is recommended
      *                         to pass in {@link TelephonyManager#getNetworkCountryIso()}.
      * @return A new cursor with all matching phone numbers.
@@ -166,19 +166,23 @@ import android.util.Log;
         }
 
         final MatrixCursor matrixCursor = new MatrixCursor(cursor.getColumnNames());
-
-        cursor.moveToPosition(-1);
-        while (cursor.moveToNext()) {
-            final int numberIndex = cursor.getColumnIndex(PhoneLookup.NUMBER);
-            final String numberToMatch = cursor.getString(numberIndex);
-            if (PhoneNumberUtils.areSamePhoneNumber(number, numberToMatch, defaultCountryIso)) {
-                final MatrixCursor.RowBuilder b = matrixCursor.newRow();
-                for (int column = 0; column < cursor.getColumnCount(); column++) {
-                    b.add(cursor.getColumnName(column), cursorValue(cursor, column));
+        try {
+            cursor.moveToPosition(-1);
+            while (cursor.moveToNext()) {
+                final int numberIndex = cursor.getColumnIndex(PhoneLookup.NUMBER);
+                final String numberToMatch = cursor.getString(numberIndex);
+                if (PhoneNumberUtils.areSamePhoneNumber(number, numberToMatch, defaultCountryIso)) {
+                    final MatrixCursor.RowBuilder b = matrixCursor.newRow();
+                    for (int column = 0; column < cursor.getColumnCount(); column++) {
+                        b.add(cursor.getColumnName(column), cursorValue(cursor, column));
+                    }
                 }
             }
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
         }
-
         return matrixCursor;
     }
 }
