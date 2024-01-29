@@ -52,16 +52,6 @@ public class NameLookupBuilderTest extends TestCase {
             return name;
         }
 
-        @Override
-        protected String[] getCommonNicknameClusters(String normalizedName) {
-            if (normalizedName.equals("Bill")) {
-                return new String[] {"*William"};
-            } else if (normalizedName.equals("Al")) {
-                return new String[] {"*Alex", "*Alice"};
-            }
-            return null;
-        }
-
         public String inserted() {
             return sb.toString();
         }
@@ -149,37 +139,6 @@ public class NameLookupBuilderTest extends TestCase {
                 "(1:Biz.Baz.Foo.Bar)(2:BizBazFooBar)" +
                 "(1:Biz.Foo.Baz.Bar)(2:BizFooBazBar)" +
                 "(1:Biz.Foo.Bar.Baz)(2:BizFooBarBaz)", mBuilder.inserted());
-    }
-
-    public void testSingleNickname() {
-        mBuilder.insertNameLookup(0, 0, "Bill", FullNameStyle.UNDEFINED);
-        assertEquals("(0:Bill)(2:Bill)(1:*William)", mBuilder.inserted());
-    }
-
-    public void testSingleNameWithTwoNicknames() {
-        mBuilder.insertNameLookup(0, 0, "Al", FullNameStyle.UNDEFINED);
-        assertEquals("(0:Al)(2:Al)(1:*Alex)(1:*Alice)", mBuilder.inserted());
-    }
-
-    public void testTwoNamesOneOfWhichIsNickname() {
-        mBuilder.insertNameLookup(0, 0, "Foo Al", FullNameStyle.UNDEFINED);
-        assertEquals(
-                "(0:Foo.Al)(2:FooAl)" +
-                "(1:Al.Foo)(2:AlFoo)" +
-                "(1:Foo.*Alex)(1:*Alex.Foo)" +
-                "(1:Foo.*Alice)(1:*Alice.Foo)", mBuilder.inserted());
-    }
-
-    public void testTwoNamesBothNickname() {
-        mBuilder.insertNameLookup(0, 0, "Bill Al", FullNameStyle.UNDEFINED);
-        assertEquals(
-                "(0:Bill.Al)(2:BillAl)" +
-                "(1:Al.Bill)(2:AlBill)" +
-                "(1:*William.Al)(1:Al.*William)" +
-                "(1:*William.*Alex)(1:*Alex.*William)" +
-                "(1:*William.*Alice)(1:*Alice.*William)" +
-                "(1:Bill.*Alex)(1:*Alex.Bill)" +
-                "(1:Bill.*Alice)(1:*Alice.Bill)", mBuilder.inserted());
     }
 
     public void testChineseName() {
