@@ -83,7 +83,7 @@ public class CallLogProviderTest extends BaseContactsProvider2Test {
             Voicemails.DIRTY,
             Voicemails.DELETED};
     /** Total number of columns exposed by call_log provider. */
-    private static final int NUM_CALLLOG_FIELDS = 41;
+    private static final int NUM_CALLLOG_FIELDS = 43;
 
     private static final int MIN_MATCH = 7;
 
