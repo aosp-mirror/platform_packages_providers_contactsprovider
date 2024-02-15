@@ -28,8 +28,8 @@ public class CallLogInsertionHelperTest extends FixedAndroidTestCase {
      * The default insertion helper under test.
      */
     private CallLogInsertionHelper mInsertionHelper =
-            DefaultCallLogInsertionHelper.getInstance(this.getContext());
-
+            DefaultCallLogInsertionHelper.getTestInstance(
+                    this.getTestContext(), new MockCountryMonitor(this.getTestContext()));
     /**
      * Tests cases where valid, normalizable phone numbers are provided.
      */
@@ -66,7 +66,6 @@ public class CallLogInsertionHelperTest extends FixedAndroidTestCase {
         ContentValues values = new ContentValues();
         values.put(Calls.NUMBER, number);
         mInsertionHelper.addComputedValues(values);
-
         assertEquals(expectedNormalized, values.getAsString(Calls.CACHED_NORMALIZED_NUMBER));
     }
 }
