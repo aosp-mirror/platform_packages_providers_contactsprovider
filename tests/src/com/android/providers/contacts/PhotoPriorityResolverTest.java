@@ -16,7 +16,7 @@
 
 package com.android.providers.contacts;
 
-import android.test.suitebuilder.annotation.MediumTest;
+import androidx.test.filters.MediumTest;
 
 /**
  * Unit tests for {@link PhotoPriorityResolver}.
