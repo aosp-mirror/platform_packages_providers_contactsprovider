@@ -38,7 +38,8 @@ import android.provider.ContactsContract.StreamItemPhotos;
 import android.provider.ContactsContract.StreamItems;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
-import android.test.suitebuilder.annotation.LargeTest;
+
+import androidx.test.filters.LargeTest;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregatedPresenceColumns;
@@ -50,7 +51,6 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DirectoryColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.GroupsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
-import com.android.providers.contacts.ContactsDatabaseHelper.NicknameLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PackagesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PhoneLookupColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.PreAuthorizedUris;
