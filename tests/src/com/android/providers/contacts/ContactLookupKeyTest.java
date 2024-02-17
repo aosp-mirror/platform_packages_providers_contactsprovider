@@ -21,7 +21,8 @@ import android.net.Uri;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.RawContacts;
-import android.test.suitebuilder.annotation.MediumTest;
+
+import androidx.test.filters.MediumTest;
 
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.testutil.RawContactUtil;

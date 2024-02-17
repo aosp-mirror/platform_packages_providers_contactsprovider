@@ -16,9 +16,9 @@
 
 package com.android.providers.contacts;
 
-import android.test.suitebuilder.annotation.SmallTest;
 import android.text.TextUtils;
-import android.util.Log;
+
+import androidx.test.filters.SmallTest;
 
 import com.android.providers.contacts.HanziToPinyin.Token;
 
