@@ -30,11 +30,12 @@ import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.Settings;
-import android.test.suitebuilder.annotation.MediumTest;
 
-import com.google.android.collect.Lists;
+import androidx.test.filters.MediumTest;
 
 import com.android.providers.contacts.testutil.RawContactUtil;
+
+import com.google.android.collect.Lists;
 
 import java.util.ArrayList;
 

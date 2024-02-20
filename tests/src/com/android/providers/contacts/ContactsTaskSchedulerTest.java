@@ -15,7 +15,7 @@
  */
 package com.android.providers.contacts;
 
-import android.test.suitebuilder.annotation.LargeTest;
+import androidx.test.filters.LargeTest;
 
 import java.util.ArrayList;
 import java.util.Arrays;

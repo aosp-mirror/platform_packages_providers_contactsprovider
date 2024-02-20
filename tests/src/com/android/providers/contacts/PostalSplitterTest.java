@@ -16,7 +16,7 @@
 
 package com.android.providers.contacts;
 
-import android.test.suitebuilder.annotation.SmallTest;
+import androidx.test.filters.SmallTest;
 
 import com.android.providers.contacts.PostalSplitter.Postal;
 

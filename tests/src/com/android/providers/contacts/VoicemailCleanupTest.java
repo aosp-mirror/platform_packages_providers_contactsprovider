@@ -20,9 +20,8 @@ import android.database.Cursor;
 import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
-import android.test.suitebuilder.annotation.SmallTest;
 
-import com.android.providers.contacts.testutil.TestUtil;
+import androidx.test.filters.SmallTest;
 
 /**
  * Tests for {@link VoicemailCleanupTest}.

@@ -16,13 +16,12 @@
 
 package com.android.providers.contacts;
 
-import android.test.MoreAsserts;
-import android.test.suitebuilder.annotation.SmallTest;
+import androidx.test.filters.SmallTest;
+
+import junit.framework.TestCase;
 
 import java.text.RuleBasedCollator;
 import java.util.Locale;
-
-import junit.framework.TestCase;
 
 /**
  * Unit tests for {@link NameNormalizer}.

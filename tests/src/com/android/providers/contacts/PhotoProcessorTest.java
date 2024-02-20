@@ -20,12 +20,12 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.test.suitebuilder.annotation.SmallTest;
+
+import androidx.test.filters.SmallTest;
 
 import com.android.providers.contacts.tests.R;
 
 import java.io.IOException;
-
 
 /**
  * Tests for {@link PhotoProcessor}.

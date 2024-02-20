@@ -18,8 +18,6 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.TestUtils.cv;
 
-import com.google.android.collect.Lists;
-
 import android.content.ContentProviderOperation;
 import android.content.ContentValues;
 import android.provider.ContactsContract;
@@ -28,8 +26,10 @@ import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Profile;
 import android.provider.ContactsContract.RawContacts;
-import android.test.suitebuilder.annotation.LargeTest;
-import android.util.Log;
+
+import androidx.test.filters.LargeTest;
+
+import com.google.android.collect.Lists;
 
 import java.util.ArrayList;
 

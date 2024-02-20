@@ -16,7 +16,6 @@
 
 package com.android.providers.contacts;
 
-import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 
 import android.accounts.Account;
 import android.content.ContentUris;
@@ -28,10 +27,10 @@ import android.provider.ContactsContract.CommonDataKinds.GroupMembership;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Directory;
-import android.test.suitebuilder.annotation.MediumTest;
+
+import androidx.test.filters.MediumTest;
 
 import com.android.providers.contacts.testutil.RawContactUtil;
-
 
 /**
  * Unit tests for {@link ContactsProvider2}, directory functionality.
