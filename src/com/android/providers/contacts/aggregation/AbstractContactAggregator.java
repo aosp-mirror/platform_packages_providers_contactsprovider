@@ -93,7 +93,6 @@ public abstract class AbstractContactAggregator {
     protected static final String STRUCTURED_NAME_BASED_LOOKUP_SQL =
             NameLookupColumns.NAME_TYPE + " IN ("
                     + NameLookupType.NAME_EXACT + ","
-                    + NameLookupType.NAME_VARIANT + ","
                     + NameLookupType.NAME_COLLATION_KEY + ")";
 
 
@@ -146,7 +145,6 @@ public abstract class AbstractContactAggregator {
     protected final ContactsDatabaseHelper mDbHelper;
     protected PhotoPriorityResolver mPhotoPriorityResolver;
     protected final NameSplitter mNameSplitter;
-    protected final CommonNicknameCache mCommonNicknameCache;
 
     protected boolean mEnabled = true;
 
@@ -274,13 +272,11 @@ public abstract class AbstractContactAggregator {
      */
     public AbstractContactAggregator(ContactsProvider2 contactsProvider,
             ContactsDatabaseHelper contactsDatabaseHelper,
-            PhotoPriorityResolver photoPriorityResolver, NameSplitter nameSplitter,
-            CommonNicknameCache commonNicknameCache) {
+            PhotoPriorityResolver photoPriorityResolver, NameSplitter nameSplitter) {
         mContactsProvider = contactsProvider;
         mDbHelper = contactsDatabaseHelper;
         mPhotoPriorityResolver = photoPriorityResolver;
         mNameSplitter = nameSplitter;
-        mCommonNicknameCache = commonNicknameCache;
 
         SQLiteDatabase db = mDbHelper.getReadableDatabase();
 
@@ -1083,11 +1079,6 @@ public abstract class AbstractContactAggregator {
         public NameLookupSelectionBuilder(NameSplitter splitter, MatchCandidateList candidates) {
             super(splitter);
             this.mNameLookupCandidates = candidates;
-        }
-
-        @Override
-        protected String[] getCommonNicknameClusters(String normalizedName) {
-            return mCommonNicknameCache.getCommonNicknameClusters(normalizedName);
         }
 
         @Override
