@@ -95,6 +95,7 @@ public class ContactsPackageMonitor {
     private void registerReceiver() {
         final IntentFilter filter = new IntentFilter();
 
+        filter.addAction(Intent.ACTION_PACKAGE_UNSTOPPED);
         filter.addAction(Intent.ACTION_PACKAGE_ADDED);
         filter.addAction(Intent.ACTION_PACKAGE_REMOVED);
         filter.addAction(Intent.ACTION_PACKAGE_REPLACED);

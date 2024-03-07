@@ -491,11 +491,6 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableColumn(NameLookupColumns.NAME_TYPE, INTEGER, true, null),
     };
 
-    private static final TableColumn[] NICKNAME_LOOKUP_COLUMNS = new TableColumn[] {
-            new TableColumn(NicknameLookupColumns.NAME, TEXT, false, null),
-            new TableColumn(NicknameLookupColumns.CLUSTER, TEXT, false, null),
-    };
-
     private static final TableColumn[] GROUPS_COLUMNS = new TableColumn[] {
             new TableColumn(Groups._ID, INTEGER, false, null),
             new TableColumn(GroupsColumns.PACKAGE_ID, INTEGER, false, null),
@@ -665,7 +660,6 @@ public class ContactsDatabaseHelperUpgradeTest extends BaseDatabaseHelperUpgrade
             new TableListEntry(Tables.DATA, DATA_COLUMNS),
             new TableListEntry(Tables.PHONE_LOOKUP, PHONE_LOOKUP_COLUMNS),
             new TableListEntry(Tables.NAME_LOOKUP, NAME_LOOKUP_COLUMNS),
-            new TableListEntry(Tables.NICKNAME_LOOKUP, NICKNAME_LOOKUP_COLUMNS),
             new TableListEntry(Tables.GROUPS, GROUPS_COLUMNS),
             new TableListEntry(Tables.AGGREGATION_EXCEPTIONS, AGGREGATION_EXCEPTIONS_COLUMNS),
             new TableListEntry(Tables.VISIBLE_CONTACTS, VISIBLE_CONTACTS_COLUMNS),
