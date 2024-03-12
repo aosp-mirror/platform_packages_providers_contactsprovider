@@ -152,9 +152,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *   1400-1499 Q
      *   1500-1599 S
      *   1600-1699 T
+     *   1700-1799 V
      * </pre>
      */
-    static final int DATABASE_VERSION = 1604;
+    static final int DATABASE_VERSION = 1701;
     private static final int MINIMUM_SUPPORTED_VERSION = 700;
 
     @VisibleForTesting
@@ -882,7 +883,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
         public static boolean isBasedOnStructuredName(int nameLookupType) {
             return nameLookupType == NameLookupType.NAME_EXACT
-                    || nameLookupType == NameLookupType.NAME_VARIANT
                     || nameLookupType == NameLookupType.NAME_COLLATION_KEY;
         }
     }
@@ -890,13 +890,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     private class StructuredNameLookupBuilder extends NameLookupBuilder {
         // NOTE(gilad): Is in intentional that we don't use the declaration on L960?
         private final SQLiteStatement mNameLookupInsert;
-        private final CommonNicknameCache mCommonNicknameCache;
 
         public StructuredNameLookupBuilder(NameSplitter splitter,
-                CommonNicknameCache commonNicknameCache, SQLiteStatement nameLookupInsert) {
+                SQLiteStatement nameLookupInsert) {
 
             super(splitter);
-            this.mCommonNicknameCache = commonNicknameCache;
             this.mNameLookupInsert = nameLookupInsert;
         }
 
@@ -908,11 +906,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 ContactsDatabaseHelper.this.insertNormalizedNameLookup(
                         mNameLookupInsert, rawContactId, dataId, lookupType, name);
             }
-        }
-
-        @Override
-        protected String[] getCommonNicknameClusters(String normalizedName) {
-            return mCommonNicknameCache.getCommonNicknameClusters(normalizedName);
         }
     }
 
@@ -1518,16 +1511,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 NameLookupColumns.RAW_CONTACT_ID +
         ");");
 
-        db.execSQL("CREATE TABLE " + Tables.NICKNAME_LOOKUP + " (" +
-                NicknameLookupColumns.NAME + " TEXT," +
-                NicknameLookupColumns.CLUSTER + " TEXT" +
-        ");");
-
-        db.execSQL("CREATE UNIQUE INDEX nickname_lookup_index ON " + Tables.NICKNAME_LOOKUP + " (" +
-                NicknameLookupColumns.NAME + ", " +
-                NicknameLookupColumns.CLUSTER +
-        ");");
-
         // Groups table.
         db.execSQL("CREATE TABLE " + Tables.GROUPS + " (" +
                 Groups._ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -1631,8 +1614,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         createContactsTriggers(db);
         createContactsIndexes(db, false /* we build stats table later */);
         createPresenceTables(db);
-
-        loadNicknameLookupTable(db);
 
         // Set sequence starts.
         initializeAutoIncrementSequences(db);
@@ -2684,6 +2665,16 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             oldVersion = 1604;
         }
 
+        if (isUpgradeRequired(oldVersion, newVersion, 1700)){
+            upgradeToVersion1700(db);
+            oldVersion = 1700;
+        }
+
+        if (isUpgradeRequired(oldVersion, newVersion, 1701)) {
+            upgradeLocaleSpecificData = true;
+            oldVersion = 1701;
+        }
+
         // We extracted "calls" and "voicemail_status" at this point, but we can't remove them here
         // yet, until CallLogDatabaseHelper moves the data.
 
@@ -2792,7 +2783,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         db.execSQL("DROP INDEX raw_contact_sort_key2_index");
         db.execSQL("DROP INDEX IF EXISTS name_lookup_index");
 
-        loadNicknameLookupTable(db);
         insertNameLookup(db);
         rebuildSortKeys(db);
         createContactsIndexes(db, rebuildSqliteStats);
@@ -2871,8 +2861,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      */
     private void insertStructuredNameLookup(SQLiteDatabase db, SQLiteStatement nameLookupInsert) {
         NameSplitter nameSplitter = createNameSplitter();
-        NameLookupBuilder nameLookupBuilder = new StructuredNameLookupBuilder(nameSplitter,
-                new CommonNicknameCache(db), nameLookupInsert);
+        NameLookupBuilder nameLookupBuilder = new StructuredNameLookupBuilder(
+                nameSplitter, nameLookupInsert);
         final long mimeTypeId = lookupMimeTypeId(db, StructuredName.CONTENT_ITEM_TYPE);
         Cursor cursor = db.query(StructuredNameQuery.TABLE, StructuredNameQuery.COLUMNS,
                 StructuredNameQuery.SELECTION, new String[] {String.valueOf(mimeTypeId)},
@@ -3535,6 +3525,22 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         mPhoneAccountHandleMigrationUtils.migrateIccIdToSubId(db);
     }
 
+    private void upgradeToVersion1700(SQLiteDatabase db) {
+        try {
+            /**
+             * Deprecate nickname database:
+             * Delete the name variant rows and the name variant table itself.
+             */
+            db.execSQL("DROP TABLE " + Tables.NICKNAME_LOOKUP);
+            db.execSQL(
+                    "DELETE FROM " + Tables.NAME_LOOKUP + " WHERE " +
+                            NameLookupColumns.NAME_TYPE + " = " + NameLookupType.NAME_VARIANT);
+        } catch (SQLException ignore) {
+            Log.v(TAG, "Version 1700: Failed to delete NICKNAME_LOOKUP table and "
+                    + "name variant rows from NAME_LOOKUP table");
+        }
+    }
+
     protected void migrateIccIdToSubId() {
         mPhoneAccountHandleMigrationUtils.migrateIccIdToSubId(getWritableDatabase());
     }
@@ -3771,9 +3777,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             updateIndexStats(db, Tables.GROUPS,
                     "groups_source_id_account_id_index", "50 2 2 1 1");
 
-            updateIndexStats(db, Tables.NICKNAME_LOOKUP,
-                    "nickname_lookup_index", "500 2 1");
-
             updateIndexStats(db, Tables.STATUS_UPDATES,
                     null, "100");
 
@@ -3989,16 +3992,24 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return id;
     }
 
+    public long getMimeTypeIdForStructuredName(SQLiteDatabase db) {
+        return lookupMimeTypeId(db, StructuredName.CONTENT_ITEM_TYPE);
+    }
+
     public long getMimeTypeIdForStructuredName() {
-        return lookupMimeTypeId(getWritableDatabase(), StructuredName.CONTENT_ITEM_TYPE);
+        return getMimeTypeIdForStructuredName(getWritableDatabase());
     }
 
     public long getMimeTypeIdForStructuredPostal() {
         return lookupMimeTypeId(getWritableDatabase(), StructuredPostal.CONTENT_ITEM_TYPE);
     }
 
+    public long getMimeTypeIdForOrganization(SQLiteDatabase db) {
+        return lookupMimeTypeId(db, Organization.CONTENT_ITEM_TYPE);
+    }
+
     public long getMimeTypeIdForOrganization() {
-        return lookupMimeTypeId(getWritableDatabase(), Organization.CONTENT_ITEM_TYPE);
+        return getMimeTypeIdForOrganization(getWritableDatabase());
     }
 
     public long getMimeTypeIdForIm() {
@@ -4584,42 +4595,6 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         return String.valueOf(mMinMatch);
     }
 
-    /**
-     * Loads common nickname mappings into the database.
-     */
-    private void loadNicknameLookupTable(SQLiteDatabase db) {
-        db.execSQL("DELETE FROM " + Tables.NICKNAME_LOOKUP);
-
-        String[] strings = mContext.getResources().getStringArray(
-                com.android.internal.R.array.common_nicknames);
-        if (strings == null || strings.length == 0) {
-            return;
-        }
-
-        final SQLiteStatement nicknameLookupInsert = db.compileStatement("INSERT INTO "
-                + Tables.NICKNAME_LOOKUP + "(" + NicknameLookupColumns.NAME + ","
-                + NicknameLookupColumns.CLUSTER + ") VALUES (?,?)");
-
-        try {
-            for (int clusterId = 0; clusterId < strings.length; clusterId++) {
-                String[] names = strings[clusterId].split(",");
-                for (String name : names) {
-                    String normalizedName = NameNormalizer.normalize(name);
-                    try {
-                        nicknameLookupInsert.bindString(1, normalizedName);
-                        nicknameLookupInsert.bindString(2, String.valueOf(clusterId));
-                        nicknameLookupInsert.executeInsert();
-                    } catch (SQLiteException e) {
-                        // Print the exception and keep going (this is not a fatal error).
-                        Log.e(TAG, "Cannot insert nickname: " + name, e);
-                    }
-                }
-            }
-        } finally {
-            nicknameLookupInsert.close();
-        }
-    }
-
     public static void copyStringValue(
             ContentValues toValues, String toKey, ContentValues fromValues, String fromKey) {
 
@@ -4869,7 +4844,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     continue;
                 }
 
-                if (mimeType == getMimeTypeIdForStructuredName()) {
+                if (mimeType == getMimeTypeIdForStructuredName(db)) {
                     NameSplitter.Name name;
                     if (bestName != null) {
                         name = new NameSplitter.Name();
@@ -4895,7 +4870,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         bestDisplayNameSource = source;
                         bestName = name;
                     }
-                } else if (mimeType == getMimeTypeIdForOrganization()) {
+                } else if (mimeType == getMimeTypeIdForOrganization(db)) {
                     mCharArrayBuffer.sizeCopied = 0;
                     c.copyStringToBuffer(RawContactNameQuery.DATA1, mCharArrayBuffer);
                     if (mCharArrayBuffer.sizeCopied != 0) {
@@ -4980,11 +4955,17 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             if (displayNameAlternative == null) {
                 displayNameAlternative = bestPhoneticName;
             }
-            // Phonetic names disregard name order so displayNamePrimary and displayNameAlternative
-            // are the same.
-            sortKeyPrimary = sortKeyAlternative = bestPhoneticName;
+            /* Phonetic names disregard name order so displayNamePrimary and displayNameAlternative
+               are the same.
+               Logographic phonetic names(example Japanese), if present, will be used for ordering
+               of contacts in the list. Otherwise, the deduced primary name is used.
+            */
+            sortKeyPrimary = sortKeyAlternative = sortNamePrimary;
             if (bestPhoneticNameStyle == PhoneticNameStyle.UNDEFINED) {
                 bestPhoneticNameStyle = mNameSplitter.guessPhoneticNameStyle(bestPhoneticName);
+            }
+            if (bestPhoneticNameStyle == PhoneticNameStyle.JAPANESE) {
+                sortKeyPrimary = sortKeyAlternative = bestPhoneticName;
             }
         } else {
             bestPhoneticNameStyle = PhoneticNameStyle.UNDEFINED;

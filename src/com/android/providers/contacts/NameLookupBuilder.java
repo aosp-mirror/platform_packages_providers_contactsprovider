@@ -83,17 +83,6 @@ public abstract class NameLookupBuilder {
             String string);
 
     /**
-     * Returns common nickname cluster IDs for a given name. For example, it
-     * will return the same value for "Robert", "Bob" and "Rob". Some names belong to multiple
-     * clusters, e.g. Leo could be Leonard or Leopold.
-     *
-     * May return null.
-     *
-     * @param normalizedName A normalized first name, see {@link NameNormalizer#normalize}.
-     */
-    protected abstract String[] getCommonNicknameClusters(String normalizedName);
-
-    /**
      * Inserts name lookup records for the given structured name.
      */
     public void insertNameLookup(long rawContactId, long dataId, String name, int fullNameStyle) {
@@ -130,13 +119,7 @@ public abstract class NameLookupBuilder {
             tokenCount = MAX_NAME_TOKENS;
         }
 
-        // Phase I: insert all variants not involving nickname clusters
-        for (int i = 0; i < tokenCount; i++) {
-            mNicknameClusters[i] = getCommonNicknameClusters(mNames[i]);
-        }
-
         insertNameVariants(rawContactId, dataId, 0, tokenCount, !tooManyTokens, true);
-        insertNicknamePermutations(rawContactId, dataId, 0, tokenCount);
     }
 
     public void appendToSearchIndex(IndexBuilder builder, String name, int fullNameStyle) {
@@ -293,30 +276,6 @@ public abstract class NameLookupBuilder {
 
         insertNameLookup(rawContactId, dataId, NameLookupType.NAME_COLLATION_KEY,
                 mStringBuilder.toString());
-    }
-
-    /**
-     * For all tokens that correspond to nickname clusters, substitutes each cluster key
-     * and inserts all permutations with that key.
-     */
-    private void insertNicknamePermutations(long rawContactId, long dataId, int fromIndex,
-            int tokenCount) {
-        for (int i = fromIndex; i < tokenCount; i++) {
-            String[] clusters = mNicknameClusters[i];
-            if (clusters != null) {
-                String token = mNames[i];
-                for (int j = 0; j < clusters.length; j++) {
-                    mNames[i] = clusters[j];
-
-                    // Insert all permutations with this nickname cluster
-                    insertNameVariants(rawContactId, dataId, 0, tokenCount, false, false);
-
-                    // Repeat recursively for other nickname clusters
-                    insertNicknamePermutations(rawContactId, dataId, i + 1, tokenCount);
-                }
-                mNames[i] = token;
-            }
-        }
     }
 
     /**
