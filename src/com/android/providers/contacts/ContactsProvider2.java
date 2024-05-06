@@ -2593,6 +2593,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final String accountType = extras.getString(Settings.ACCOUNT_TYPE);
         final String dataSet = extras.getString(Settings.DATA_SET);
 
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, String.format(
+                    "setDefaultAccountSettings: name = %s, type = %s, data_set = %s",
+                    TextUtils.emptyIfNull(accountName), TextUtils.emptyIfNull(accountType),
+                    TextUtils.emptyIfNull(dataSet)));
+        }
+
         if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
             throw new IllegalArgumentException(
                     "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE");
