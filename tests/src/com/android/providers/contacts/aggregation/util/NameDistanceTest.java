@@ -16,7 +16,7 @@
 
 package com.android.providers.contacts.aggregation.util;
 
-import android.test.suitebuilder.annotation.SmallTest;
+import androidx.test.filters.SmallTest;
 
 import com.android.providers.contacts.NameNormalizer;
 import com.android.providers.contacts.util.Hex;

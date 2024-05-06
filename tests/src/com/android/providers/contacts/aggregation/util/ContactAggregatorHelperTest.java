@@ -17,10 +17,13 @@
 package com.android.providers.contacts.aggregation.util;
 
 import android.test.MoreAsserts;
-import android.test.suitebuilder.annotation.SmallTest;
+
+import androidx.test.filters.SmallTest;
+
 import com.google.android.collect.Sets;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
+
 import junit.framework.TestCase;
 
 import java.util.Arrays;
