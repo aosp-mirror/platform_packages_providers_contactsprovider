@@ -38,10 +38,8 @@ public class ProfileAggregator extends ContactAggregator {
 
     public ProfileAggregator(ContactsProvider2 contactsProvider,
             ContactsDatabaseHelper contactsDatabaseHelper,
-            PhotoPriorityResolver photoPriorityResolver, NameSplitter nameSplitter,
-            CommonNicknameCache commonNicknameCache) {
-        super(contactsProvider, contactsDatabaseHelper, photoPriorityResolver, nameSplitter,
-                commonNicknameCache);
+            PhotoPriorityResolver photoPriorityResolver, NameSplitter nameSplitter) {
+        super(contactsProvider, contactsDatabaseHelper, photoPriorityResolver, nameSplitter);
     }
 
     @Override

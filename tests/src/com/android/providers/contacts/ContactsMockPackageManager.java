@@ -24,6 +24,7 @@ import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.content.res.Resources;
 import android.os.Binder;
+import android.os.UserHandle;
 import android.test.mock.MockPackageManager;
 
 import java.util.ArrayList;
@@ -148,5 +149,23 @@ public class ContactsMockPackageManager extends MockPackageManager {
             }
         }
         return ret;
+    }
+
+    @Override
+    public List<ResolveInfo> queryIntentActivitiesAsUser(Intent intent, ResolveInfoFlags flags,
+            UserHandle user) {
+        return new ArrayList<>();
+    }
+
+    @Override
+    public int getPackageUid(String packageName, int flags) throws NameNotFoundException {
+        return 123;
+    }
+
+    @Override
+    public boolean isPackageStopped(String packageName) throws NameNotFoundException {
+        PackageInfo packageInfo = getPackageInfo(packageName, 0);
+        return packageInfo.applicationInfo != null
+                && ((packageInfo.applicationInfo.flags & ApplicationInfo.FLAG_STOPPED) != 0);
     }
 }
