@@ -18,6 +18,7 @@ android_app {
         "android-common",
         "com.android.vcard",
         "guava",
+        "android.content.pm.flags-aconfig-java",
     ],
 
     // The Jacoco tool analyzes code coverage when running unit tests on the

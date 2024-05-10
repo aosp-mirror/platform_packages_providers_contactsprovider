@@ -22,13 +22,15 @@ import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
-import android.os.Looper;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
+import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.annotation.WorkerThread;
 import android.app.AppOpsManager;
+import android.app.BroadcastOptions;
 import android.app.SearchManager;
 import android.content.BroadcastReceiver;
 import android.content.ContentProviderOperation;
@@ -44,9 +46,11 @@ import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
 import android.content.UriMatcher;
+import android.content.pm.Flags;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ProviderInfo;
+import android.content.pm.UserInfo;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
@@ -69,6 +73,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor.AutoCloseInputStream;
 import android.os.RemoteException;
@@ -129,10 +134,14 @@ import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
+import android.util.SparseArray;
 
 import com.android.common.content.ProjectionMap;
 import com.android.common.content.SyncStateContentProviderHelper;
 import com.android.common.io.MoreCloseables;
+import com.android.internal.R;
+import com.android.internal.annotations.GuardedBy;
+import com.android.internal.config.appcloning.AppCloningDeviceConfigHelper;
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.ContactsDatabaseHelper.AccountsColumns;
@@ -167,7 +176,6 @@ import com.android.providers.contacts.aggregation.AbstractContactAggregator.Aggr
 import com.android.providers.contacts.aggregation.ContactAggregator;
 import com.android.providers.contacts.aggregation.ContactAggregator2;
 import com.android.providers.contacts.aggregation.ProfileAggregator;
-import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
@@ -179,12 +187,9 @@ import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.LogFields;
 import com.android.providers.contacts.util.LogUtils;
 import com.android.providers.contacts.util.NeededForTesting;
-import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 import com.android.providers.contacts.util.UserUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
-
-import libcore.io.IoUtils;
 
 import com.google.android.collect.Lists;
 import com.google.android.collect.Maps;
@@ -192,6 +197,8 @@ import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
+
+import libcore.io.IoUtils;
 
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
@@ -282,6 +289,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
     /** Rate limit (in milliseconds) for dangling contacts cleanup.  Do it at most once per day. */
     private static final int DANGLING_CONTACTS_CLEANUP_RATE_LIMIT = 24 * 60 * 60 * 1000;
 
+    /** Time after which an entry in the launchable clone packages cache is invalidated and needs to
+     * be refreshed.
+     */
+    private static final int LAUNCHABLE_CLONE_APPS_CACHE_ENTRY_REFRESH_INTERVAL = 10 * 60 * 1000;
+
+    /** This value indicates the frequency of cleanup of the launchable clone apps cache */
+    private static final int LAUNCHABLE_CLONE_APPS_CACHE_CLEANUP_LIMIT = 7 * 24 * 60 * 60 * 1000;
+
     /** Maximum length of a phone number that can be inserted into the database */
     private static final int PHONE_NUMBER_LENGTH_LIMIT = 1000;
 
@@ -341,6 +356,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public static final int CONTACTS_ID_PHOTO_CORP = 1027;
     public static final int CONTACTS_ID_DISPLAY_PHOTO_CORP = 1028;
     public static final int CONTACTS_FILTER_ENTERPRISE = 1029;
+    public static final int CONTACTS_ENTERPRISE = 1030;
 
     public static final int RAW_CONTACTS = 2002;
     public static final int RAW_CONTACTS_ID = 2003;
@@ -1206,6 +1222,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/frequent", CONTACTS_FREQUENT);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/delete_usage", CONTACTS_DELETE_USAGE);
 
+        matcher.addURI(ContactsContract.AUTHORITY, "contacts/enterprise", CONTACTS_ENTERPRISE);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter_enterprise",
                 CONTACTS_FILTER_ENTERPRISE);
         matcher.addURI(ContactsContract.AUTHORITY, "contacts/filter_enterprise/*",
@@ -1355,6 +1372,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
         String authority;
         String accountName;
         String accountType;
+        String packageName;
     }
 
     /**
@@ -1366,6 +1384,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
         long accountId;
         String sourceId;
         long groupId;
+    }
+
+    @VisibleForTesting
+    protected static class LaunchableCloneAppsCacheEntry {
+        boolean doesAppHaveLaunchableActivity;
+        long lastUpdatedAt;
+
+        public LaunchableCloneAppsCacheEntry(boolean doesAppHaveLaunchableActivity,
+                long lastUpdatedAt) {
+            this.doesAppHaveLaunchableActivity = doesAppHaveLaunchableActivity;
+            this.lastUpdatedAt = lastUpdatedAt;
+        }
     }
 
     /**
@@ -1431,6 +1461,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private ArrayMap<String, ArrayList<GroupIdCacheEntry>> mGroupIdCache = new ArrayMap<>();
 
     /**
+     * Cache to store info on whether a cloned app has a launchable activity. This will be used to
+     * provide it access to query cross-profile contacts.
+     * The key to this map is the uid of the cloned app. The entries in the cache are refreshed
+     * after {@link LAUNCHABLE_CLONE_APPS_CACHE_ENTRY_REFRESH_INTERVAL} to ensure the uid values
+     * stored in the cache aren't stale.
+     */
+    @VisibleForTesting
+    @GuardedBy("mLaunchableCloneAppsCache")
+    protected final SparseArray<LaunchableCloneAppsCacheEntry> mLaunchableCloneAppsCache =
+            new SparseArray<>();
+
+    /**
      * Sub-provider for handling profile requests against the profile database.
      */
     private ProfileProvider mProfileProvider;
@@ -1456,7 +1498,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
-    private CommonNicknameCache mCommonNicknameCache;
     private SearchIndexManager mSearchIndexManager;
 
     private int mProviderStatus = STATUS_NORMAL;
@@ -1481,6 +1522,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private long mLastDanglingContactsCleanup = 0;
 
+    @GuardedBy("mLaunchableCloneAppsCache")
+    private long mLastLaunchableCloneAppsCacheCleanup = 0;
+
     private FastScrollingIndexCache mFastScrollingIndexCache;
 
     // Stats about FastScrollingIndex.
@@ -1492,6 +1536,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private EnterprisePolicyGuard mEnterprisePolicyGuard;
 
     private Set<PhoneAccountHandle> mMigratedPhoneAccountHandles;
+
+    private AppCloningDeviceConfigHelper mAppCloningDeviceConfigHelper;
 
     /**
      * Subscription change will trigger ACTION_PHONE_ACCOUNT_REGISTERED that broadcasts new
@@ -1568,6 +1614,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         mFastScrollingIndexCache = FastScrollingIndexCache.getInstance(getContext());
         mSubscriptionManager = getContext().getSystemService(SubscriptionManager.class);
+        mAppCloningDeviceConfigHelper = AppCloningDeviceConfigHelper.getInstance(getContext());
         mContactsHelper = getDatabaseHelper();
         mDbHelper.set(mContactsHelper);
 
@@ -1579,7 +1626,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
                 .isPhoneAccountMigrationPending()) {
-            IntentFilter filter = new IntentFilter(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE);
+            IntentFilter filter = new IntentFilter(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
             getContext().registerReceiver(mBroadcastReceiver, filter);
         }
 
@@ -1628,9 +1675,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public void setNewAggregatorForTest(boolean enabled) {
         mContactAggregator = (enabled)
                 ? new ContactAggregator2(this, mContactsHelper,
-                createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache)
+                createPhotoPriorityResolver(getContext()), mNameSplitter)
                 : new ContactAggregator(this, mContactsHelper,
-                createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache);
+                createPhotoPriorityResolver(getContext()), mNameSplitter);
         mContactAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         initDataRowHandlers(mDataRowHandlers, mContactsHelper, mContactAggregator,
                 mContactsPhotoStore);
@@ -1647,7 +1694,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mNameSplitter = mContactsHelper.createNameSplitter(mCurrentLocales.getPrimaryLocale());
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
         mPostalSplitter = new PostalSplitter(mCurrentLocales.getPrimaryLocale());
-        mCommonNicknameCache = new CommonNicknameCache(mContactsHelper.getReadableDatabase());
         ContactLocaleUtils.setLocales(mCurrentLocales);
 
         int value = android.provider.Settings.Global.getInt(context.getContentResolver(),
@@ -1659,13 +1705,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 : AGGREGATION_ALGORITHM_NEW_VERSION;
         mContactAggregator = (value == 0)
                 ? new ContactAggregator(this, mContactsHelper,
-                        createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache)
+                        createPhotoPriorityResolver(context), mNameSplitter)
                 : new ContactAggregator2(this, mContactsHelper,
-                        createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
+                        createPhotoPriorityResolver(context), mNameSplitter);
 
         mContactAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         mProfileAggregator = new ProfileAggregator(this, mProfileHelper,
-                createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
+                createPhotoPriorityResolver(context), mNameSplitter);
         mProfileAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         mSearchIndexManager = new SearchIndexManager(this);
         mContactsPhotoStore = new PhotoStore(getContext().getFilesDir(), mContactsHelper);
@@ -1718,6 +1764,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     PhotoPriorityResolver createPhotoPriorityResolver(Context context) {
         return new PhotoPriorityResolver(context);
+    }
+
+    @VisibleForTesting
+    protected SparseArray<LaunchableCloneAppsCacheEntry> getLaunchableCloneAppsCacheForTesting() {
+        synchronized (mLaunchableCloneAppsCache) {
+            return mLaunchableCloneAppsCache;
+        }
     }
 
     protected void scheduleBackgroundTask(int task) {
@@ -2138,6 +2191,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     /**
+     * Returns whether contacts sharing is enabled allowing the clone contacts provider to use the
+     * parent contacts providers contacts data to serve its requests. The method returns true if
+     * the device supports clone profile contacts sharing and the feature flag for the same is
+     * turned on.
+     *
+     * @return true/false if contact sharing is enabled/disabled
+     */
+    @VisibleForTesting
+    protected boolean isContactSharingEnabledForCloneProfile() {
+        return getContext().getResources().getBoolean(R.bool.config_enableAppCloningBuildingBlocks)
+                && mAppCloningDeviceConfigHelper.getEnableAppCloningBuildingBlocks();
+    }
+
+    /**
      * Maximum dimension (height or width) of photo thumbnails.
      */
     public int getMaxThumbnailDim() {
@@ -2297,7 +2364,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
         Uri resultUri = null;
 
         try {
@@ -2305,6 +2373,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             mContactsHelper.validateContentValues(getCallingPackage(), values);
 
+            if (!areContactWritesEnabled()) {
+                // Returning fake uri since the insert was rejected
+                Log.w(TAG, "Blocked insert with uri [" + uri + "]. Contact writes not enabled "
+                        + "for the user");
+                return rejectInsert(uri, values);
+            }
             if (mapsToProfileDbWithInsertedValues(uri, values)) {
                 switchToProfileMode();
                 resultUri = mProfileProvider.insert(uri, values);
@@ -2330,7 +2404,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
         int updates = 0;
 
         try {
@@ -2339,6 +2414,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
             mContactsHelper.validateContentValues(getCallingPackage(), values);
             mContactsHelper.validateSql(getCallingPackage(), selection);
 
+            if (!areContactWritesEnabled()) {
+                // Returning 0, no rows were updated as writes are disabled
+                Log.w(TAG, "Blocked update with uri [" + uri + "]. Contact writes not enabled "
+                        + "for the user");
+                return 0;
+            }
             if (mapsToProfileDb(uri)) {
                 switchToProfileMode();
                 updates = mProfileProvider.update(uri, values, selection, selectionArgs);
@@ -2362,7 +2443,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
         int deletes = 0;
 
         try {
@@ -2370,6 +2452,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             mContactsHelper.validateSql(getCallingPackage(), selection);
 
+            if (!areContactWritesEnabled()) {
+                // Returning 0, no rows were deleted as writes are disabled
+                Log.w(TAG, "Blocked delete with uri [" + uri + "]. Contact writes not enabled "
+                        + "for the user");
+                return 0;
+            }
             if (mapsToProfileDb(uri)) {
                 switchToProfileMode();
                 deletes = mProfileProvider.delete(uri, selection, selectionArgs);
@@ -2386,9 +2474,25 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
+    private void notifySimAccountsChanged() {
+        // This allows us to discard older broadcasts still waiting to be delivered.
+        final Bundle options = BroadcastOptions.makeBasic()
+                .setDeliveryGroupPolicy(BroadcastOptions.DELIVERY_GROUP_POLICY_MOST_RECENT)
+                .setDeferralPolicy(BroadcastOptions.DEFERRAL_POLICY_UNTIL_ACTIVE)
+                .toBundle();
+
+        getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED), null,
+                options);
+    }
+
     @Override
     public Bundle call(String method, String arg, Bundle extras) {
         waitForAccess(mReadAccessLatch);
+        if (!areContactWritesEnabled()) {
+            // Returning EMPTY Bundle since the call was rejected and no rows were affected
+            Log.w(TAG, "Blocked call to method [" + method + "], not enabled for the user");
+            return Bundle.EMPTY;
+        }
         switchToContactMode();
         if (Authorization.AUTHORIZATION_METHOD.equals(method)) {
             Uri uri = extras.getParcelable(Authorization.KEY_URI_TO_AUTHORIZE);
@@ -2438,7 +2542,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             } finally {
                 db.endTransaction();
             }
-            getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
+            notifySimAccountsChanged();
             return response;
         } else if (SimContacts.REMOVE_SIM_ACCOUNT_METHOD.equals(method)) {
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
@@ -2458,7 +2562,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             } finally {
                 db.endTransaction();
             }
-            getContext().sendBroadcast(new Intent(SimContacts.ACTION_SIM_ACCOUNTS_CHANGED));
+            notifySimAccountsChanged();
             return response;
         } else if (SimContacts.QUERY_SIM_ACCOUNTS_METHOD.equals(method)) {
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
@@ -2556,6 +2660,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             final long now = Clock.getInstance().currentTimeMillis();
             final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
             db.beginTransactionNonExclusive();
+            Cursor cursor =  null;
             try {
                 // First delete any pre-authorization URIs that are no longer valid. Unfortunately,
                 // this operation will grab a write lock for readonly queries. Since this only
@@ -2565,15 +2670,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         new String[]{String.valueOf(now)});
 
                 // Now check to see if the pre-authorized URI map contains the URI.
-                final Cursor c = db.query(Tables.PRE_AUTHORIZED_URIS, null,
+                cursor = db.query(Tables.PRE_AUTHORIZED_URIS, null,
                         PreAuthorizedUris.URI + "=?1",
                         new String[]{uri.toString()}, null, null, null);
-                final boolean isValid = c.getCount() != 0;
+                final boolean isValid = cursor.getCount() != 0;
 
                 db.setTransactionSuccessful();
                 return isValid;
             } finally {
                 db.endTransaction();
+                MoreCloseables.closeQuietly(cursor);
             }
         }
         return false;
@@ -2607,6 +2713,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @Override
     public int bulkInsert(Uri uri, ContentValues[] values) {
         waitForAccess(mWriteAccessLatch);
+        if (!areContactWritesEnabled()) {
+            // Returning 0, no rows were affected since writes are disabled
+            Log.w(TAG, "Blocked bulkInsert with uri [" + uri + "]. Contact writes not enabled "
+                    + "for the user");
+            return 0;
+        }
         return super.bulkInsert(uri, values);
     }
 
@@ -5552,7 +5664,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .setUriType(sUriMatcher.match(uri))
                 .setCallerIsSyncAdapter(readBooleanQueryParameter(
                         uri, ContactsContract.CALLER_IS_SYNCADAPTER, false))
-                .setStartNanos(SystemClock.elapsedRealtimeNanos());
+                .setStartNanos(SystemClock.elapsedRealtimeNanos())
+                .setUid(Binder.getCallingUid());
 
         Cursor cursor = null;
         try {
@@ -5590,8 +5703,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         // If caller does not come from same profile, Check if it's privileged or allowed by
         // enterprise policy
-        if (!queryAllowedByEnterprisePolicy(uri)) {
+        if (!isCrossUserQueryAllowed(uri)) {
             return null;
+        }
+
+        if (shouldRedirectQueryToParentProvider()) {
+            return queryParentProfileContactsProvider(uri, projection, selection, selectionArgs,
+                    sortOrder, cancellationSignal);
         }
 
         // Query the profile DB if appropriate.
@@ -5613,7 +5731,68 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private boolean queryAllowedByEnterprisePolicy(Uri uri) {
+    /**
+     * Check if the query should be redirected to the parent profile's contacts provider.
+     */
+    private boolean shouldRedirectQueryToParentProvider() {
+        return isContactSharingEnabledForCloneProfile() &&
+                UserUtils.shouldUseParentsContacts(getContext()) &&
+                isAppAllowedToUseParentUsersContacts(getCallingPackage());
+    }
+
+    /**
+     * Check if the app with the given package name is allowed to use parent user's contacts to
+     * serve the contacts read queries.
+     */
+    @VisibleForTesting
+    protected boolean isAppAllowedToUseParentUsersContacts(@Nullable String packageName) {
+        final int callingUid = Binder.getCallingUid();
+        final UserHandle user = Binder.getCallingUserHandle();
+
+        synchronized (mLaunchableCloneAppsCache) {
+            maybeCleanupLaunchableCloneAppsCacheLocked();
+
+            final long now = System.currentTimeMillis();
+            LaunchableCloneAppsCacheEntry cacheEntry = mLaunchableCloneAppsCache.get(callingUid);
+            if (cacheEntry == null || ((now - cacheEntry.lastUpdatedAt)
+                    >= LAUNCHABLE_CLONE_APPS_CACHE_ENTRY_REFRESH_INTERVAL)) {
+                boolean result = doesPackageHaveALauncherActivity(packageName, user);
+                mLaunchableCloneAppsCache.put(callingUid,
+                        new LaunchableCloneAppsCacheEntry(result, now));
+            }
+            return mLaunchableCloneAppsCache.get(callingUid).doesAppHaveLaunchableActivity;
+        }
+    }
+
+    /**
+     * Clean up the launchable clone apps cache to ensure it doesn't have any stale entries taking
+     * up additional space. The frequency of the cleanup is governed by {@link
+     * LAUNCHABLE_CLONE_APPS_CACHE_CLEANUP_LIMIT}.
+     */
+    @GuardedBy("mLaunchableCloneAppsCache")
+    private void maybeCleanupLaunchableCloneAppsCacheLocked() {
+        long now = System.currentTimeMillis();
+        if (now - mLastLaunchableCloneAppsCacheCleanup
+                >= LAUNCHABLE_CLONE_APPS_CACHE_CLEANUP_LIMIT) {
+            mLaunchableCloneAppsCache.clear();
+            mLastLaunchableCloneAppsCacheCleanup = now;
+        }
+    }
+
+    @VisibleForTesting
+    @SuppressLint("AndroidFrameworkRequiresPermission")
+    protected boolean doesPackageHaveALauncherActivity(String packageName, UserHandle user) {
+        Intent launcherCategoryIntent = new Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
+                .setPackage(packageName);
+        final PackageManager pm = getContext().getPackageManager();
+        return !pm.queryIntentActivitiesAsUser(launcherCategoryIntent,
+                        PackageManager.ResolveInfoFlags.of(PackageManager.GET_ACTIVITIES),
+                        user)
+                .isEmpty();
+    }
+
+    private boolean isCrossUserQueryAllowed(Uri uri) {
         if (isCallerFromSameUser()) {
             // Caller is on the same user; query allowed.
             return true;
@@ -5621,20 +5800,44 @@ public class ContactsProvider2 extends AbstractContactsProvider
         if (!doesCallerHoldInteractAcrossUserPermission()) {
             // Cross-user and the caller has no INTERACT_ACROSS_USERS; don't allow query.
             // Technically, in a cross-profile sharing case, this would be a valid query.
-            // But for now we don't allow it. (We never allowe it and no one complained about it.)
+            // But for now we don't allow it. (We never allowed it and no one complained about it.)
             return false;
         }
         if (isCallerAnotherSelf()) {
-            // The caller is the other CP2 (which has INTERACT_ACROSS_USERS), meaning the reuest
+            // The caller is the other CP2 (which has INTERACT_ACROSS_USERS), meaning the request
             // is on behalf of a "real" client app.
+
+            if (isContactSharingEnabledForCloneProfile() &&
+                    doesCallingProviderUseCurrentUsersContacts())  {
+                // The caller is the other CP2 (which has INTERACT_ACROSS_USERS), from the child
+                // user (of the current user) profile with the property of using parent's contacts
+                // set.
+                return true;
+            }
             // Consult the enterprise policy.
-            return mEnterprisePolicyGuard.isCrossProfileAllowed(uri);
+            return mEnterprisePolicyGuard.isCrossProfileAllowed(uri, getRealCallerPackageName(uri));
         }
         return true;
     }
 
     private boolean isCallerFromSameUser() {
         return UserHandle.getUserId(Binder.getCallingUid()) == UserHandle.myUserId();
+    }
+
+    /**
+     * Returns true if calling contacts provider instance uses current users contacts.
+     * This can happen when the current user is the parent of the calling user and the calling user
+     * has the corresponding user property to use parent's contacts set. Please note that this
+     * cross-profile contact access will only be allowed if the call is redirected from the child
+     * user's CP2.
+     */
+    private boolean doesCallingProviderUseCurrentUsersContacts() {
+        UserHandle callingUserHandle = UserHandle.getUserHandleForUid(Binder.getCallingUid());
+        UserHandle currentUserHandle = android.os.Process.myUserHandle();
+        boolean isCallerFromSameUser = callingUserHandle.equals(currentUserHandle);
+        return isCallerFromSameUser ||
+                (UserUtils.shouldUseParentsContacts(getContext(), callingUserHandle) &&
+                UserUtils.isParentUser(getContext(), currentUserHandle, callingUserHandle));
     }
 
     /**
@@ -5655,7 +5858,19 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 || context.checkCallingPermission(INTERACT_ACROSS_USERS) == PERMISSION_GRANTED;
     }
 
-    private Cursor queryDirectoryIfNecessary(Uri uri, String[] projection, String selection,
+    /**
+     * Returns true if the contact writes are enabled for the current instance of ContactsProvider.
+     * The ContactsProvider instance running in the clone profile should block inserts, updates
+     * and deletes and hence should return false.
+     */
+    @VisibleForTesting
+    protected boolean areContactWritesEnabled() {
+        return !isContactSharingEnabledForCloneProfile() ||
+                !UserUtils.shouldUseParentsContacts(getContext());
+    }
+
+    @VisibleForTesting
+    protected Cursor queryDirectoryIfNecessary(Uri uri, String[] projection, String selection,
             String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
         String directory = getQueryParameter(uri, ContactsContract.DIRECTORY_PARAM_KEY);
         final long directoryId =
@@ -5703,14 +5918,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
             final String passedPackage = queryUri.getQueryParameter(
                     Directory.CALLER_PACKAGE_PARAM_KEY);
             if (TextUtils.isEmpty(passedPackage)) {
-                Log.wtfStack(TAG,
-                        "Cross-profile query with no " + Directory.CALLER_PACKAGE_PARAM_KEY);
-                return "UNKNOWN";
+                throw new IllegalArgumentException(
+                        "Cross-profile query with no " + Directory.CALLER_PACKAGE_PARAM_KEY
+                                + " param. Uri: " + queryUri);
             }
             return passedPackage;
         } else {
             // Otherwise, just return the real calling package name.
-            return getCallingPackage();
+            return getCallingPackageUnchecked();
         }
     }
 
@@ -5722,6 +5937,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Log.e(TAG, "Invalid directory ID");
             return null;
         }
+
+        if (projection == null) {
+            projection = getDefaultProjection(uri);
+        }
+
+        // Handle directories in stopped state
+        try {
+            if (Flags.stayStopped()
+                    && getContext().getPackageManager()
+                                   .isPackageStopped(directoryInfo.packageName)) {
+                return new MatrixCursor(projection, 0);
+            }
+        } catch (NameNotFoundException e) {
+            Log.w(TAG, "Package name " + directoryInfo.packageName + " not found");
+        }
+
 
         Builder builder = new Uri.Builder();
         builder.scheme(ContentResolver.SCHEME_CONTENT);
@@ -5746,11 +5977,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         Uri directoryUri = builder.build();
 
-        if (projection == null) {
-            projection = getDefaultProjection(uri);
+        int galUid = -1;
+        try {
+            galUid = getContext().getPackageManager().getPackageUid(directoryInfo.packageName,
+                    PackageManager.MATCH_ALL);
+        } catch (NameNotFoundException e) {
+            // Shouldn't happen, but just in case.
+            Log.w(TAG, "getPackageUid() failed", e);
         }
+        final LogFields.Builder logBuilder = LogFields.Builder.aLogFields()
+                .setApiType(LogUtils.ApiType.GAL_CALL)
+                .setUriType(sUriMatcher.match(uri))
+                .setUid(galUid);
 
-        Cursor cursor;
+        Cursor cursor = null;
         try {
             if (VERBOSE_LOGGING) {
                 Log.v(TAG, "Making directory query: uri=" + directoryUri +
@@ -5768,6 +6008,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         } catch (RuntimeException e) {
             Log.w(TAG, "Directory query failed", e);
             return null;
+        } finally {
+            LogUtils.log(
+                    logBuilder.setResultCount(cursor == null ? 0 : cursor.getCount()).build());
         }
 
         if (cursor.getCount() > 0) {
@@ -5804,11 +6047,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return createEmptyCursor(localUri, projection);
         }
         // Make sure authority is CP2 not other providers
-        if (!ContactsContract.AUTHORITY.equals(localUri.getAuthority())) {
-            Log.w(TAG, "Invalid authority: " + localUri.getAuthority());
-            throw new IllegalArgumentException(
-                    "Authority " + localUri.getAuthority() + " is not a valid CP2 authority.");
-        }
+        validateAuthority(localUri.getAuthority());
         // Add the "user-id @" to the URI, and also pass the caller package name.
         final Uri remoteUri = maybeAddUserId(localUri, corpUserId).buildUpon()
                 .appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY, getCallingPackage())
@@ -5819,6 +6058,69 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return createEmptyCursor(localUri, projection);
         }
         return cursor;
+    }
+
+    private Uri getParentProviderUri(Uri uri, @NonNull UserInfo parentUserInfo) {
+        // Add the "user-id @" of the parent to the URI
+        final Builder remoteUriBuilder =
+                maybeAddUserId(uri, parentUserInfo.getUserHandle().getIdentifier())
+                        .buildUpon();
+        // Pass the caller package name query param and build the uri
+        return remoteUriBuilder
+                .appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY,
+                        getRealCallerPackageName(uri))
+                .build();
+    }
+
+    protected AssetFileDescriptor openAssetFileThroughParentProvider(Uri uri, String mode)
+            throws FileNotFoundException {
+        final UserInfo parentUserInfo = UserUtils.getProfileParentUser(getContext());
+        if (parentUserInfo == null) {
+            return null;
+        }
+        validateAuthority(uri.getAuthority());
+        final Uri remoteUri = getParentProviderUri(uri, parentUserInfo);
+        return getContext().getContentResolver().openAssetFile(remoteUri, mode, null);
+    }
+
+    /**
+     * A helper function to query parent CP2, should only be called from users that are allowed to
+     * use parents contacts
+     */
+    @VisibleForTesting
+    protected Cursor queryParentProfileContactsProvider(Uri uri, String[] projection,
+            String selection, String[] selectionArgs, String sortOrder,
+            CancellationSignal cancellationSignal) {
+        final UserInfo parentUserInfo = UserUtils.getProfileParentUser(getContext());
+        if (parentUserInfo == null) {
+            return createEmptyCursor(uri, projection);
+        }
+        // Make sure authority is CP2 not other providers
+        validateAuthority(uri.getAuthority());
+        Cursor cursor = queryContactsProviderForUser(uri, projection, selection, selectionArgs,
+                sortOrder, cancellationSignal, parentUserInfo);
+        if (cursor == null) {
+            Log.w(TAG, "null cursor returned from primary CP2");
+            return createEmptyCursor(uri, projection);
+        }
+        return cursor;
+    }
+
+    @VisibleForTesting
+    protected Cursor queryContactsProviderForUser(Uri uri, String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal,
+            UserInfo parentUserInfo) {
+        final Uri remoteUri = getParentProviderUri(uri, parentUserInfo);
+        return getContext().getContentResolver().query(remoteUri, projection, selection,
+                selectionArgs, sortOrder, cancellationSignal);
+    }
+
+    private void validateAuthority(String authority) {
+        if (!ContactsContract.AUTHORITY.equals(authority)) {
+            Log.w(TAG, "Invalid authority: " + authority);
+            throw new IllegalArgumentException(
+                    "Authority " + authority + " is not a valid CP2 authority.");
+        }
     }
 
     private Cursor addSnippetExtrasToCursor(Uri uri, Cursor cursor) {
@@ -5862,7 +6164,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 Directory._ID,
                 Directory.DIRECTORY_AUTHORITY,
                 Directory.ACCOUNT_NAME,
-                Directory.ACCOUNT_TYPE
+                Directory.ACCOUNT_TYPE,
+                Directory.PACKAGE_NAME
         };
 
         public static final int DIRECTORY_ID = 0;
@@ -5888,6 +6191,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         info.authority = cursor.getString(DirectoryQuery.AUTHORITY);
                         info.accountName = cursor.getString(DirectoryQuery.ACCOUNT_NAME);
                         info.accountType = cursor.getString(DirectoryQuery.ACCOUNT_TYPE);
+                        info.packageName =
+                                cursor.getString(cursor.getColumnIndex(Directory.PACKAGE_NAME));
                         mDirectoryCache.put(id, info);
                     }
                 } finally {
@@ -6341,8 +6646,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         new Object[] {getMaxDisplayPhotoDim(), getMaxThumbnailDim()});
             }
             case PHONES_ENTERPRISE: {
-                ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
-                        INTERACT_ACROSS_USERS);
                 return queryMergedDataPhones(uri, projection, selection, selectionArgs, sortOrder,
                         cancellationSignal);
             }
@@ -6510,6 +6813,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 }
                 break;
             }
+            case CONTACTS_ENTERPRISE:
+                return queryMergedContacts(projection, selection, selectionArgs, sortOrder,
+                        cancellationSignal);
             case PHONES_FILTER_ENTERPRISE:
             case CALLABLES_FILTER_ENTERPRISE:
             case EMAILS_FILTER_ENTERPRISE:
@@ -6962,7 +7268,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     } finally {
                         if (!foundResult) {
                             // We'll be returning a different cursor, so close this one.
-                            cursor.close();
+                            MoreCloseables.closeQuietly(cursor);
                         }
                     }
                 }
@@ -7154,11 +7460,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // This method will return either primary directory or enterprise directory
                 final long inputDirectoryId = ContentUris.parseId(uri);
                 if (Directory.isEnterpriseDirectoryId(inputDirectoryId)) {
-                    final Cursor cursor = queryCorpContactsProvider(
-                            ContentUris.withAppendedId(Directory.CONTENT_URI,
-                            inputDirectoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE),
-                            projection, selection, selectionArgs, sortOrder, cancellationSignal);
-                    return rewriteCorpDirectories(cursor);
+                    Cursor cursor = null;
+                    try {
+                        cursor = queryCorpContactsProvider(
+                                ContentUris.withAppendedId(Directory.CONTENT_URI,
+                                inputDirectoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE),
+                                projection, selection, selectionArgs, sortOrder, cancellationSignal);
+                        return rewriteCorpDirectories(cursor);
+                    } finally {
+                        MoreCloseables.closeQuietly(cursor);
+                    }
                 } else {
                     // As it is not an enterprise directory id, fall back to original API
                     final Uri localUri = ContentUris.withAppendedId(Directory.CONTENT_URI,
@@ -7273,8 +7584,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             final Cursor[] cursorArray = new Cursor[] {
                     primaryCursor, rewriteCorpDirectories(corpCursor)
             };
-            final MergeCursor mergeCursor = new MergeCursor(cursorArray);
-            return mergeCursor;
+            return new MergeCursor(cursorArray);
         } catch (Throwable th) {
             if (primaryCursor != null) {
                 primaryCursor.close();
@@ -7284,6 +7594,35 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (corpCursor != null) {
                 corpCursor.close();
             }
+        }
+    }
+
+    /**
+     * Handles {@link Contacts#ENTERPRISE_CONTENT_URI}.
+     */
+    private Cursor queryMergedContacts(String[] projection, String selection,
+            String[] selectionArgs, String sortOrder, CancellationSignal cancellationSignal) {
+        final Uri localUri = Contacts.CONTENT_URI;
+        final Cursor primaryCursor = queryLocal(localUri, projection, selection, selectionArgs,
+                sortOrder, Directory.DEFAULT, cancellationSignal);
+        try {
+            final int managedUserId = UserUtils.getCorpUserId(getContext());
+            if (managedUserId < 0) {
+                // No managed profile or policy not allowed
+                return primaryCursor;
+            }
+            final Cursor managedCursor = queryCorpContacts(localUri, projection, selection,
+                    selectionArgs, sortOrder, new String[] {Contacts._ID},
+                    Directory.ENTERPRISE_DEFAULT, cancellationSignal);
+            final Cursor[] cursorArray = new Cursor[] {
+                    primaryCursor, managedCursor
+            };
+            return new MergeCursor(cursorArray);
+        } catch (Throwable th) {
+            if (primaryCursor != null) {
+                primaryCursor.close();
+            }
+            throw th;
         }
     }
 
@@ -7310,8 +7649,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final Cursor primaryCursor = queryLocal(localUri, projection, selection, selectionArgs,
                 sortOrder, directoryId, null);
         try {
-            // PHONES_ENTERPRISE should not be guarded by EnterprisePolicyGuard as Bluetooth app is
-            // responsible to guard it.
             final int corpUserId = UserUtils.getCorpUserId(getContext());
             if (corpUserId < 0) {
                 // No Corp user or policy not allowed
@@ -7321,21 +7658,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
             final Cursor managedCursor = queryCorpContacts(localUri, projection, selection,
                     selectionArgs, sortOrder, new String[] {RawContacts.CONTACT_ID}, null,
                     cancellationSignal);
-            if (managedCursor == null) {
-                // No corp results.  Just return the local result.
-                return primaryCursor;
-            }
             final Cursor[] cursorArray = new Cursor[] {
                     primaryCursor, managedCursor
             };
-            // Sort order is not supported yet, will be fixed in M when we have
-            // merged provider
-            // MergeCursor will copy all the contacts from two cursors, which may
-            // cause OOM if there's a lot of contacts. But it's only used by
-            // Bluetooth, and Bluetooth will loop through the Cursor and put all
-            // content in ArrayList anyway, so we ignore OOM issue here for now
-            final MergeCursor mergeCursor = new MergeCursor(cursorArray);
-            return mergeCursor;
+            return new MergeCursor(cursorArray);
         } catch (Throwable th) {
             if (primaryCursor != null) {
                 primaryCursor.close();
@@ -7638,11 +7964,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         lookupQb.appendWhere(contactIdColumn + "=? AND " + lookupKeyColumn + "=?");
         Cursor c = doQuery(db, lookupQb, projection, selection, args, sortOrder,
                 groupBy, null, limit, cancellationSignal);
-        if (c.getCount() != 0) {
+        if (c != null && c.getCount() != 0) {
             return c;
         }
-
-        c.close();
+        MoreCloseables.closeQuietly(c);
         return null;
     }
 
@@ -8702,13 +9027,25 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public AssetFileDescriptor openAssetFile(Uri uri, String mode) throws FileNotFoundException {
         boolean success = false;
         try {
+            if (!mode.equals("r") && !areContactWritesEnabled()) {
+                Log.w(TAG, "Blocked openAssetFile with uri [" + uri + "]. Contact writes not "
+                        + "enabled for the user");
+                return null;
+            }
             if (!isDirectoryParamValid(uri)){
                 return null;
             }
-            if (!queryAllowedByEnterprisePolicy(uri)) {
+            if (!isCrossUserQueryAllowed(uri)) {
                 return null;
             }
             waitForAccess(mode.equals("r") ? mReadAccessLatch : mWriteAccessLatch);
+
+            // Redirect reads to parent provider if the corresponding user property is set and app
+            // is allow-listed to access parent's contacts
+            if (mode.equals("r") && shouldRedirectQueryToParentProvider()) {
+                return openAssetFileThroughParentProvider(uri, mode);
+            }
+
             final AssetFileDescriptor ret;
             if (mapsToProfileDb(uri)) {
                 switchToProfileMode();
@@ -9022,6 +9359,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             builder.encodedPath(uri.getEncodedPath());
             builder.appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY,
                     String.valueOf(directoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE));
+            builder.appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY,
+                    getRealCallerPackageName(uri));
             addQueryParametersFromUri(builder, uri, MODIFIED_KEY_SET_FOR_ENTERPRISE_FILTER);
 
             // If work profile is not available, it will throw FileNotFoundException
@@ -9075,12 +9414,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
             throw new FileNotFoundException(uri.toString());
         }
         // Convert the URI into:
-        // content://USER@com.android.contacts/contacts_corp/ID/{photo,display_photo}
+        // content://USER@com.android.contacts/contacts/ID/{photo,display_photo}
         // If work profile is not available, it will throw FileNotFoundException
         final Uri corpUri = maybeAddUserId(
                 ContentUris.appendId(Contacts.CONTENT_URI.buildUpon(), contactId)
                         .appendPath(displayPhoto ?
                                 Contacts.Photo.DISPLAY_PHOTO : Contacts.Photo.CONTENT_DIRECTORY)
+                        .appendQueryParameter(Directory.CALLER_PACKAGE_PARAM_KEY,
+                                getRealCallerPackageName(uri))
                         .build(), corpUserId);
 
         // TODO Make sure it doesn't leak any FDs.
@@ -9504,11 +9845,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         protected void insertNameLookup(long rawContactId, long dataId, int lookupType,
                 String name) {
             mDbHelper.get().insertNameLookup(rawContactId, dataId, lookupType, name);
-        }
-
-        @Override
-        protected String[] getCommonNicknameClusters(String normalizedName) {
-            return mCommonNicknameCache.getCommonNicknameClusters(normalizedName);
         }
     }
 
