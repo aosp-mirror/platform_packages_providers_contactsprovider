@@ -21,6 +21,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
+import android.database.SQLException;
 import android.database.sqlite.SQLiteCantOpenDatabaseException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
@@ -50,7 +51,7 @@ public class CallLogDatabaseHelper {
     private static final String TAG = "CallLogDatabaseHelper";
 
     @VisibleForTesting
-    static final int DATABASE_VERSION = 11;
+    static final int DATABASE_VERSION = 12;
 
     private static final boolean DEBUG = false; // DON'T SUBMIT WITH TRUE
 
@@ -173,6 +174,9 @@ public class CallLogDatabaseHelper {
                     Calls.LOCATION + " TEXT," +
                     Calls.COMPOSER_PHOTO_URI + " TEXT," +
                     Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING + " INTEGER NOT NULL DEFAULT 0," +
+                    Calls.IS_BUSINESS_CALL + " INTEGER NOT NULL DEFAULT 0," +
+                    Calls.ASSERTED_DISPLAY_NAME + " TEXT," +
+
                     Voicemails._DATA + " TEXT," +
                     Voicemails.HAS_CONTENT + " INTEGER," +
                     Voicemails.MIME_TYPE + " TEXT," +
@@ -250,6 +254,10 @@ public class CallLogDatabaseHelper {
 
             if (oldVersion < 11) {
                 upgradeToVersion11(db);
+            }
+
+            if (oldVersion < 12) {
+                upgradeToVersion12(db);
             }
         }
 
@@ -530,6 +538,15 @@ public class CallLogDatabaseHelper {
                 + " INTEGER NOT NULL DEFAULT 0");
         mPhoneAccountHandleMigrationUtils.markAllTelephonyPhoneAccountsPendingMigration(db);
         mPhoneAccountHandleMigrationUtils.migrateIccIdToSubId(db);
+    }
+
+    private void upgradeToVersion12(SQLiteDatabase db) {
+        try {
+            db.execSQL("ALTER TABLE calls ADD is_business_call INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE calls ADD asserted_display_name TEXT");
+        } catch (SQLException ignore) {
+            Log.i(TAG, String.format("upgradeToVersion12: SQLException occurred e=[%s]", ignore));
+        }
     }
 
     @VisibleForTesting

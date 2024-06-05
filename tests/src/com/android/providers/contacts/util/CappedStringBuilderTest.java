@@ -15,7 +15,7 @@
  */
 package com.android.providers.contacts.util;
 
-import android.test.suitebuilder.annotation.SmallTest;
+import androidx.test.filters.SmallTest;
 
 import junit.framework.TestCase;
 

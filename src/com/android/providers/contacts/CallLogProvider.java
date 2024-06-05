@@ -60,6 +60,7 @@ import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.EventLog;
+import android.util.LocalLog;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -254,6 +255,8 @@ public class CallLogProvider extends ContentProvider {
         sCallsProjectionMap.put(Calls.LOCATION, Calls.LOCATION);
         sCallsProjectionMap.put(Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING,
                 Calls.IS_PHONE_ACCOUNT_MIGRATION_PENDING);
+        sCallsProjectionMap.put(Calls.IS_BUSINESS_CALL, Calls.IS_BUSINESS_CALL);
+        sCallsProjectionMap.put(Calls.ASSERTED_DISPLAY_NAME, Calls.ASSERTED_DISPLAY_NAME);
     }
 
     /**
@@ -314,6 +317,7 @@ public class CallLogProvider extends ContentProvider {
     private VoicemailPermissions mVoicemailPermissions;
     private CallLogInsertionHelper mCallLogInsertionHelper;
     private SubscriptionManager mSubscriptionManager;
+    private LocalLog mLocalLog = new LocalLog(20);
 
     private final ThreadLocal<Boolean> mApplyingBatch = new ThreadLocal<>();
     private final ThreadLocal<Integer> mCallingUid = new ThreadLocal<>();
@@ -681,7 +685,7 @@ public class CallLogProvider extends ContentProvider {
         final int callingUid =
                 applyingBatch() ? mCallingUid.get() : Binder.getCallingUid();
 
-        mStats.incrementInsertStats(callingUid, applyingBatch());
+        mStats.incrementUpdateStats(callingUid, applyingBatch());
         try {
             return updateInternal(uri, values, selection, selectionArgs);
         } finally {
@@ -694,7 +698,7 @@ public class CallLogProvider extends ContentProvider {
         final int callingUid =
                 applyingBatch() ? mCallingUid.get() : Binder.getCallingUid();
 
-        mStats.incrementInsertStats(callingUid, applyingBatch());
+        mStats.incrementDeleteStats(callingUid, applyingBatch());
         try {
             return deleteInternal(uri, selection, selectionArgs);
         } finally {
@@ -751,6 +755,11 @@ public class CallLogProvider extends ContentProvider {
         mCallLogInsertionHelper.addComputedValues(copiedValues);
 
         long rowId = createDatabaseModifier(mCallsInserter).insert(copiedValues);
+        String insertLog = String.format(Locale.getDefault(),
+                "insert uid/pid=%d/%d, uri=%s, rowId=%d",
+                Binder.getCallingUid(), Binder.getCallingPid(), uri, rowId);
+        Log.i(TAG, insertLog);
+        mLocalLog.log(insertLog);
         if (rowId > 0) {
             return ContentUris.withAppendedId(uri, rowId);
         }
@@ -959,8 +968,16 @@ public class CallLogProvider extends ContentProvider {
                 throw new UnsupportedOperationException("Cannot update URL: " + uri);
         }
 
-        return createDatabaseModifier(db, hasReadVoicemailPermission).update(uri, Tables.CALLS,
+        int count = createDatabaseModifier(db, hasReadVoicemailPermission).update(uri, Tables.CALLS,
                 values, selectionBuilder.build(), selectionArgs);
+
+        String logStr = String.format(Locale. getDefault(),
+                "update uid/pid=%d/%d, uri=%s, numChanged=%d",
+                Binder.getCallingUid(), Binder.getCallingPid(), uri, count);
+        Log.i(TAG, logStr);
+        mLocalLog.log(logStr);
+
+        return count;
     }
 
     private int deleteInternal(Uri uri, String selection, String[] selectionArgs) {
@@ -981,8 +998,14 @@ public class CallLogProvider extends ContentProvider {
         final int matchedUriId = sURIMatcher.match(uri);
         switch (matchedUriId) {
             case CALLS:
-                return createDatabaseModifier(db, hasReadVoicemailPermission).delete(Tables.CALLS,
-                    selectionBuilder.build(), selectionArgs);
+                int count =  createDatabaseModifier(db, hasReadVoicemailPermission).delete(
+                        Tables.CALLS, selectionBuilder.build(), selectionArgs);
+                String logStr = String.format(Locale. getDefault(),
+                        "delete uid/pid=%d/%d, uri=%s, numChanged=%d",
+                        Binder.getCallingUid(), Binder.getCallingPid(), uri, count);
+                Log.i(TAG, logStr);
+                mLocalLog.log(logStr);
+                return count;
             case CALL_COMPOSER_PICTURE:
                 // TODO(hallliu): implement deletion of file when the corresponding calllog entry
                 // gets deleted as well.
@@ -1127,10 +1150,21 @@ public class CallLogProvider extends ContentProvider {
                 new String[] {String.valueOf(lastSyncTime)},
                 Calls.DATE + " ASC");
         if (cursor == null) {
+            Log.i(TAG, String.format(Locale.getDefault(),
+                    "syncEntriesFrom: fromUserId=%d, srcIsShadow=%b, forAllUsers=%b; nothing to "
+                            + "sync",
+                    sourceUserId, sourceIsShadow, forAllUsersOnly));
             return;
         }
         try {
             newestTimeStamp = copyEntriesFromCursor(cursor, lastSyncTime, sourceIsShadow);
+            Log.i(TAG,
+                    String.format(Locale.getDefault(),
+                            "syncEntriesFrom: fromUserId=%d, srcIsShadow=%b, forAllUsers=%b; "
+                                    + "previousTimeStamp=%d, newTimeStamp=%d, entries=%d",
+                            sourceUserId, sourceIsShadow, forAllUsersOnly, lastSyncTime,
+                            newestTimeStamp,
+                            cursor.getCount()));
         } finally {
             cursor.close();
         }
@@ -1376,6 +1410,9 @@ public class CallLogProvider extends ContentProvider {
     @Override
     public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
         mStats.dump(writer, "  ");
+        writer.println();
+        writer.println("Latest call log activity:");
+        mLocalLog.dump(writer);
     }
 
     /**

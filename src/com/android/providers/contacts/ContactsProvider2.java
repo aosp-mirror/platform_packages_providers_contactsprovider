@@ -46,6 +46,7 @@ import android.content.OperationApplicationException;
 import android.content.SharedPreferences;
 import android.content.SyncAdapterType;
 import android.content.UriMatcher;
+import android.content.pm.Flags;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.pm.ProviderInfo;
@@ -175,7 +176,6 @@ import com.android.providers.contacts.aggregation.AbstractContactAggregator.Aggr
 import com.android.providers.contacts.aggregation.ContactAggregator;
 import com.android.providers.contacts.aggregation.ContactAggregator2;
 import com.android.providers.contacts.aggregation.ProfileAggregator;
-import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
@@ -187,12 +187,9 @@ import com.android.providers.contacts.util.DbQueryUtils;
 import com.android.providers.contacts.util.LogFields;
 import com.android.providers.contacts.util.LogUtils;
 import com.android.providers.contacts.util.NeededForTesting;
-import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 import com.android.providers.contacts.util.UserUtils;
 import com.android.vcard.VCardComposer;
 import com.android.vcard.VCardConfig;
-
-import libcore.io.IoUtils;
 
 import com.google.android.collect.Lists;
 import com.google.android.collect.Maps;
@@ -200,6 +197,8 @@ import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Ints;
+
+import libcore.io.IoUtils;
 
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
@@ -1499,7 +1498,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
-    private CommonNicknameCache mCommonNicknameCache;
     private SearchIndexManager mSearchIndexManager;
 
     private int mProviderStatus = STATUS_NORMAL;
@@ -1677,9 +1675,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public void setNewAggregatorForTest(boolean enabled) {
         mContactAggregator = (enabled)
                 ? new ContactAggregator2(this, mContactsHelper,
-                createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache)
+                createPhotoPriorityResolver(getContext()), mNameSplitter)
                 : new ContactAggregator(this, mContactsHelper,
-                createPhotoPriorityResolver(getContext()), mNameSplitter, mCommonNicknameCache);
+                createPhotoPriorityResolver(getContext()), mNameSplitter);
         mContactAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         initDataRowHandlers(mDataRowHandlers, mContactsHelper, mContactAggregator,
                 mContactsPhotoStore);
@@ -1696,7 +1694,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mNameSplitter = mContactsHelper.createNameSplitter(mCurrentLocales.getPrimaryLocale());
         mNameLookupBuilder = new StructuredNameLookupBuilder(mNameSplitter);
         mPostalSplitter = new PostalSplitter(mCurrentLocales.getPrimaryLocale());
-        mCommonNicknameCache = new CommonNicknameCache(mContactsHelper.getReadableDatabase());
         ContactLocaleUtils.setLocales(mCurrentLocales);
 
         int value = android.provider.Settings.Global.getInt(context.getContentResolver(),
@@ -1708,13 +1705,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 : AGGREGATION_ALGORITHM_NEW_VERSION;
         mContactAggregator = (value == 0)
                 ? new ContactAggregator(this, mContactsHelper,
-                        createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache)
+                        createPhotoPriorityResolver(context), mNameSplitter)
                 : new ContactAggregator2(this, mContactsHelper,
-                        createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
+                        createPhotoPriorityResolver(context), mNameSplitter);
 
         mContactAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         mProfileAggregator = new ProfileAggregator(this, mProfileHelper,
-                createPhotoPriorityResolver(context), mNameSplitter, mCommonNicknameCache);
+                createPhotoPriorityResolver(context), mNameSplitter);
         mProfileAggregator.setEnabled(ContactsProperties.aggregate_contacts().orElse(true));
         mSearchIndexManager = new SearchIndexManager(this);
         mContactsPhotoStore = new PhotoStore(getContext().getFilesDir(), mContactsHelper);
@@ -2596,6 +2593,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final String accountType = extras.getString(Settings.ACCOUNT_TYPE);
         final String dataSet = extras.getString(Settings.DATA_SET);
 
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, String.format(
+                    "setDefaultAccountSettings: name = %s, type = %s, data_set = %s",
+                    TextUtils.emptyIfNull(accountName), TextUtils.emptyIfNull(accountType),
+                    TextUtils.emptyIfNull(dataSet)));
+        }
+
         if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
             throw new IllegalArgumentException(
                     "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE");
@@ -2663,6 +2667,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             final long now = Clock.getInstance().currentTimeMillis();
             final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
             db.beginTransactionNonExclusive();
+            Cursor cursor =  null;
             try {
                 // First delete any pre-authorization URIs that are no longer valid. Unfortunately,
                 // this operation will grab a write lock for readonly queries. Since this only
@@ -2672,15 +2677,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         new String[]{String.valueOf(now)});
 
                 // Now check to see if the pre-authorized URI map contains the URI.
-                final Cursor c = db.query(Tables.PRE_AUTHORIZED_URIS, null,
+                cursor = db.query(Tables.PRE_AUTHORIZED_URIS, null,
                         PreAuthorizedUris.URI + "=?1",
                         new String[]{uri.toString()}, null, null, null);
-                final boolean isValid = c.getCount() != 0;
+                final boolean isValid = cursor.getCount() != 0;
 
                 db.setTransactionSuccessful();
                 return isValid;
             } finally {
                 db.endTransaction();
+                MoreCloseables.closeQuietly(cursor);
             }
         }
         return false;
@@ -5939,6 +5945,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return null;
         }
 
+        if (projection == null) {
+            projection = getDefaultProjection(uri);
+        }
+
+        // Handle directories in stopped state
+        try {
+            if (Flags.stayStopped()
+                    && getContext().getPackageManager()
+                                   .isPackageStopped(directoryInfo.packageName)) {
+                return new MatrixCursor(projection, 0);
+            }
+        } catch (NameNotFoundException e) {
+            Log.w(TAG, "Package name " + directoryInfo.packageName + " not found");
+        }
+
+
         Builder builder = new Uri.Builder();
         builder.scheme(ContentResolver.SCHEME_CONTENT);
         builder.authority(directoryInfo.authority);
@@ -5962,9 +5984,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         Uri directoryUri = builder.build();
 
-        if (projection == null) {
-            projection = getDefaultProjection(uri);
-        }
         int galUid = -1;
         try {
             galUid = getContext().getPackageManager().getPackageUid(directoryInfo.packageName,
@@ -7256,7 +7275,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     } finally {
                         if (!foundResult) {
                             // We'll be returning a different cursor, so close this one.
-                            cursor.close();
+                            MoreCloseables.closeQuietly(cursor);
                         }
                     }
                 }
@@ -7448,11 +7467,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // This method will return either primary directory or enterprise directory
                 final long inputDirectoryId = ContentUris.parseId(uri);
                 if (Directory.isEnterpriseDirectoryId(inputDirectoryId)) {
-                    final Cursor cursor = queryCorpContactsProvider(
-                            ContentUris.withAppendedId(Directory.CONTENT_URI,
-                            inputDirectoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE),
-                            projection, selection, selectionArgs, sortOrder, cancellationSignal);
-                    return rewriteCorpDirectories(cursor);
+                    Cursor cursor = null;
+                    try {
+                        cursor = queryCorpContactsProvider(
+                                ContentUris.withAppendedId(Directory.CONTENT_URI,
+                                inputDirectoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE),
+                                projection, selection, selectionArgs, sortOrder, cancellationSignal);
+                        return rewriteCorpDirectories(cursor);
+                    } finally {
+                        MoreCloseables.closeQuietly(cursor);
+                    }
                 } else {
                     // As it is not an enterprise directory id, fall back to original API
                     final Uri localUri = ContentUris.withAppendedId(Directory.CONTENT_URI,
@@ -7947,11 +7971,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         lookupQb.appendWhere(contactIdColumn + "=? AND " + lookupKeyColumn + "=?");
         Cursor c = doQuery(db, lookupQb, projection, selection, args, sortOrder,
                 groupBy, null, limit, cancellationSignal);
-        if (c.getCount() != 0) {
+        if (c != null && c.getCount() != 0) {
             return c;
         }
-
-        c.close();
+        MoreCloseables.closeQuietly(c);
         return null;
     }
 
@@ -9829,11 +9852,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         protected void insertNameLookup(long rawContactId, long dataId, int lookupType,
                 String name) {
             mDbHelper.get().insertNameLookup(rawContactId, dataId, lookupType, name);
-        }
-
-        @Override
-        protected String[] getCommonNicknameClusters(String normalizedName) {
-            return mCommonNicknameCache.getCommonNicknameClusters(normalizedName);
         }
     }
 

@@ -31,7 +31,8 @@ import android.provider.VoicemailContract;
 import android.provider.VoicemailContract.Status;
 import android.provider.VoicemailContract.Voicemails;
 import android.test.MoreAsserts;
-import android.test.suitebuilder.annotation.SmallTest;
+
+import androidx.test.filters.SmallTest;
 
 import com.android.common.io.MoreCloseables;
 

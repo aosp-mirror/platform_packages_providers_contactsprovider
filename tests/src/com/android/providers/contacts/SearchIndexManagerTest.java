@@ -26,8 +26,9 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredPostal;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.SearchSnippets;
 import android.test.MoreAsserts;
-import android.test.suitebuilder.annotation.MediumTest;
-import android.test.suitebuilder.annotation.Suppress;
+
+import androidx.test.filters.MediumTest;
+import androidx.test.filters.Suppress;
 
 import com.android.providers.contacts.testutil.DataUtil;
 import com.android.providers.contacts.testutil.RawContactUtil;

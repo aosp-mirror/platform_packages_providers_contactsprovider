@@ -17,7 +17,6 @@
 package com.android.providers.contacts.aggregation;
 
 import android.accounts.Account;
-import android.app.ActivityManager;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentUris;
@@ -36,7 +35,8 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
 import android.telephony.PhoneNumberUtils;
 import android.test.MoreAsserts;
-import android.test.suitebuilder.annotation.MediumTest;
+
+import androidx.test.filters.MediumTest;
 
 import com.android.providers.contacts.BaseContactsProvider2Test;
 import com.android.providers.contacts.ContactsDatabaseHelper;
@@ -425,69 +425,6 @@ public class ContactAggregator2Test extends BaseContactsProvider2Test {
         long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
         DataUtil.insertStructuredName(mResolver, rawContactId2, "Luigi", "Guido");
         insertEmail(rawContactId2, "hicky@android.com");
-
-        assertNotAggregated(rawContactId1, rawContactId2);
-    }
-
-    public void testAggregationByCommonNicknameWithLastName() {
-        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
-        DataUtil.insertStructuredName(mResolver, rawContactId1, "Bill", "Gore");
-
-        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
-        DataUtil.insertStructuredName(mResolver, rawContactId2, "William", "Gore");
-
-        if (ActivityManager.isLowRamDeviceStatic()) {
-            // No common nickname DB on lowram devices.
-            assertNotAggregated(rawContactId1, rawContactId2);
-        } else {
-            assertAggregated(rawContactId1, rawContactId2, "William Gore");
-        }
-    }
-
-    public void testAggregationByCommonNicknameOnly() {
-        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
-        DataUtil.insertStructuredName(mResolver, rawContactId1, "Lawrence", null);
-
-        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
-        DataUtil.insertStructuredName(mResolver, rawContactId2, "Larry", null);
-
-        if (ActivityManager.isLowRamDeviceStatic()) {
-            // No common nickname DB on lowram devices.
-            assertNotAggregated(rawContactId1, rawContactId2);
-        } else {
-            assertAggregated(rawContactId1, rawContactId2, "Lawrence");
-        }
-    }
-
-    public void testAggregationByNicknameNoStructuredNameWithinSameAccount() {
-        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
-        insertNickname(rawContactId1, "Frozone");
-
-        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
-        insertNickname(rawContactId2, "Frozone");
-
-        assertNotAggregated(rawContactId1, rawContactId2);
-    }
-
-    public void testAggregationByNicknameNoStructuredNameWithinDifferentAccounts() {
-        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
-        insertNickname(rawContactId1, "Frozone");
-
-        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
-        insertNickname(rawContactId2, "Frozone");
-
-        assertAggregated(rawContactId1, rawContactId2);
-    }
-
-
-    public void testAggregationByNicknameWithDifferentNames() {
-        long rawContactId1 = RawContactUtil.createRawContact(mResolver, ACCOUNT_1);
-        DataUtil.insertStructuredName(mResolver, rawContactId1, "Helen", "Parr");
-        insertNickname(rawContactId1, "Elastigirl");
-
-        long rawContactId2 = RawContactUtil.createRawContact(mResolver, ACCOUNT_2);
-        DataUtil.insertStructuredName(mResolver, rawContactId2, "Shawn", "Johnson");
-        insertNickname(rawContactId2, "Elastigirl");
 
         assertNotAggregated(rawContactId1, rawContactId2);
     }
@@ -1047,54 +984,6 @@ public class ContactAggregator2Test extends BaseContactsProvider2Test {
         long contactId2 = queryContactId(rawContactId2);
         assertTrue(contactId1 != contactId2);
 
-        assertSuggestions(contactId1, contactId2);
-    }
-
-    public void testAggregationSuggestionsBasedOnNickname() {
-        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
-        DataUtil.insertStructuredName(mResolver, rawContactId1, "Peter", "Parker");
-        insertNickname(rawContactId1, "Spider-Man");
-
-        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
-        DataUtil.insertStructuredName(mResolver, rawContactId2, "Manny", "Spider");
-
-        long contactId1 = queryContactId(rawContactId1);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
-                rawContactId1, rawContactId2);
-
-        long contactId2 = queryContactId(rawContactId2);
-        assertSuggestions(contactId1, contactId2);
-    }
-
-    public void testAggregationSuggestionsBasedOnNicknameMatchingName() {
-        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
-        DataUtil.insertStructuredName(mResolver, rawContactId1, "Clark", "Kent");
-        insertNickname(rawContactId1, "Superman");
-
-        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
-        DataUtil.insertStructuredName(mResolver, rawContactId2, "Roy", "Williams");
-        insertNickname(rawContactId2, "superman");
-
-        long contactId1 = queryContactId(rawContactId1);
-        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
-                rawContactId1, rawContactId2);
-
-        long contactId2 = queryContactId(rawContactId2);
-        assertSuggestions(contactId1, contactId2);
-    }
-
-    public void testAggregationSuggestionsBasedOnCommonNickname() {
-        long rawContactId1 = RawContactUtil.createRawContact(mResolver);
-        DataUtil.insertStructuredName(mResolver, rawContactId1, "Dick", "Cherry");
-
-        long rawContactId2 = RawContactUtil.createRawContact(mResolver);
-        DataUtil.insertStructuredName(mResolver, rawContactId2, "Richard", "Cherry");
-
-        setAggregationException(AggregationExceptions.TYPE_KEEP_SEPARATE,
-                rawContactId1, rawContactId2);
-
-        long contactId1 = queryContactId(rawContactId1);
-        long contactId2 = queryContactId(rawContactId2);
         assertSuggestions(contactId1, contactId2);
     }
 
