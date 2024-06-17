@@ -18,7 +18,8 @@ package com.android.providers.contacts;
 
 import android.provider.ContactsContract.FullNameStyle;
 import android.provider.ContactsContract.PhoneticNameStyle;
-import android.test.suitebuilder.annotation.SmallTest;
+
+import androidx.test.filters.SmallTest;
 
 import com.android.providers.contacts.NameSplitter.Name;
 

@@ -20,9 +20,10 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.net.Uri;
 import android.provider.ContactsContract.RawContacts;
-import android.test.suitebuilder.annotation.MediumTest;
-
 import android.telecom.CallerInfo;
+
+import androidx.test.filters.MediumTest;
+
 import com.android.providers.contacts.testutil.DataUtil;
 
 /**

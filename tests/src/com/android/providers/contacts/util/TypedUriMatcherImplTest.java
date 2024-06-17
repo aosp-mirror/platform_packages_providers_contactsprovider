@@ -17,7 +17,8 @@
 package com.android.providers.contacts.util;
 
 import android.net.Uri;
-import android.test.suitebuilder.annotation.SmallTest;
+
+import androidx.test.filters.SmallTest;
 
 import com.android.providers.contacts.FixedAndroidTestCase;
 
