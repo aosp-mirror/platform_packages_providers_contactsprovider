@@ -17,7 +17,6 @@
 package com.android.providers.contacts.aggregation;
 
 import android.accounts.Account;
-import android.app.ActivityManager;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentUris;
@@ -36,7 +35,8 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.StatusUpdates;
 import android.telephony.PhoneNumberUtils;
 import android.test.MoreAsserts;
-import android.test.suitebuilder.annotation.MediumTest;
+
+import androidx.test.filters.MediumTest;
 
 import com.android.providers.contacts.BaseContactsProvider2Test;
 import com.android.providers.contacts.ContactsDatabaseHelper;

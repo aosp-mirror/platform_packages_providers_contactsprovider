@@ -17,7 +17,8 @@
 package com.android.providers.contacts;
 
 import android.content.ContentResolver;
-import android.test.suitebuilder.annotation.MediumTest;
+
+import androidx.test.filters.MediumTest;
 
 import com.android.providers.contacts.testutil.RawContactUtil;
 import com.android.vcard.VCardComposer;
