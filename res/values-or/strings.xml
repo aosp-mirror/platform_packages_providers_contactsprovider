@@ -23,7 +23,7 @@
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"ଯୋଗାଯୋଗ ପାଇଁ ଷ୍ଟୋରେଜ୍ ଅପଗ୍ରେଡ୍ କରାଯାଉଛି"</string>
     <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"ଅପଗ୍ରେଡ୍ ସମ୍ପୂର୍ଣ୍ଣ କରିବା ପାଇଁ ଟାପ୍ କରନ୍ତୁ।"</string>
     <string name="default_directory" msgid="93961630309570294">"ଯୋଗାଯୋଗ"</string>
-    <string name="local_invisible_directory" msgid="705244318477396120">"ଅନ୍ୟାନ୍ୟ"</string>
+    <string name="local_invisible_directory" msgid="705244318477396120">"ଅନ୍ଯ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ଏହାଙ୍କଠାରୁ ଭଏସମେଲ୍‌ "</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"ଯୋଗାଯୋଗ ଡାଟାବେସ୍ କପୀ କରନ୍ତୁ"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"ଆପଣ 1) ଇଣ୍ଟର୍ନଲ ଷ୍ଟୋରେଜରେ ନିଜ ଡାଟାବେସ୍‌ର ଏକ କପୀ ବନାନ୍ତୁ, ଯେଉଁଥିରେ ଯୋଗାଯୋଗ ସମ୍ବନ୍ଧିତ ସମସ୍ତ ତଥ୍ୟ ଏବଂ କଲ୍ ଲଗ୍ ସାମିଲ ରହିବ ଏବଂ 2) ଏହାକୁ ଇମେଲ୍ କରନ୍ତୁ। ମନେରଖନ୍ତୁ, ଡିଭାଇସ୍‌ରୁ ସଫଳତାପୂର୍ବକ ଏହାର କପୀ କରିସାରିବା ପରେ କିମ୍ୱା ଇମେଲ୍ ପ୍ରାପ୍ତ ହୋଇସାରିବା ପରେ, ଏହି କପୀକୁ ଡିଲିଟ୍ କରିଦେବେ।"</string>
