@@ -17,8 +17,9 @@ package com.android.providers.contacts;
 
 import android.icu.text.AlphabeticIndex;
 import android.icu.text.AlphabeticIndex.ImmutableIndex;
-import android.test.suitebuilder.annotation.Suppress;
 import android.util.Log;
+
+import androidx.test.filters.Suppress;
 
 import java.util.Arrays;
 import java.util.Locale;
