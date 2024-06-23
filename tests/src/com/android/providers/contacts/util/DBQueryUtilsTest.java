@@ -21,7 +21,8 @@ import static com.android.providers.contacts.util.DbQueryUtils.concatenateClause
 import static com.android.providers.contacts.util.DbQueryUtils.escapeLikeValue;
 
 import android.content.ContentValues;
-import android.test.suitebuilder.annotation.SmallTest;
+
+import androidx.test.filters.SmallTest;
 
 import com.android.common.content.ProjectionMap;
 import com.android.providers.contacts.EvenMoreAsserts;

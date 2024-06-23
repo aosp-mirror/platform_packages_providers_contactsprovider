@@ -16,9 +16,11 @@
 
 package com.android.providers.contacts;
 
-import android.test.suitebuilder.annotation.SmallTest;
-import java.util.Locale;
+import androidx.test.filters.SmallTest;
+
 import junit.framework.TestCase;
+
+import java.util.Locale;
 
 @SmallTest
 public class LocaleSetTest extends TestCase {

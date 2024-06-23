@@ -80,9 +80,10 @@ import android.telecom.TelecomManager;
 import android.telephony.PhoneNumberUtils;
 import android.telephony.SubscriptionInfo;
 import android.test.MoreAsserts;
-import android.test.suitebuilder.annotation.LargeTest;
 import android.text.TextUtils;
 import android.util.ArraySet;
+
+import androidx.test.filters.LargeTest;
 
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsActor.AlteringUserContext;
