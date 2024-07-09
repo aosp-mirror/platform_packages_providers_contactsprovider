@@ -1,0 +1,9 @@
+package: "com.android.providers.contacts.flags"
+container: "system"
+
+flag {
+    name: "cp2_account_move_flag"
+    namespace: "contacts"
+    description: "Methods for bulk move of contacts between accounts"
+    bug: "330324156"
+}
