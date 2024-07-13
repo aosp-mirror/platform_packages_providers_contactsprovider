@@ -20,6 +20,7 @@ import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
+import static com.android.providers.contacts.flags.Flags.cp2AccountMoveFlag;
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
 import android.accounts.Account;
@@ -134,6 +135,7 @@ import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
+import android.util.Pair;
 import android.util.SparseArray;
 
 import com.android.common.content.ProjectionMap;
@@ -2631,6 +2633,90 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         return response;
     }
+
+    private void updateRawContactsAccount(
+            AccountWithDataSet destAccount, Set<Long> rawContactIds) {
+        if (rawContactIds.isEmpty()) {
+            return;
+        }
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.ACCOUNT_NAME, destAccount.getAccountName());
+        values.put(RawContacts.ACCOUNT_TYPE, destAccount.getAccountType());
+        values.put(RawContacts.DATA_SET, destAccount.getDataSet());
+        values.putNull(RawContacts.SOURCE_ID);
+        values.putNull(RawContacts.SYNC1);
+        values.putNull(RawContacts.SYNC2);
+        values.putNull(RawContacts.SYNC3);
+        values.putNull(RawContacts.SYNC4);
+
+        // actually update the account columns and break the source ID
+        updateRawContacts(
+                values,
+                RawContacts._ID + " IN (" + TextUtils.join(",", rawContactIds) + ")",
+                new String[] {},
+                false);
+    }
+
+    @VisibleForTesting
+    Bundle moveRawContacts(
+            AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
+        if (!cp2AccountMoveFlag()) {
+            return new Bundle();
+        }
+        if (sourceAccount.equals(destAccount)) {
+            throw new IllegalArgumentException("Source and destination accounts must differ");
+        }
+
+
+        final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+        db.beginTransaction();
+        try {
+            // First, compare raw contacts from source and destination accounts, find the unique
+            // raw contacts from source account;
+            Pair<Set<Long>, Set<Long>> sourceRawContactIds =
+                    mDbHelper.get().deDuplicateRawContacts(sourceAccount, destAccount);
+            Set<Long> nonDuplicates = sourceRawContactIds.first;
+            Set<Long> duplicates = sourceRawContactIds.second;
+
+            if (sourceAccount.isLocalAccount()) {
+                // if we are moving from a device account, just perform the move
+                updateRawContactsAccount(destAccount, nonDuplicates);
+            } else {
+                /*
+                    If the source account isn't a device account, we'll need to get the sync fields
+                    for any non-duplicate contacts so we can write back stub contacts.
+                    This ensures any sync adapters on the source account won't just sync the moved
+                    contacts back down (creating duplicates).
+                 */
+                List<ContentValues> syncContentValues = mDbHelper.get()
+                        .getSyncStubContentValues(sourceAccount, nonDuplicates);
+
+                // Move the contacts to the destination account
+                updateRawContactsAccount(destAccount, nonDuplicates);
+
+                // Now actually write the stubs
+                for (ContentValues values: syncContentValues) {
+                    insertRawContact(RawContacts.CONTENT_URI, values, false);
+                }
+            }
+
+            // Last, clear the duplicates.
+            // Since these are duplicates, we don't need to do anything else with them
+            for (long rawContactId: duplicates) {
+                deleteRawContact(
+                        rawContactId,
+                        mDbHelper.get().getContactId(rawContactId),
+                        false);
+            }
+
+
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        return new Bundle();
+    }
+
 
     /**
      * Pre-authorizes the given URI, adding an expiring permission token to it and placing that
