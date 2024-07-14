@@ -43,7 +43,6 @@ import android.os.Binder;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.os.UserManager;
-import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -90,13 +89,12 @@ import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Base64;
 import android.util.Log;
+import android.util.Pair;
 import android.util.Slog;
 
 import com.android.common.content.SyncStateContentProviderHelper;
-import com.android.internal.R;
 import com.android.internal.R.bool;
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.database.ContactsTableUtil;
 import com.android.providers.contacts.database.DeletedContactsTableUtil;
 import com.android.providers.contacts.database.MoreDatabaseUtils;
@@ -107,13 +105,12 @@ import com.android.providers.contacts.util.NeededForTesting;
 import com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils;
 import com.android.providers.contacts.util.PropertyUtils;
 
-import com.google.common.base.Strings;
-
 import java.io.PrintWriter;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -952,7 +949,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      */
     private long mDatabaseCreationTime;
 
-    private MessageDigest mMessageDigest;
+    private final MessageDigest mMessageDigest;
     {
         try {
             mMessageDigest = MessageDigest.getInstance("SHA-1");
@@ -4720,6 +4717,265 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             }
         }
         return sb.toString();
+    }
+
+    private interface Move {
+        String RAW_CONTACTS_ID_SELECT_FRAGMENT = (
+                "SELECT "
+                        + RawContacts._ID + ", " + RawContacts.DISPLAY_NAME_PRIMARY
+                        + " FROM " + Tables.RAW_CONTACTS
+                        + " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?"
+                        + " AND " + RawContacts.DELETED + " = 0");
+
+        String DEDUPLICATION_QUERY = "SELECT "
+                + "source." + RawContacts._ID + " AS source_raw_contact_id,"
+                + " dest." + RawContacts._ID + " AS dest_raw_contact_id"
+                + " FROM (" + RAW_CONTACTS_ID_SELECT_FRAGMENT + ") source"
+                + " LEFT OUTER JOIN (" + RAW_CONTACTS_ID_SELECT_FRAGMENT + ") dest" + " ON "
+                + "source." + RawContacts.DISPLAY_NAME_PRIMARY + " = "
+                + "dest." + RawContacts.DISPLAY_NAME_PRIMARY;
+    }
+
+    private Cursor getFirstPassDeduplicationQuery(
+            long sourceAccountId, long destAccountId) {
+        return getReadableDatabase().rawQuery(
+                Move.DEDUPLICATION_QUERY, new String[]{
+                        String.valueOf(sourceAccountId), String.valueOf(destAccountId)}
+        );
+    }
+
+    private Cursor getSecondPassDeduplicationQuery(Set<Long> rawContactIds) {
+        return getReadableDatabase().rawQuery("SELECT "
+                + RawContactsColumns.CONCRETE_ID + ", "
+                + RawContactsColumns.CONCRETE_STARRED + ", "
+                + dbForProfile() + " AS " + RawContacts.RAW_CONTACT_IS_USER_PROFILE + ", "
+                + Tables.DATA + "." + Data.IS_SUPER_PRIMARY + ", "
+                + DataColumns.CONCRETE_IS_PRIMARY + ", "
+                + DataColumns.MIMETYPE_ID + ", "
+                + DataColumns.CONCRETE_DATA1 + ", "
+                + DataColumns.CONCRETE_DATA2 + ", "
+                + DataColumns.CONCRETE_DATA3 + ", "
+                + DataColumns.CONCRETE_DATA4 + ", "
+                + DataColumns.CONCRETE_DATA5 + ", "
+                + DataColumns.CONCRETE_DATA6 + ", "
+                + DataColumns.CONCRETE_DATA7 + ", "
+                + DataColumns.CONCRETE_DATA8 + ", "
+                + DataColumns.CONCRETE_DATA9 + ", "
+                + DataColumns.CONCRETE_DATA10 + ", "
+                + DataColumns.CONCRETE_DATA11 + ", "
+                + DataColumns.CONCRETE_DATA12 + ", "
+                + DataColumns.CONCRETE_DATA13 + ", "
+                + DataColumns.CONCRETE_DATA14 + ", "
+                + DataColumns.CONCRETE_DATA15
+                + " FROM " + Tables.RAW_CONTACTS
+                + " LEFT OUTER JOIN " + Tables.DATA
+                + " ON " + RawContactsColumns.CONCRETE_ID + " = "
+                + DataColumns.CONCRETE_RAW_CONTACT_ID
+                + " WHERE " + RawContactsColumns.CONCRETE_ID
+                + " IN (" + TextUtils.join(",", rawContactIds) + ")",
+                new String[]{});
+    }
+
+
+    /**
+     * Compares the raw contacts in source and dest accounts, dividing the raw contacts in the
+     * source account into two sets - those which are duplicated in the destination account and
+     * those which are not.
+     *
+     * @param sourceAccount the source account
+     * @param destAccount the destination account
+     * @return Pair of nonDuplicate ID set and the duplicate ID sets
+     */
+    public Pair<Set<Long>, Set<Long>> deDuplicateRawContacts(
+            AccountWithDataSet sourceAccount,
+            AccountWithDataSet destAccount) {
+        /*
+            First get the account ids
+         */
+        final Long sourceAccountId = getAccountIdOrNull(sourceAccount);
+        final Long destAccountId = getAccountIdOrNull(destAccount);
+        // if source account id is null then source account is empty, we are done
+        if (sourceAccountId == null) {
+
+            return Pair.create(Set.of(), Set.of());
+        }
+
+        // if dest account id is null, it is empty, everything in source is a non-duplicate
+        Set<Long> nonDuplicates = new HashSet<>();
+        if (destAccountId == null) {
+            try (Cursor c = getReadableDatabase().query(
+                    Tables.RAW_CONTACTS,
+                    new String[] {
+                            RawContacts._ID,
+                    },
+                    RawContactsColumns.ACCOUNT_ID + " = ?"
+                    + " AND " + RawContacts.DELETED + " = 0",
+                    new String[] {sourceAccountId.toString()},
+                    null, null, null)) {
+                while (c.moveToNext()) {
+                    long rawContactId = c.getLong(0);
+                    nonDuplicates.add(rawContactId);
+                }
+            }
+            return Pair.create(nonDuplicates, Set.of());
+        }
+
+        /*
+         First discover potential duplicate by comparing names, which should filter out most of the
+         non-duplicate cases.
+        */
+        Set<Long> potentialDupSourceRawContactIds = new ArraySet<>();
+        Set<Long> potentialDupIds = new ArraySet<>();
+
+        try (Cursor c = getFirstPassDeduplicationQuery(sourceAccountId, destAccountId)) {
+            while (c.moveToNext()) {
+                long sourceRawContactIdId = c.getLong(0);
+                if (!c.isNull(1)) {
+                    // if name matches, consider it a potential duplicate
+                    long destRawContactId = c.getLong(1);
+                    potentialDupSourceRawContactIds.add(sourceRawContactIdId);
+                    potentialDupIds.add(sourceRawContactIdId);
+                    potentialDupIds.add(destRawContactId);
+                } else {
+                    // add non name matching unique raw contacts to results.
+                    nonDuplicates.add(sourceRawContactIdId);
+                }
+            }
+        }
+
+        /*
+            Next, hash the potential duplicates.
+        */
+        Map<Long, Set<String>> sourceRawContactIdToHashSet = new HashMap<>();
+        Map<String, Set<Long>> destEntityHashes = new HashMap<>();
+        try (Cursor c = getSecondPassDeduplicationQuery(potentialDupIds)) {
+            while (c.moveToNext()) {
+                long id = c.getLong(0);
+                String hash = hashRawContactEntities(c);
+                if (potentialDupSourceRawContactIds.contains(id)) {
+                    // if it's a source id, we'll want to build a set of hashes that represent it
+                    if (!sourceRawContactIdToHashSet.containsKey(id)) {
+                        Set<String> sourceHashes = new ArraySet<>();
+                        sourceRawContactIdToHashSet.put(id, sourceHashes);
+                    }
+                    sourceRawContactIdToHashSet.get(id).add(hash);
+                } else {
+                    // if it's a destination id, build a set of ids that it maps to
+                    if (!destEntityHashes.containsKey(hash)) {
+                        Set<Long> destIds = new ArraySet<>();
+                        destEntityHashes.put(hash, destIds);
+                    }
+                    destEntityHashes.get(hash).add(id);
+                }
+            }
+        }
+
+        /*
+            Now use the hashes to determine which of the raw contact ids on the source account have
+            exact duplicates in the destination set.
+         */
+        Set<Long> duplicates = new ArraySet<>();
+        // At last, compare the raw entity hash to locate the exact duplicates
+        for (Map.Entry<Long, Set<String>> entry : sourceRawContactIdToHashSet.entrySet()) {
+            Long sourceRawContactId = entry.getKey();
+            Set<String> sourceHashes = entry.getValue();
+            if (hasDuplicateAtDestination(sourceHashes, destEntityHashes)) {
+                // if the source already has an exact match in the dest set, then it's a duplicate
+                duplicates.add(sourceRawContactId);
+            } else {
+                // if there is unique data on the source raw contact, add it to the unique set
+                nonDuplicates.add(sourceRawContactId);
+            }
+        }
+
+        return Pair.create(nonDuplicates, duplicates);
+    }
+
+    private boolean hasDuplicateAtDestination(Set<String> sourceHashes,
+            Map<String, Set<Long>> destHashToIdMap) {
+        // if we have no source hashes then treat it as unique
+        if (sourceHashes == null || sourceHashes.isEmpty()) {
+            // we should always have source hashes at this point so log something
+            Log.e(TAG, "empty source hashes while checking for duplicates during move");
+            return false;
+        }
+
+        Set<Long> potentialDestinationIds = null;
+        for (String sourceHash : sourceHashes) {
+            // if the source hash doesn't have a match in the dest account, we are done
+            if (!destHashToIdMap.containsKey(sourceHash)) {
+                return false;
+            }
+
+            // for all the matches in the destination account, intersect the sets of ids
+            if (potentialDestinationIds == null) {
+                potentialDestinationIds = new ArraySet<>(destHashToIdMap.get(sourceHash));
+            } else {
+                potentialDestinationIds.retainAll(destHashToIdMap.get(sourceHash));
+            }
+
+            // if the set of potential destination ids is ever empty, then we are done (no dupe)
+            if (potentialDestinationIds.isEmpty()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+
+    private String hashRawContactEntities(final Cursor c) {
+        byte[] hashResult;
+        synchronized (mMessageDigest) {
+            mMessageDigest.reset();
+            for (int i = 1; i < c.getColumnCount(); i++) {
+                String data = c.getString(i);
+                if (!TextUtils.isEmpty(data)) {
+                    mMessageDigest.update(data.getBytes());
+                }
+            }
+            hashResult = mMessageDigest.digest();
+        }
+
+        return Base64.encodeToString(hashResult, Base64.DEFAULT);
+    }
+
+    /**
+     * Gets content values for the sync stubs.
+     */
+    public List<ContentValues> getSyncStubContentValues(AccountWithDataSet account,
+            Set<Long> rawContactIds) {
+        List<ContentValues> syncContentValues = new ArrayList<>();
+        try (Cursor c = getReadableDatabase().query(
+                Tables.RAW_CONTACTS,
+                new String[] {
+                        RawContacts.SOURCE_ID,
+                        RawContacts.SYNC1,
+                        RawContacts.SYNC2,
+                        RawContacts.SYNC3,
+                        RawContacts.SYNC4
+                },
+                RawContacts._ID + " IN (?)",
+                new String[] {TextUtils.join(",", rawContactIds)},
+                null, null, null)) {
+            while (c.moveToNext()) {
+                String sourceId = c.getString(0);
+                // if there's no source id, then we won't need to write a stub
+                if (sourceId != null && !sourceId.isEmpty()) {
+                    ContentValues values = new ContentValues();
+                    DatabaseUtils.cursorRowToContentValues(c, values);
+                    values.put(RawContacts.ACCOUNT_NAME, account.getAccountName());
+                    values.put(RawContacts.ACCOUNT_TYPE, account.getAccountType());
+                    values.put(RawContacts.DELETED, 1);
+                    values.put(RawContacts.SOURCE_ID, sourceId);
+                    values.put(RawContacts.DATA_SET, account.getDataSet());
+                    syncContentValues.add(values);
+                }
+
+            }
+        }
+
+        return syncContentValues;
     }
 
     public void deleteStatusUpdate(long dataId) {
