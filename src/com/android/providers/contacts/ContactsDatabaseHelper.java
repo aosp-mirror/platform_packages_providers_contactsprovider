@@ -4734,6 +4734,41 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + " LEFT OUTER JOIN (" + RAW_CONTACTS_ID_SELECT_FRAGMENT + ") dest" + " ON "
                 + "source." + RawContacts.DISPLAY_NAME_PRIMARY + " = "
                 + "dest." + RawContacts.DISPLAY_NAME_PRIMARY;
+
+        String IS_NONSYSTEM_GROUP_FILTER = "("
+                    + Groups.SYSTEM_ID + " IS NULL"
+                    + " AND " + Groups.GROUP_IS_READ_ONLY + " = 0"
+                + ")";
+
+        String IS_SYSTEM_GROUP_FILTER = "("
+                    + Groups.SYSTEM_ID + " IS NOT NULL"
+                    + " OR " + Groups.GROUP_IS_READ_ONLY + " != 0"
+                + ")";
+
+        String GROUPS_ID_SELECT_FRAGMENT = (
+                "SELECT "
+                    + Groups._ID + ", "
+                    + Groups.TITLE
+                + " FROM " + Tables.GROUPS
+                + " WHERE " + GroupsColumns.ACCOUNT_ID + " = ?"
+                    + " AND " + Groups.DELETED + " = 0");
+    }
+
+    private Cursor getGroupDeduplicationQuery(
+            long sourceAccountId, long destAccountId, boolean isSystemGroupQuery) {
+        return getReadableDatabase().rawQuery(
+                        "SELECT "
+                            + "source." + Groups._ID + " AS source_group_id,"
+                            + "dest." + Groups._ID + " AS dest_group_id"
+                            + " FROM (" + Move.GROUPS_ID_SELECT_FRAGMENT + " AND "
+                                + (isSystemGroupQuery
+                                ? Move.IS_SYSTEM_GROUP_FILTER
+                                : Move.IS_NONSYSTEM_GROUP_FILTER) + ") source"
+                            + " LEFT OUTER JOIN (" + Move.GROUPS_ID_SELECT_FRAGMENT + ") dest ON "
+                            + "source." + Groups.TITLE + " = "
+                            + "dest." + Groups.TITLE,
+                new String[] {String.valueOf(sourceAccountId), String.valueOf(destAccountId)}
+        );
     }
 
     private Cursor getFirstPassDeduplicationQuery(
@@ -4775,6 +4810,75 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + " IN (" + TextUtils.join(",", rawContactIds) + ")",
                 new String[]{});
     }
+
+    /**
+     * Compares the Groups in source and dest accounts, dividing the Groups in the
+     * source account into two sets - those which are duplicated in the destination account and
+     * those which are not.
+     *
+     * @param sourceAccount the source account
+     * @param destAccount the destination account
+     * @param isSystemGroupQuery true if we should deduplicate system groups, false if we should
+     *                              deduplicate non-system groups
+     * @return Pair of nonDuplicate ID set and the ID mapping (source to desk) for duplicates.
+     */
+    public Pair<Set<Long>, Map<Long, Long>> deDuplicateGroups(
+            AccountWithDataSet sourceAccount, AccountWithDataSet destAccount,
+            boolean isSystemGroupQuery) {
+        /*
+            First get the account ids
+         */
+        final Long sourceAccountId = getAccountIdOrNull(sourceAccount);
+        final Long destAccountId = getAccountIdOrNull(destAccount);
+        // if source account id is null then source account is empty, we are done
+        if (sourceAccountId == null) {
+
+            return Pair.create(Set.of(), Map.of());
+        }
+
+        // if dest account id is null, then dest account is empty, we can be sure everything in
+        // source is unique
+        Set<Long> nonDuplicates = new HashSet<>();
+        if (destAccountId == null) {
+            try (Cursor c = getReadableDatabase().query(
+                    Tables.GROUPS,
+                    new String[] {
+                            Groups._ID,
+                    },
+                    GroupsColumns.ACCOUNT_ID + " = ?"
+                            + " AND " + Groups.DELETED + " = 0"
+                            + " AND " + (isSystemGroupQuery ? Move.IS_SYSTEM_GROUP_FILTER
+                                : Move.IS_NONSYSTEM_GROUP_FILTER),
+                    new String[] {sourceAccountId.toString()},
+                    null, null, null)) {
+                while (c.moveToNext()) {
+                    long rawContactId = c.getLong(0);
+                    nonDuplicates.add(rawContactId);
+                }
+            }
+            return Pair.create(nonDuplicates, Map.of());
+        }
+
+        HashMap<Long, Long> duplicates = new HashMap<>();
+        try (Cursor c = getGroupDeduplicationQuery(sourceAccountId, destAccountId,
+                isSystemGroupQuery)) {
+            while (c.moveToNext()) {
+                long sourceGroupId = c.getLong(0);
+                if (!c.isNull(1)) {
+                    // if name matches, it's a duplicate
+                    long destGroupId = c.getLong(1);
+                    duplicates.put(sourceGroupId, destGroupId);
+                } else {
+                    // add non name matching unique raw contacts to results.
+                    nonDuplicates.add(sourceGroupId);
+                }
+            }
+        }
+
+        return Pair.create(nonDuplicates, duplicates);
+    }
+
+
 
 
     /**
@@ -4963,8 +5067,119 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
+    private Set<Long> filterEmptyGroups(Set<Long> groupIds) {
+        Set<Long> nonEmptyGroupIds = new HashSet<>();
+        try (Cursor c = getReadableDatabase().query(
+                /* distinct= */ true,
+                Tables.DATA,
+                new String[] {
+                        GroupMembership.GROUP_ROW_ID,
+                },
+                GroupMembership.GROUP_ROW_ID + " IN (?)"
+                + " AND " + DataColumns.MIMETYPE_ID + " = "
+                        + mCommonMimeTypeIdsCache.get(GroupMembership.CONTENT_ITEM_TYPE),
+                new String[] {TextUtils.join(",", groupIds)},
+                null, null, null, null)) {
+            while (c.moveToNext()) {
+                nonEmptyGroupIds.add(c.getLong(0));
+            }
+        }
+        return nonEmptyGroupIds;
+    }
+
+    /**
+     * Gets the content values for Groups that will be copied over during a move. Specifically, we
+     * move {@link ContactsContract.Groups#TITLE}, {@link ContactsContract.Groups#NOTES},
+     * {@link ContactsContract.Groups#GROUP_VISIBLE} {@link ContactsContract.Groups#TITLE_RES}, and
+     * {@link ContactsContract.Groups#RES_PACKAGE}.
+     * It will only create ContentValues for Groups that contain Contacts and will skip any with
+     * {@link ContactsContract.Groups#AUTO_ADD} set (as they are likely to simply be all contacts).
+     */
+    public Map<Long, ContentValues> getGroupContentValuesForMoveCopy(AccountWithDataSet account,
+            Set<Long> groupIds) {
+        // we only want move copies for non-empty groups
+        Set<Long> nonEmptyGroupIds = filterEmptyGroups(groupIds);
+        Map<Long, ContentValues> idToContentValues = new HashMap<>();
+        try (Cursor c = getReadableDatabase().query(
+                Tables.GROUPS,
+                new String[] {
+                        Groups._ID,
+                        Groups.GROUP_VISIBLE,
+                        Groups.NOTES,
+                        GroupsColumns.CONCRETE_PACKAGE_ID,
+                        Groups.TITLE,
+                        Groups.TITLE_RES,
+                },
+                Groups._ID + " IN (?)"
+                + " AND " + Groups.AUTO_ADD + " = 0",
+                new String[] {TextUtils.join(",", nonEmptyGroupIds)},
+                null, null, null)) {
+            while (c.moveToNext()) {
+                Long originalGroupId = c.getLong(0);
+                ContentValues values = new ContentValues();
+                DatabaseUtils.cursorRowToContentValues(c, values);
+                // clear the existing ID from the content values
+                values.putNull(Groups._ID);
+                values.put(Groups.ACCOUNT_NAME, account.getAccountName());
+                values.put(Groups.ACCOUNT_TYPE, account.getAccountType());
+                values.put(Groups.DATA_SET, account.getDataSet());
+                idToContentValues.put(originalGroupId, values);
+            }
+        }
+
+        return idToContentValues;
+    }
+
+    /**
+     * Gets content values for the Group sync stubs.
+     * The stubs consist of just the {@link ContactsContract.Groups#SOURCE_ID},
+     * {@link ContactsContract.Groups#SYNC1}, {@link ContactsContract.Groups#SYNC2},
+     * {@link ContactsContract.Groups#SYNC3}, and {@link ContactsContract.Groups#SYNC4} columns,
+     * with {@link ContactsContract.Groups#DELETED} and {@link ContactsContract.Groups#DIRTY} = 1.
+     */
+    public List<ContentValues> getGroupSyncStubContentValues(AccountWithDataSet account,
+            Set<Long> groupIds) {
+        List<ContentValues> syncContentValues = new ArrayList<>();
+        try (Cursor c = getReadableDatabase().query(
+                Tables.GROUPS,
+                new String[] {
+                        Groups.SOURCE_ID,
+                        Groups.SYNC1,
+                        Groups.SYNC2,
+                        Groups.SYNC3,
+                        Groups.SYNC4
+                },
+                Groups._ID + " IN (?)",
+                new String[] {TextUtils.join(",", groupIds)},
+                null, null, null)) {
+            while (c.moveToNext()) {
+                String sourceId = c.getString(0);
+                // if there's no source id, then we won't need to write a stub
+                if (sourceId != null && !sourceId.isEmpty()) {
+                    ContentValues values = new ContentValues();
+                    DatabaseUtils.cursorRowToContentValues(c, values);
+                    values.put(Groups.ACCOUNT_NAME, account.getAccountName());
+                    values.put(Groups.ACCOUNT_TYPE, account.getAccountType());
+                    values.put(Groups.DELETED, 1);
+                    values.put(Groups.DIRTY, 1);
+                    values.put(Groups.SOURCE_ID, sourceId);
+                    values.put(Groups.DATA_SET, account.getDataSet());
+                    syncContentValues.add(values);
+                }
+
+            }
+        }
+
+        return syncContentValues;
+    }
+
     /**
      * Gets content values for the sync stubs.
+     * The stubs consist of just the {@link ContactsContract.RawContacts#SOURCE_ID},
+     * {@link ContactsContract.RawContacts#SYNC1}, {@link ContactsContract.RawContacts#SYNC2},
+     * {@link ContactsContract.RawContacts#SYNC3}, and {@link ContactsContract.RawContacts#SYNC4}
+     * columns, with {@link ContactsContract.RawContacts#DELETED} and
+     * {@link ContactsContract.RawContacts#DIRTY} = 1.
      */
     public List<ContentValues> getSyncStubContentValues(AccountWithDataSet account,
             Set<Long> rawContactIds) {
@@ -4990,6 +5205,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                     values.put(RawContacts.ACCOUNT_NAME, account.getAccountName());
                     values.put(RawContacts.ACCOUNT_TYPE, account.getAccountType());
                     values.put(RawContacts.DELETED, 1);
+                    values.put(RawContacts.DIRTY, 1);
                     values.put(RawContacts.SOURCE_ID, sourceId);
                     values.put(RawContacts.DATA_SET, account.getDataSet());
                     syncContentValues.add(values);
