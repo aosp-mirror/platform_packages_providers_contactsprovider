@@ -4941,6 +4941,29 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Delete all Data rows where MIMETYPE is not in ContactsContract.CommonDataKinds.
+     * @param account the account to delete data rows from.
+     */
+    public void deleteNonCommonDataRows(AccountWithDataSet account) {
+        final Long accountId = getAccountIdOrNull(account);
+        if (accountId == null) {
+            return;
+        }
+
+        try (SQLiteStatement nonPortableDataDelete = getWritableDatabase().compileStatement(
+                "DELETE FROM " + Tables.DATA
+                        + " WHERE " + DataColumns.MIMETYPE_ID + " NOT IN ("
+                            + TextUtils.join(",", mCommonMimeTypeIdsCache.values()) + ")"
+                        + " AND " + Data.RAW_CONTACT_ID + " IN ("
+                            + "SELECT " + RawContacts._ID + " FROM " + Tables.RAW_CONTACTS
+                            + " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ? )"
+        )) {
+            nonPortableDataDelete.bindLong(1, accountId);
+            nonPortableDataDelete.execute();
+        }
+    }
+
+    /**
      * Gets content values for the sync stubs.
      */
     public List<ContentValues> getSyncStubContentValues(AccountWithDataSet account,
