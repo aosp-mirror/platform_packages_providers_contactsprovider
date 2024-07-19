@@ -17,9 +17,12 @@
 package com.android.providers.contacts;
 
 import android.accounts.Account;
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.flag.junit.SetFlagsRule;
+import android.provider.ContactsContract.CommonDataKinds.StructuredName;
+import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.RawContacts;
 
 import androidx.test.filters.MediumTest;
@@ -54,8 +57,11 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
     static final Account SOURCE_ACCOUNT = new Account("sourceName", "sourceType");
     static final Account DEST_ACCOUNT = new Account("destName", "destType");
+    static final Account DEST_ACCOUNT_WITH_SOURCE_TYPE = new Account("destName", "sourceType");
 
     static final String SOURCE_ID = "uniqueSourceId";
+
+    static final String NON_PORTABLE_MIMETYPE = "test/mimetype";
 
     @Before
     @Override
@@ -141,6 +147,35 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
         RawContactUtil.update(mResolver, rawContactId, rawContactValues);
         return rawContactId;
+    }
+
+    private void insertNonPortableData(
+            ContentResolver resolver, long rawContactId, String data1) {
+        ContentValues values = new ContentValues();
+        values.put(Data.DATA1, data1);
+        values.put(Data.MIMETYPE, NON_PORTABLE_MIMETYPE);
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        resolver.insert(Data.CONTENT_URI, values);
+    }
+
+    private void assertData(long rawContactId, String mimetype, String data1, int expectedCount) {
+        assertEquals(expectedCount, getCount(Data.CONTENT_URI,
+                Data.RAW_CONTACT_ID + " == ? AND "
+                        + Data.MIMETYPE + " = ? AND "
+                        + Data.DATA1 + " = ?",
+                new String[] {
+                        Long.toString(rawContactId),
+                        mimetype,
+                        data1
+                }));
+    }
+
+    private void assertDataExists(long rawContactId, String mimetype, String data1) {
+        assertData(rawContactId, mimetype, data1, 1);
+    }
+
+    private void assertDataDoesNotExist(long rawContactId, String mimetype, String data1) {
+        assertData(rawContactId, mimetype, data1, 0);
     }
 
     @Test
@@ -326,5 +361,141 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
         // verify a stub has been written for the unique raw contact in the source account
         assertMoveStubExists(uniqueContactId, SOURCE_ID, source);
+    }
+
+    /**
+     * Move a contact between source and dest where both account have different account types.
+     * The contact is unique because of a non-portable data row, because the account types don't
+     * match, the non-portable data row will be deleted before matching the contacts and the contact
+     * will be deleted as a duplicate.
+     */
+    @Test
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    public void testMoveUniqueRawContactWithNonPortableDataRows() {
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT});
+        AccountWithDataSet source =
+                AccountWithDataSet.get(SOURCE_ACCOUNT.name, SOURCE_ACCOUNT.type, null);
+        AccountWithDataSet dest =
+                AccountWithDataSet.get(DEST_ACCOUNT.name, DEST_ACCOUNT.type, null);
+
+        // create a duplicate pair of contacts
+        long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
+                SOURCE_ACCOUNT);
+        long destRawContactId = RawContactUtil.createRawContactWithName(mResolver, DEST_ACCOUNT);
+        // create a combination of data rows
+        DataUtil.insertStructuredName(mResolver, sourceRawContactId, "firstA", "lastA");
+        insertNonPortableData(mResolver, sourceRawContactId, "foo");
+        DataUtil.insertStructuredName(mResolver, destRawContactId, "firstA", "lastA");
+
+        // trigger the move
+        cp.moveRawContacts(source, dest);
+
+        // Verify no stub was written since no source ID existed
+        assertMoveStubDoesNotExist(sourceRawContactId, source);
+
+        // verify the unique raw contact has been deleted as a duplicate
+        assertMovedContactIsDeleted(sourceRawContactId, source);
+        assertDataDoesNotExist(sourceRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        assertDataDoesNotExist(
+                sourceRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
+
+
+        // verify the original near duplicate contact remains unchanged
+        assertMovedRawContact(destRawContactId, dest, false);
+        // the non portable data should still not exist on the destination account
+        assertDataDoesNotExist(destRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        // the existing data row in the destination account should be unaffected
+        assertDataExists(destRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
+    }
+
+    /**
+     * Moves a contact between source and dest where both accounts have the same account type.
+    *  The contact is unique because of a non-portable data row. Because the account types match,
+    *  the non-portable data row will be considered while matching the contacts and the contact will
+    *  be treated as unique.
+     */
+    @Test
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    public void testMoveUniqueRawContactsWithNonPortableDataRowsAccountTypesMatch() {
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT_WITH_SOURCE_TYPE});
+        AccountWithDataSet source =
+                AccountWithDataSet.get(SOURCE_ACCOUNT.name, SOURCE_ACCOUNT.type, null);
+        AccountWithDataSet dest =
+                AccountWithDataSet.get(DEST_ACCOUNT_WITH_SOURCE_TYPE.name,
+                        DEST_ACCOUNT_WITH_SOURCE_TYPE.type, null);
+
+        // create a duplicate pair of contacts
+        long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
+                SOURCE_ACCOUNT);
+        long destRawContactId = RawContactUtil.createRawContactWithName(mResolver,
+                DEST_ACCOUNT_WITH_SOURCE_TYPE);
+        // create a combination of data rows
+        DataUtil.insertStructuredName(mResolver, sourceRawContactId, "firstA", "lastA");
+        insertNonPortableData(mResolver, sourceRawContactId, "foo");
+        DataUtil.insertStructuredName(mResolver, destRawContactId, "firstA", "lastA");
+
+        // trigger the move
+        cp.moveRawContacts(source, dest);
+
+        // Verify no stub was written since no source ID existed
+        assertMoveStubDoesNotExist(sourceRawContactId, source);
+
+        // verify the unique raw contact has been moved from the old -> new account
+        assertMovedRawContact(sourceRawContactId, dest, false);
+        // all data rows should have moved with the source
+        assertDataExists(sourceRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        assertDataExists(sourceRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
+
+        // verify the original near duplicate contact remains unchanged
+        assertMovedRawContact(destRawContactId, dest, false);
+        // the non portable data should still not exist on the destination account
+        assertDataDoesNotExist(destRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        // the existing data row in the destination account should be unaffected
+        assertDataExists(destRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
+    }
+
+    /**
+     * Moves a contact between source and dest where both accounts have the same account type.
+     * The contact is unique because of a non-portable data row. Because the account types match,
+     * the non-portable data row will be considered while matching the contacts and the contact will
+     * be treated as a duplicate.
+     */
+    @Test
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    public void testMoveDuplicateRawContactsWithNonPortableDataRowsAccountTypesMatch() {
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT_WITH_SOURCE_TYPE});
+        AccountWithDataSet source =
+                AccountWithDataSet.get(SOURCE_ACCOUNT.name, SOURCE_ACCOUNT.type, null);
+        AccountWithDataSet dest =
+                AccountWithDataSet.get(DEST_ACCOUNT_WITH_SOURCE_TYPE.name,
+                        DEST_ACCOUNT_WITH_SOURCE_TYPE.type, null);
+
+        // create a duplicate pair of contacts
+        long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
+                SOURCE_ACCOUNT);
+        long destRawContactId = RawContactUtil.createRawContactWithName(mResolver,
+                DEST_ACCOUNT_WITH_SOURCE_TYPE);
+        // create a combination of data rows
+        DataUtil.insertStructuredName(mResolver, sourceRawContactId, "firstA", "lastA");
+        insertNonPortableData(mResolver, sourceRawContactId, "foo");
+        DataUtil.insertStructuredName(mResolver, destRawContactId, "firstA", "lastA");
+        insertNonPortableData(mResolver, destRawContactId, "foo");
+
+        // trigger the move
+        cp.moveRawContacts(source, dest);
+
+        // verify the duplicate contact has been deleted
+        assertMovedContactIsDeleted(sourceRawContactId, source);
+        assertDataDoesNotExist(sourceRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        assertDataDoesNotExist(
+                sourceRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
+
+        // verify the original near duplicate contact remains unchanged
+        assertMovedRawContact(destRawContactId, dest, false);
+        assertDataExists(destRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        assertDataExists(destRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
     }
 }
