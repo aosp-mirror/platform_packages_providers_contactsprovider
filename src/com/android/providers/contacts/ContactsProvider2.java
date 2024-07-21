@@ -2657,6 +2657,24 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 false);
     }
 
+    private boolean isAccountTypeMatch(
+            AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
+        if (sourceAccount.getAccountType() == null) {
+            return destAccount.getAccountType() == null;
+        }
+
+        return sourceAccount.getAccountType().equals(destAccount.getAccountType());
+    }
+
+    private boolean isDataSetMatch(
+            AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
+        if (sourceAccount.getDataSet() == null) {
+            return destAccount.getDataSet() == null;
+        }
+
+        return sourceAccount.getDataSet().equals(destAccount.getDataSet());
+    }
+
     @VisibleForTesting
     Bundle moveRawContacts(
             AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
@@ -2671,7 +2689,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
         final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
         db.beginTransaction();
         try {
-            // First, compare raw contacts from source and destination accounts, find the unique
+            // If we are moving between account types or data sets, delete non-portable data rows
+            // from the source
+            if (!isAccountTypeMatch(sourceAccount, destAccount)
+                    || !isDataSetMatch(sourceAccount, destAccount)) {
+                mDbHelper.get().deleteNonCommonDataRows(sourceAccount);
+            }
+
+            // Next, compare raw contacts from source and destination accounts, find the unique
             // raw contacts from source account;
             Pair<Set<Long>, Set<Long>> sourceRawContactIds =
                     mDbHelper.get().deDuplicateRawContacts(sourceAccount, destAccount);
