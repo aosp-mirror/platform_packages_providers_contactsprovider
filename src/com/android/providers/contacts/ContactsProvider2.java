@@ -21,6 +21,7 @@ import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 import static com.android.providers.contacts.flags.Flags.cp2AccountMoveFlag;
+import static com.android.providers.contacts.flags.Flags.enableNewDefaultAccountRuleFlag;
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
 import android.accounts.Account;
@@ -1501,6 +1502,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private GlobalSearchSupport mGlobalSearchSupport;
     private SearchIndexManager mSearchIndexManager;
 
+    private DefaultAccountManager mDefaultAccountManager;
+    private AccountResolver mAccountResolver;
+
     private int mProviderStatus = STATUS_NORMAL;
     private boolean mProviderStatusUpdateNeeded;
     private volatile CountDownLatch mReadAccessLatch;
@@ -1624,6 +1628,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
+        mDefaultAccountManager = new DefaultAccountManager(getContext(), mContactsHelper);
+        mAccountResolver = new AccountResolver(mContactsHelper, mDefaultAccountManager);
 
         if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
                 .isPhoneAccountMigrationPending()) {
@@ -2753,7 +2759,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 .getGroupContentValuesForMoveCopy(destAccount, systemUniqueGroups);
         Map<Long, Long> systemGroupIdMap = new HashMap<>();
         for (Map.Entry<Long, ContentValues> idToValues: oldIdToNewValues.entrySet()) {
-            Long newGroupId = insertGroup(Groups.CONTENT_URI, idToValues.getValue(), false);
+            Long newGroupId = insertGroup(Groups.CONTENT_URI, idToValues.getValue(),
+                    /*callerIsSyncAdapter=*/false,
+                    /*applyDefaultAccount=*/enableNewDefaultAccountRuleFlag());
             systemGroupIdMap.put(idToValues.getKey(), newGroupId);
         }
         updateGroupDataRows(systemGroupIdMap);
@@ -2837,7 +2845,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         return new Bundle();
     }
-
 
     /**
      * Pre-authorizes the given URI, adding an expiring permission token to it and placing that
@@ -3182,7 +3189,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case RAW_CONTACTS:
             case PROFILE_RAW_CONTACTS: {
                 invalidateFastScrollingIndexCache();
-                id = insertRawContact(uri, values, callerIsSyncAdapter);
+                id = insertRawContact(uri, values, callerIsSyncAdapter,
+                        enableNewDefaultAccountRuleFlag() && match == RAW_CONTACTS);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -3213,7 +3221,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case GROUPS: {
-                id = insertGroup(uri, values, callerIsSyncAdapter);
+                id = insertGroup(uri, values, callerIsSyncAdapter,
+                        enableNewDefaultAccountRuleFlag());
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -3282,7 +3291,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @return the ID of the newly-created row.
      */
     private long insertRawContact(
-            Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter) {
+            Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter,
+            boolean applyDefaultAccount) {
 
         inputValues = fixUpUsageColumnsForEdit(inputValues);
 
@@ -3291,7 +3301,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         values.putNull(RawContacts.CONTACT_ID);
 
         // Populate the relevant values before inserting the new entry into the database.
-        final long accountId = replaceAccountInfoByAccountId(uri, values);
+        final long accountId = replaceAccountInfoByAccountId(uri, values,
+                applyDefaultAccount);
         if (flagIsSet(values, RawContacts.DELETED)) {
             values.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
         }
@@ -3651,12 +3662,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
      *     and false otherwise.
      * @return the ID of the newly-created row.
      */
-    private long insertGroup(Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter) {
+    private long insertGroup(Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter,
+            boolean applyDefaultAccount) {
         // Create a shallow copy.
         final ContentValues values = new ContentValues(inputValues);
 
         // Populate the relevant values before inserting the new entry into the database.
-        final long accountId = replaceAccountInfoByAccountId(uri, values);
+        final long accountId = replaceAccountInfoByAccountId(uri, values,
+                applyDefaultAccount);
         replacePackageNameByPackageId(values);
         if (!callerIsSyncAdapter) {
             values.put(Groups.DIRTY, 1);
@@ -3695,8 +3708,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private Uri insertSettings(Uri uri, ContentValues values) {
-        final AccountWithDataSet account = AccountResolver.resolveAccountWithDataSet(uri, values,
-                mDbHelper.get());
+        final AccountWithDataSet account = mAccountResolver.resolveAccountWithDataSet(uri, values,
+                /*applyDefaultAccount=*/false);
 
         // Note that the following check means the local account settings cannot be created with
         // an insert because resolveAccountWithDataSet returns null for it. However, the settings
@@ -10449,9 +10462,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @param values The {@link ContentValues} object to operate on.
      * @return The corresponding account ID.
      */
-    private long replaceAccountInfoByAccountId(Uri uri, ContentValues values) {
-        final AccountWithDataSet account = AccountResolver.resolveAccountWithDataSet(uri, values,
-                mDbHelper.get());
+    private long replaceAccountInfoByAccountId(Uri uri, ContentValues values,
+            boolean applyDefaultAccount) {
+        final AccountWithDataSet account = mAccountResolver.resolveAccountWithDataSet(uri, values,
+                applyDefaultAccount);
         final long id = mDbHelper.get().getOrCreateAccountIdInTransaction(account);
         values.put(RawContactsColumns.ACCOUNT_ID, id);
 
