@@ -20,7 +20,8 @@ import static com.android.providers.contacts.ContactsActor.PACKAGE_GREY;
 import android.content.Context;
 import android.os.UserHandle;
 import android.provider.ContactsContract;
-import android.test.suitebuilder.annotation.SmallTest;
+
+import androidx.test.filters.SmallTest;
 
 import com.android.providers.contacts.ContactsActor;
 import com.android.providers.contacts.ContactsActor.MockUserManager;

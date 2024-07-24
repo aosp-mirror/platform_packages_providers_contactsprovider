@@ -1,0 +1,28 @@
+#!/bin/bash
+
+set -e
+
+user_path=data
+file=contacts2.db
+pass=""
+
+adb root && adb wait-for-device
+
+while getopts "theqvpu:" opt; do
+  case "$opt" in
+    t|h|e|q|v)
+      pass="$pass -$opt"
+      ;;
+    p) # Open profile DB instead.
+      file=profile.db
+      ;;
+    u) # Open for a secondary user
+      user_path="user/$OPTARG"
+      ;;
+    *)
+      exit 1
+  esac
+done
+shift $(($OPTIND - 1))
+
+$(dirname "$0")/qdb $pass /data/$user_path/com.android.providers.contacts/databases/$file "$*"

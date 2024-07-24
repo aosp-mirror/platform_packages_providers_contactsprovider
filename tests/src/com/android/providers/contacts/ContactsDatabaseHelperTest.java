@@ -16,9 +16,9 @@
 
 package com.android.providers.contacts;
 
+import android.accounts.Account;
 import android.content.ContentValues;
 import android.database.ContentObserver;
-import android.accounts.Account;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
@@ -28,8 +28,9 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
 import android.test.MoreAsserts;
-import android.test.suitebuilder.annotation.LargeTest;
-import android.test.suitebuilder.annotation.SmallTest;
+
+import androidx.test.filters.LargeTest;
+import androidx.test.filters.SmallTest;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;

@@ -19,6 +19,8 @@ package com.android.providers.contacts;
 import android.annotation.NonNull;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.Flags;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -39,6 +41,7 @@ import android.util.Log;
 import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.DirectoryColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+
 import com.google.android.collect.Lists;
 import com.google.android.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
@@ -418,7 +421,8 @@ public class ContactDirectoryManager {
      * Scans the specified package for content directories and updates the {@link Directory}
      * table accordingly.
      */
-    private List<DirectoryInfo> updateDirectoriesForPackage(
+    @VisibleForTesting
+    List<DirectoryInfo> updateDirectoriesForPackage(
             PackageInfo packageInfo, boolean initialScan) {
         if (DEBUG) {
             Log.d(TAG, "updateDirectoriesForPackage  packageName=" + packageInfo.packageName
@@ -426,6 +430,15 @@ public class ContactDirectoryManager {
         }
 
         ArrayList<DirectoryInfo> directories = Lists.newArrayList();
+
+        if (Flags.stayStopped()
+                && (packageInfo.applicationInfo != null
+                 && ((packageInfo.applicationInfo.flags & ApplicationInfo.FLAG_STOPPED) != 0))) {
+            if (DEBUG) {
+                Log.d(TAG, "Package " + packageInfo.packageName + " is in stopped state");
+            }
+            return null;
+        }
 
         ProviderInfo[] providers = packageInfo.providers;
         if (providers != null) {

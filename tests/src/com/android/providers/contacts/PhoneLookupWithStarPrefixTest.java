@@ -16,8 +16,8 @@
 
 package com.android.providers.contacts;
 
-import android.test.suitebuilder.annotation.LargeTest;
-import android.test.suitebuilder.annotation.SmallTest;
+import androidx.test.filters.LargeTest;
+import androidx.test.filters.SmallTest;
 
 @LargeTest
 public class PhoneLookupWithStarPrefixTest extends FixedAndroidTestCase {

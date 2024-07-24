@@ -16,9 +16,12 @@
 
 package com.android.providers.contacts;
 
+import static android.content.pm.Flags.FLAG_STAY_STOPPED;
+
 import android.accounts.Account;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
@@ -27,20 +30,28 @@ import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.Contacts;
 import android.provider.ContactsContract.Directory;
 import android.provider.ContactsContract.RawContacts;
 import android.test.mock.MockContentProvider;
-import android.test.suitebuilder.annotation.MediumTest;
 import android.util.Log;
 
 import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.runner.AndroidJUnit4;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.AggregationExceptionColumns;
 
 import com.google.android.collect.Lists;
+
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.util.Arrays;
 import java.util.Set;
@@ -52,8 +63,11 @@ import java.util.Set;
         -w com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  *
  */
-@MediumTest
+@RunWith(AndroidJUnit4.class)
 public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
+
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
     private static final String TAG = "ContactDirectoryManagerTest";
 
     private ContactsMockPackageManager mPackageManager;
@@ -114,8 +128,10 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         }
     }
 
+    @Before
     @Override
     public void setUp() throws Exception {
+
         super.setUp();
 
         mProvider = (ContactsProvider2) getProvider();
@@ -129,9 +145,10 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
     protected String getContextPackageName() {
         // In this test, we need to use the real package name, because that'll be recorded in the
         // directory table, and if it's wrong, the tests would get confused.
-        return getContext().getPackageName();
+        return mContext.getPackageName();
     }
 
+    @Test
     public void testIsDirectoryProvider() {
         ProviderInfo provider = new ProviderInfo();
 
@@ -158,6 +175,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         assertTrue(ContactDirectoryManager.isDirectoryProvider(provider));
     }
 
+    @Test
     public void testScanAllProviders() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(
@@ -209,13 +227,13 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
                 Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
 
         assertTrue(cursor.moveToPosition(3));
-        assertDirectoryRow(cursor, getContext().getPackageName(),
+        assertDirectoryRow(cursor, mContext.getPackageName(),
                 "com.android.contacts", null, null,
                 null, -1 /* =any */, Directory.EXPORT_SUPPORT_NONE,
                 Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
 
         assertTrue(cursor.moveToPosition(4));
-        assertDirectoryRow(cursor, getContext().getPackageName(),
+        assertDirectoryRow(cursor, mContext.getPackageName(),
                 "com.android.contacts", null, null,
                 null, -1 /* =any */, Directory.EXPORT_SUPPORT_NONE,
                 Directory.SHORTCUT_SUPPORT_FULL, Directory.PHOTO_SUPPORT_FULL);
@@ -223,6 +241,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testScanAllProviders_scanCondition() throws Exception {
         testScanAllProviders();
 
@@ -254,6 +273,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
 
     }
 
+    @Test
     public void testPackageInstalled() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
@@ -305,6 +325,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testPackageUninstalled() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(
@@ -351,6 +372,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testPackageReplaced() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(
@@ -409,6 +431,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
      * Tests if the manager works correctly when the package name for a directory is changed
      * (on system update).
      */
+    @Test
     public void testPackageRenamed() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(
@@ -472,6 +495,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testAccountRemoval() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(
@@ -513,6 +537,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testNotifyDirectoryChange() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
@@ -547,6 +572,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testForwardingToDirectoryProvider() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
@@ -587,6 +613,7 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testProjectionPopulated() throws Exception {
         mPackageManager.setInstalledPackages(
                 Lists.newArrayList(createProviderPackage("test.package1", "authority1"),
@@ -625,8 +652,9 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
      * Test {@link ContactDirectoryManager#getDirectoryProviderPackages} with the actual
      * package manager, and see if it returns the google sync package.
      */
+    @Test
     public void testGetDirectoryProviderPackages() {
-        final PackageManager pm = getContext().getPackageManager();
+        final PackageManager pm = mContext.getPackageManager();
         final String googleSync = "com.google.android.gms";
 
         // Skip if the package is not installed.
@@ -648,6 +676,55 @@ public class ContactDirectoryManagerTest extends BaseContactsProvider2Test {
         assertTrue(googleSync + " package not found in the list of directory provider packages: "
                         + Arrays.toString(dirProviderPackages.toArray()),
                         dirProviderPackages.contains(googleSync));
+    }
+
+    @Test
+    public void testUpdateDirectoriesForUnstoppedPackage() throws Exception {
+        mPackageManager.setInstalledPackages(
+                Lists.newArrayList(createProviderPackage("test.package1", "authority1")));
+
+        MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
+                MockContactDirectoryProvider.class, "authority1");
+        MatrixCursor response1 = provider1.createResponseCursor();
+        addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
+
+        PackageInfo packageInfo = mPackageManager.getPackageInfo("test.package1",
+                PackageManager.GET_PROVIDERS | PackageManager.GET_META_DATA);
+
+        ApplicationInfo applicationInfo = new ApplicationInfo();
+        applicationInfo.packageName = packageInfo.packageName;
+        packageInfo.applicationInfo = applicationInfo;
+        // Package is not in stopped state
+        packageInfo.applicationInfo.flags = 0;
+
+        assertEquals(mDirectoryManager.updateDirectoriesForPackage(packageInfo, true).size(), 1);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(FLAG_STAY_STOPPED)
+    public void testUpdateDirectoriesForStoppedPackage() throws Exception {
+        mPackageManager.setInstalledPackages(
+                Lists.newArrayList(createProviderPackage("test.package1", "authority1")));
+
+        MockContactDirectoryProvider provider1 = (MockContactDirectoryProvider) addProvider(
+                MockContactDirectoryProvider.class, "authority1");
+        MatrixCursor response1 = provider1.createResponseCursor();
+        addDirectoryRow(response1, "account-name1", "account-type1", "display-name1", 1,
+                Directory.EXPORT_SUPPORT_NONE, Directory.SHORTCUT_SUPPORT_NONE,
+                Directory.PHOTO_SUPPORT_NONE);
+
+        PackageInfo packageInfo = mPackageManager.getPackageInfo("test.package1",
+                PackageManager.GET_PROVIDERS | PackageManager.GET_META_DATA);
+
+        ApplicationInfo applicationInfo = new ApplicationInfo();
+        applicationInfo.packageName = packageInfo.packageName;
+        packageInfo.applicationInfo = applicationInfo;
+        // Put the package in stopped state: set associated app flags to true
+        packageInfo.applicationInfo.flags |= ApplicationInfo.FLAG_STOPPED;
+
+        assertNull(mDirectoryManager.updateDirectoriesForPackage(packageInfo, true));
     }
 
     protected PackageInfo createProviderPackage(String packageName, String authority) {
