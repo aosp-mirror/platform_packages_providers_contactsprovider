@@ -4248,7 +4248,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *
      * @param accountName The account name to be set to default.
      * @param accountType The account type to be set to default.
-     * @throws IllegalArgumentException if the account name or type is null.
+     * @throws IllegalArgumentException if one of the account name or type is null, but not both.
      */
     public void setDefaultAccount(String accountName, String accountType) {
         if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
@@ -4278,9 +4278,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     /**
      * Return the default account from Accounts table.
+     *
+     * @return empty array if Default account is not set; 1-element with null if the default account
+     * is set to NULL account; 1-element with non-null account otherwise.
      */
-    public Account getDefaultAccount() {
-        Account defaultAccount = null;
+    public Account[] getDefaultAccountIfAny() {
         try (Cursor c = getReadableDatabase().rawQuery(
                 "SELECT " + AccountsColumns.ACCOUNT_NAME + ","
                 + AccountsColumns.ACCOUNT_TYPE + " FROM " + Tables.ACCOUNTS + " WHERE "
@@ -4288,12 +4290,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             while (c.moveToNext()) {
                 String accountName = c.getString(0);
                 String accountType = c.getString(1);
-                if (!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
-                    defaultAccount = new Account(accountName, accountType);
+                if (TextUtils.isEmpty(accountName) || TextUtils.isEmpty(accountType)) {
+                    return new Account[]{null};
+                } else {
+                    return new Account[]{new Account(accountName, accountType)};
                 }
             }
         }
-        return defaultAccount;
+        return new Account[0];
     }
 
     /**
@@ -4392,32 +4396,70 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      * If {@code optionalContactId} is non-negative, it'll update only for the specified contact.
      */
     private void updateCustomContactVisibility(SQLiteDatabase db, long optionalContactId) {
-        final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
-        String[] selectionArgs = new String[] {String.valueOf(groupMembershipMimetypeId)};
+        // NOTE: This requires late binding of GroupMembership MIME-type
+        final String contactIsVisible = """
+                SELECT
+                MAX((SELECT (CASE WHEN
+                    (CASE
+                        WHEN COUNT(groups._id)=0
+                        THEN ungrouped_visible
+                        ELSE MAX(group_visible)
+                        END)=1 THEN 1 ELSE 0 END)
+                    FROM raw_contacts JOIN accounts ON
+                        (raw_contacts.account_id = accounts._id)
+                        LEFT OUTER JOIN data ON (data.mimetype_id=? AND
+                            data.raw_contact_id = raw_contacts._id)
+                        LEFT OUTER JOIN groups ON (groups._id = data.data1)
+                    WHERE raw_contacts._id = outer_raw_contacts._id))
+                FROM raw_contacts AS outer_raw_contacts
+                WHERE contact_id = contacts._id
+                GROUP BY contact_id
+                """;
 
-        final String contactIdSelect = (optionalContactId < 0) ? "" :
-                (Contacts._ID + "=" + optionalContactId + " AND ");
+        final long groupMembershipMimetypeId = getMimeTypeId(GroupMembership.CONTENT_ITEM_TYPE);
 
         // First delete what needs to be deleted, then insert what needs to be added.
         // Since flash writes are very expensive, this approach is much better than
         // delete-all-insert-all.
-        db.execSQL(
-                "DELETE FROM " + Tables.VISIBLE_CONTACTS +
-                " WHERE " + Contacts._ID + " IN" +
-                    "(SELECT " + Contacts._ID +
-                    " FROM " + Tables.CONTACTS +
-                    " WHERE " + contactIdSelect + "(" + Clauses.CONTACT_IS_VISIBLE + ")=0) ",
-                selectionArgs);
+        if (optionalContactId < 0) {
+            String[] selectionArgs = new String[] {String.valueOf(groupMembershipMimetypeId)};
+            db.execSQL("""
+                    DELETE FROM visible_contacts
+                        WHERE _id IN
+                            (SELECT contacts._id
+                             FROM contacts
+                             WHERE (""" + contactIsVisible + ")=0)",
+                    selectionArgs);
 
-        db.execSQL(
-                "INSERT INTO " + Tables.VISIBLE_CONTACTS +
-                " SELECT " + Contacts._ID +
-                " FROM " + Tables.CONTACTS +
-                " WHERE " +
-                    contactIdSelect +
-                    Contacts._ID + " NOT IN " + Tables.VISIBLE_CONTACTS +
-                    " AND (" + Clauses.CONTACT_IS_VISIBLE + ")=1 ",
-                selectionArgs);
+            db.execSQL("""
+                    INSERT INTO visible_contacts
+                        SELECT _id
+                        FROM contacts
+                        WHERE _id NOT IN visible_contacts
+                           AND (""" + contactIsVisible + ")=1 ",
+                    selectionArgs);
+        } else {
+            String[] selectionArgs = new String[] {String.valueOf(optionalContactId),
+                                                    String.valueOf(groupMembershipMimetypeId)};
+
+            db.execSQL("""
+                    DELETE FROM visible_contacts
+                        WHERE _id IN
+                            (SELECT contacts._id
+                             FROM contacts
+                             WHERE contacts._id = ?
+                                 AND (""" + contactIsVisible + ")=0) ",
+                    selectionArgs);
+
+            db.execSQL("""
+                    INSERT INTO visible_contacts
+                        SELECT _id
+                        FROM contacts
+                        WHERE _id = ? AND
+                            _id NOT IN visible_contacts
+                            AND (""" + contactIsVisible + ")=1 ",
+                    selectionArgs);
+        }
     }
 
     /**
