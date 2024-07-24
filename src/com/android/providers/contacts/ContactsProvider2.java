@@ -2578,8 +2578,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
             final Bundle response = new Bundle();
 
-            final Account defaultAccount = mDbHelper.get().getDefaultAccount();
-            response.putParcelable(Settings.KEY_DEFAULT_ACCOUNT, defaultAccount);
+            final Account[] defaultAccount = mDbHelper.get().getDefaultAccountIfAny();
+
+            if (defaultAccount.length > 0) {
+                response.putParcelable(Settings.KEY_DEFAULT_ACCOUNT, defaultAccount[0]);
+            } else {
+                response.putParcelable(Settings.KEY_DEFAULT_ACCOUNT, null);
+            }
 
             return response;
         } else if (Settings.SET_DEFAULT_ACCOUNT_METHOD.equals(method)) {
