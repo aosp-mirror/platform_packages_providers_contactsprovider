@@ -4248,7 +4248,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      *
      * @param accountName The account name to be set to default.
      * @param accountType The account type to be set to default.
-     * @throws IllegalArgumentException if the account name or type is null.
+     * @throws IllegalArgumentException if one of the account name or type is null, but not both.
      */
     public void setDefaultAccount(String accountName, String accountType) {
         if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
@@ -4278,9 +4278,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
 
     /**
      * Return the default account from Accounts table.
+     *
+     * @return empty array if Default account is not set; 1-element with null if the default account
+     * is set to NULL account; 1-element with non-null account otherwise.
      */
-    public Account getDefaultAccount() {
-        Account defaultAccount = null;
+    public Account[] getDefaultAccountIfAny() {
         try (Cursor c = getReadableDatabase().rawQuery(
                 "SELECT " + AccountsColumns.ACCOUNT_NAME + ","
                 + AccountsColumns.ACCOUNT_TYPE + " FROM " + Tables.ACCOUNTS + " WHERE "
@@ -4288,12 +4290,14 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             while (c.moveToNext()) {
                 String accountName = c.getString(0);
                 String accountType = c.getString(1);
-                if (!TextUtils.isEmpty(accountName) && !TextUtils.isEmpty(accountType)) {
-                    defaultAccount = new Account(accountName, accountType);
+                if (TextUtils.isEmpty(accountName) || TextUtils.isEmpty(accountType)) {
+                    return new Account[]{null};
+                } else {
+                    return new Account[]{new Account(accountName, accountType)};
                 }
             }
         }
-        return defaultAccount;
+        return new Account[0];
     }
 
     /**
