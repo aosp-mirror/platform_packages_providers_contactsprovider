@@ -15,10 +15,10 @@
  */
 package com.android.providers.contacts.aggregation.util;
 
+import androidx.test.filters.SmallTest;
+
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupType;
 import com.android.providers.contacts.FixedAndroidTestCase;
-
-import android.test.suitebuilder.annotation.SmallTest;
 
 @SmallTest
 public class ContactMatcherTest extends FixedAndroidTestCase {

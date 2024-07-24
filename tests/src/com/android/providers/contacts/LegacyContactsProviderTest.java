@@ -16,8 +16,6 @@
 
 package com.android.providers.contacts;
 
-import static com.android.providers.contacts.TestUtils.dumpTable;
-import static com.android.providers.contacts.TestUtils.dumpUri;
 
 import android.app.SearchManager;
 import android.content.ContentProvider;
@@ -37,7 +35,8 @@ import android.provider.Contacts.Photos;
 import android.provider.Contacts.Presence;
 import android.provider.Contacts.Settings;
 import android.provider.ContactsContract;
-import android.test.suitebuilder.annotation.MediumTest;
+
+import androidx.test.filters.MediumTest;
 
 import java.io.IOException;
 

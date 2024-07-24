@@ -19,8 +19,8 @@ import android.content.Context;
 import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.Data;
-import android.test.suitebuilder.annotation.LargeTest;
-import android.util.Log;
+
+import androidx.test.filters.LargeTest;
 
 import java.io.File;
 import java.io.FileOutputStream;

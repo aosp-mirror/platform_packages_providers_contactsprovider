@@ -161,4 +161,11 @@ public class ContactsMockPackageManager extends MockPackageManager {
     public int getPackageUid(String packageName, int flags) throws NameNotFoundException {
         return 123;
     }
+
+    @Override
+    public boolean isPackageStopped(String packageName) throws NameNotFoundException {
+        PackageInfo packageInfo = getPackageInfo(packageName, 0);
+        return packageInfo.applicationInfo != null
+                && ((packageInfo.applicationInfo.flags & ApplicationInfo.FLAG_STOPPED) != 0);
+    }
 }

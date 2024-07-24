@@ -19,11 +19,10 @@ package com.android.providers.contacts;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.provider.ContactsContract.PhoneLookup;
-import android.test.MoreAsserts;
-import android.test.suitebuilder.annotation.SmallTest;
+
+import androidx.test.filters.SmallTest;
 
 import com.android.providers.contacts.enterprise.EnterpriseContactsCursorWrapper;
-
 
 @SmallTest
 public class EnterpriseContactsCursorWrapperTest extends FixedAndroidTestCase {
