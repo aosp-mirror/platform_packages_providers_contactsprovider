@@ -1491,8 +1491,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private boolean mIsPhoneInitialized;
     private boolean mIsPhone;
 
-    private Account mAccount;
-
     private AbstractContactAggregator mContactAggregator;
     private AbstractContactAggregator mProfileAggregator;
 
@@ -3290,91 +3288,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return ContentUris.withAppendedId(uri, id);
     }
 
-    /**
-     * If account is non-null then store it in the values. If the account is
-     * already specified in the values then it must be consistent with the
-     * account, if it is non-null.
-     *
-     * @param uri Current {@link Uri} being operated on.
-     * @param values {@link ContentValues} to read and possibly update.
-     * @throws IllegalArgumentException when only one of
-     *             {@link RawContacts#ACCOUNT_NAME} or
-     *             {@link RawContacts#ACCOUNT_TYPE} is specified, leaving the
-     *             other undefined.
-     * @throws IllegalArgumentException when {@link RawContacts#ACCOUNT_NAME}
-     *             and {@link RawContacts#ACCOUNT_TYPE} are inconsistent between
-     *             the given {@link Uri} and {@link ContentValues}.
-     */
-    private Account resolveAccount(Uri uri, ContentValues values) throws IllegalArgumentException {
-        String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
-        String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
-        final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
-
-        String valueAccountName = values.getAsString(RawContacts.ACCOUNT_NAME);
-        String valueAccountType = values.getAsString(RawContacts.ACCOUNT_TYPE);
-        final boolean partialValues = TextUtils.isEmpty(valueAccountName)
-                ^ TextUtils.isEmpty(valueAccountType);
-
-        if (partialUri || partialValues) {
-            // Throw when either account is incomplete.
-            throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
-                    "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE", uri));
-        }
-
-        // Accounts are valid by only checking one parameter, since we've
-        // already ruled out partial accounts.
-        final boolean validUri = !TextUtils.isEmpty(accountName);
-        final boolean validValues = !TextUtils.isEmpty(valueAccountName);
-
-        if (validValues && validUri) {
-            // Check that accounts match when both present
-            final boolean accountMatch = TextUtils.equals(accountName, valueAccountName)
-                    && TextUtils.equals(accountType, valueAccountType);
-            if (!accountMatch) {
-                throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
-                        "When both specified, ACCOUNT_NAME and ACCOUNT_TYPE must match", uri));
-            }
-        } else if (validUri) {
-            // Fill values from the URI when not present.
-            values.put(RawContacts.ACCOUNT_NAME, accountName);
-            values.put(RawContacts.ACCOUNT_TYPE, accountType);
-        } else if (validValues) {
-            accountName = valueAccountName;
-            accountType = valueAccountType;
-        } else {
-            return null;
-        }
-
-        // Use cached Account object when matches, otherwise create
-        if (mAccount == null
-                || !mAccount.name.equals(accountName)
-                || !mAccount.type.equals(accountType)) {
-            mAccount = new Account(accountName, accountType);
-        }
-
-        return mAccount;
-    }
-
-    /**
-     * Resolves the account and builds an {@link AccountWithDataSet} based on the data set specified
-     * in the URI or values (if any).
-     * @param uri Current {@link Uri} being operated on.
-     * @param values {@link ContentValues} to read and possibly update.
-     */
-    private AccountWithDataSet resolveAccountWithDataSet(Uri uri, ContentValues values) {
-        final Account account = resolveAccount(uri, values);
-        AccountWithDataSet accountWithDataSet = null;
-        if (account != null) {
-            String dataSet = getQueryParameter(uri, RawContacts.DATA_SET);
-            if (dataSet == null) {
-                dataSet = values.getAsString(RawContacts.DATA_SET);
-            } else {
-                values.put(RawContacts.DATA_SET, dataSet);
-            }
-            accountWithDataSet = AccountWithDataSet.get(account.name, account.type, dataSet);
-        }
-        return accountWithDataSet;
-    }
 
     /**
      * Inserts an item in the contacts table
@@ -3809,7 +3722,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private Uri insertSettings(Uri uri, ContentValues values) {
-        final AccountWithDataSet account = resolveAccountWithDataSet(uri, values);
+        final AccountWithDataSet account = AccountResolver.resolveAccountWithDataSet(uri, values,
+                mDbHelper.get());
 
         // Note that the following check means the local account settings cannot be created with
         // an insert because resolveAccountWithDataSet returns null for it. However, the settings
@@ -10527,7 +10441,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @return The corresponding account ID.
      */
     private long replaceAccountInfoByAccountId(Uri uri, ContentValues values) {
-        final AccountWithDataSet account = resolveAccountWithDataSet(uri, values);
+        final AccountWithDataSet account = AccountResolver.resolveAccountWithDataSet(uri, values,
+                mDbHelper.get());
         final long id = mDbHelper.get().getOrCreateAccountIdInTransaction(account);
         values.put(RawContactsColumns.ACCOUNT_ID, id);
 
