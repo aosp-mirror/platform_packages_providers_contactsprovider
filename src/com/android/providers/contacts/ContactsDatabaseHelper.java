@@ -4854,6 +4854,34 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Update GroupMembership DataRows from oldGroup to newGroup.
+     * @param oldGroup the old group.
+     * @param newGroup the new group.
+     */
+    public void updateGroupMemberships(Long oldGroup, Long newGroup) {
+        Long groupMembershipMimeType =
+                mCommonMimeTypeIdsCache.get(GroupMembership.CONTENT_ITEM_TYPE);
+        if (groupMembershipMimeType == null) {
+            // if we don't have a mimetype ID for group membership we know we don't have anything
+            // to update.
+            return;
+        }
+
+        try (SQLiteStatement updateGroupMembershipQuery = getWritableDatabase().compileStatement(
+                "UPDATE " + Tables.DATA
+                        + " SET " + GroupMembership.GROUP_ROW_ID + "= ?"
+                        + " WHERE "
+                        + GroupMembership.GROUP_ROW_ID + "= ?"
+                        + " AND " + DataColumns.MIMETYPE_ID + " = ?")) {
+
+            updateGroupMembershipQuery.bindLong(1, newGroup);
+            updateGroupMembershipQuery.bindLong(2, oldGroup);
+            updateGroupMembershipQuery.bindLong(3, groupMembershipMimeType);
+            updateGroupMembershipQuery.execute();
+        }
+    }
+
+    /**
      * Compares the Groups in source and dest accounts, dividing the Groups in the
      * source account into two sets - those which are duplicated in the destination account and
      * those which are not.
@@ -4989,6 +5017,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             }
         }
 
+        // if there are no potential duplicates at this point, then we are done
+        if (potentialDupIds.isEmpty()) {
+            return Pair.create(nonDuplicates, Set.of());
+        }
+
         /*
             Next, hash the potential duplicates.
         */
@@ -5110,6 +5143,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     private Set<Long> filterEmptyGroups(Set<Long> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return Set.of();
+        }
         Set<Long> nonEmptyGroupIds = new HashSet<>();
         try (Cursor c = getReadableDatabase().query(
                 /* distinct= */ true,
@@ -5117,10 +5153,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 new String[] {
                         GroupMembership.GROUP_ROW_ID,
                 },
-                GroupMembership.GROUP_ROW_ID + " IN (?)"
+                GroupMembership.GROUP_ROW_ID + " IN (" + TextUtils.join(",", groupIds) + ")"
                 + " AND " + DataColumns.MIMETYPE_ID + " = "
                         + mCommonMimeTypeIdsCache.get(GroupMembership.CONTENT_ITEM_TYPE),
-                new String[] {TextUtils.join(",", groupIds)},
+                new String[] {},
                 null, null, null, null)) {
             while (c.moveToNext()) {
                 nonEmptyGroupIds.add(c.getLong(0));
@@ -5141,6 +5177,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             Set<Long> groupIds) {
         // we only want move copies for non-empty groups
         Set<Long> nonEmptyGroupIds = filterEmptyGroups(groupIds);
+        if (nonEmptyGroupIds == null || nonEmptyGroupIds.isEmpty()) {
+            return Map.of();
+        }
         Map<Long, ContentValues> idToContentValues = new HashMap<>();
         try (Cursor c = getReadableDatabase().query(
                 Tables.GROUPS,
@@ -5152,9 +5191,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         Groups.TITLE,
                         Groups.TITLE_RES,
                 },
-                Groups._ID + " IN (?)"
+                Groups._ID + " IN (" + TextUtils.join(",", nonEmptyGroupIds) + ")"
                 + " AND " + Groups.AUTO_ADD + " = 0",
-                new String[] {TextUtils.join(",", nonEmptyGroupIds)},
+                new String[] {},
                 null, null, null)) {
             while (c.moveToNext()) {
                 Long originalGroupId = c.getLong(0);
@@ -5181,6 +5220,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      */
     public List<ContentValues> getGroupSyncStubContentValues(AccountWithDataSet account,
             Set<Long> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return List.of();
+        }
         List<ContentValues> syncContentValues = new ArrayList<>();
         try (Cursor c = getReadableDatabase().query(
                 Tables.GROUPS,
@@ -5191,8 +5233,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         Groups.SYNC3,
                         Groups.SYNC4
                 },
-                Groups._ID + " IN (?)",
-                new String[] {TextUtils.join(",", groupIds)},
+                Groups._ID + " IN (" + TextUtils.join(",", groupIds) + ")",
+                new String[] {},
                 null, null, null)) {
             while (c.moveToNext()) {
                 String sourceId = c.getString(0);
@@ -5225,6 +5267,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
      */
     public List<ContentValues> getSyncStubContentValues(AccountWithDataSet account,
             Set<Long> rawContactIds) {
+        if (rawContactIds == null || rawContactIds.isEmpty()) {
+            return List.of();
+        }
         List<ContentValues> syncContentValues = new ArrayList<>();
         try (Cursor c = getReadableDatabase().query(
                 Tables.RAW_CONTACTS,
@@ -5235,8 +5280,8 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         RawContacts.SYNC3,
                         RawContacts.SYNC4
                 },
-                RawContacts._ID + " IN (?)",
-                new String[] {TextUtils.join(",", rawContactIds)},
+                RawContacts._ID + " IN (" + TextUtils.join(",", rawContactIds) + ")",
+                new String[] {},
                 null, null, null)) {
             while (c.moveToNext()) {
                 String sourceId = c.getString(0);
