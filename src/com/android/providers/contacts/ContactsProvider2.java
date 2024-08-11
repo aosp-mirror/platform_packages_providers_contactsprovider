@@ -2687,18 +2687,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private void updateGroupDataRows(Map<Long, Long> groupIdMap) {
         // for each group in the groupIdMap, update all Group Membership data rows from key to value
         for (Map.Entry<Long, Long> groupIds: groupIdMap.entrySet()) {
-            ContentValues values = new ContentValues();
-            values.put(GroupMembership.GROUP_ROW_ID, groupIds.getValue());
-            updateData(
-                    Data.CONTENT_URI,
-                    values,
-                    GroupMembership.GROUP_ROW_ID + " = ? AND "
-                            + Data.MIMETYPE + " = ?",
-                    new String[] {
-                            groupIds.getKey().toString(),
-                            GroupMembership.CONTENT_ITEM_TYPE,
-                    },
-                    false);
+            mDbHelper.get().updateGroupMemberships(groupIds.getKey(), groupIds.getValue());
         }
 
     }
@@ -2781,12 +2770,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         // will be left with data rows pointing to the skipped groups in the source account.
         systemUniqueGroups.removeAll(oldIdToNewValues.keySet());
         delete(Data.CONTENT_URI,
-                GroupMembership.GROUP_ROW_ID + " IN (?)"
+                GroupMembership.GROUP_ROW_ID
+                        + " IN (" + TextUtils.join(",", systemUniqueGroups) + ")"
                         + " AND " + Data.MIMETYPE + " = ?",
-                new String[] {
-                        TextUtils.join(",", systemUniqueGroups),
-                        GroupMembership.CONTENT_ITEM_TYPE
-                }
+                new String[] {GroupMembership.CONTENT_ITEM_TYPE}
         );
     }
 
