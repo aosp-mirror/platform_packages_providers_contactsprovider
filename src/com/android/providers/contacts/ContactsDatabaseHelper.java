@@ -4244,6 +4244,18 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Clear the previous set default account from Accounts table.
+     */
+    public void clearDefaultAccount() {
+        SQLiteDatabase db = getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+        values.put(AccountsColumns.IS_DEFAULT, 0);
+
+        db.update(Tables.ACCOUNTS, values, null, null);
+    }
+
+    /**
      * Set is_default column for the given account name and account type.
      *
      * @param accountName The account name to be set to default.
