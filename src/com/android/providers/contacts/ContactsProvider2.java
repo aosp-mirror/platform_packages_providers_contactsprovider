@@ -2710,8 +2710,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return sourceAccount.getDataSet().equals(destAccount.getDataSet());
     }
 
-    private void moveNonSystemGroups(
-            AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
+    private void moveNonSystemGroups(AccountWithDataSet sourceAccount,
+            AccountWithDataSet destAccount, boolean insertSyncStubs) {
         Pair<Set<Long>, Map<Long, Long>> nonSystemGroups = mDbHelper.get()
                 .deDuplicateGroups(sourceAccount, destAccount, /* isSystemGroupQuery= */ false);
         Set<Long> nonSystemUniqueGroups = nonSystemGroups.first;
@@ -2726,20 +2726,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         // For non-system groups that only exist in source:
-        // 1. Get source ids
+        // 1. Write sync stubs for synced groups (if needed)
         // 2. Update account ids
-        // 3. Write tombstones for the source ids with deleted = 1
-        if (sourceAccount.isLocalAccount()) {
-            // we don't need to write stubs if we are migrating from a local account
-            updateGroupAccount(destAccount, nonSystemUniqueGroups);
-        } else {
-            List<ContentValues> nonSystemGroupStubs = mDbHelper.get()
-                    .getGroupSyncStubContentValues(sourceAccount, nonSystemUniqueGroups);
-            updateGroupAccount(destAccount, nonSystemUniqueGroups);
-            for (ContentValues values: nonSystemGroupStubs) {
-                insertGroup(Groups.CONTENT_URI, values, false);
-            }
+        if (!sourceAccount.isLocalAccount() && insertSyncStubs) {
+            mDbHelper.get().insertGroupSyncStubs(sourceAccount, nonSystemUniqueGroups);
         }
+        updateGroupAccount(destAccount, nonSystemUniqueGroups);
     }
 
     private void moveSystemGroups(
@@ -2768,7 +2760,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         // now delete membership data rows for any unique groups we skipped - otherwise the contacts
         // will be left with data rows pointing to the skipped groups in the source account.
-        systemUniqueGroups.removeAll(oldIdToNewValues.keySet());
+        if (!oldIdToNewValues.isEmpty()) {
+            systemUniqueGroups.removeAll(oldIdToNewValues.keySet());
+        }
         delete(Data.CONTENT_URI,
                 GroupMembership.GROUP_ROW_ID
                         + " IN (" + TextUtils.join(",", systemUniqueGroups) + ")"
@@ -2777,14 +2771,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
         );
     }
 
-    private void moveGroups(AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
-        moveNonSystemGroups(sourceAccount, destAccount);
+    private void moveGroups(AccountWithDataSet sourceAccount, AccountWithDataSet destAccount,
+            boolean createSyncStubs) {
+        moveNonSystemGroups(sourceAccount, destAccount, createSyncStubs);
         moveSystemGroups(sourceAccount, destAccount);
     }
 
     @VisibleForTesting
-    Bundle moveRawContacts(
-            AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
+    Bundle moveRawContacts(AccountWithDataSet sourceAccount, AccountWithDataSet destAccount,
+            boolean insertSyncStubs) {
         if (!cp2AccountMoveFlag()) {
             return new Bundle();
         }
@@ -2804,7 +2799,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             // Move any groups and group memberships from the source to destination account
-            moveGroups(sourceAccount, destAccount);
+            moveGroups(sourceAccount, destAccount, insertSyncStubs);
 
             // Next, compare raw contacts from source and destination accounts, find the unique
             // raw contacts from source account;
@@ -2813,27 +2808,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Set<Long> nonDuplicates = sourceRawContactIds.first;
             Set<Long> duplicates = sourceRawContactIds.second;
 
-            if (sourceAccount.isLocalAccount()) {
-                // if we are moving from a device account, just perform the move
-                updateRawContactsAccount(destAccount, nonDuplicates);
-            } else {
+            if (!sourceAccount.isLocalAccount() && insertSyncStubs) {
                 /*
-                    If the source account isn't a device account, we'll need to get the sync fields
-                    for any non-duplicate contacts so we can write back stub contacts.
+                    If the source account isn't a device account, and we want to write stub contacts
+                    for the move, create them now.
                     This ensures any sync adapters on the source account won't just sync the moved
                     contacts back down (creating duplicates).
                  */
-                List<ContentValues> syncContentValues = mDbHelper.get()
-                        .getSyncStubContentValues(sourceAccount, nonDuplicates);
-
-                // Move the contacts to the destination account
-                updateRawContactsAccount(destAccount, nonDuplicates);
-
-                // Now actually write the stubs
-                for (ContentValues values: syncContentValues) {
-                    insertRawContact(RawContacts.CONTENT_URI, values, false);
-                }
+                mDbHelper.get().insertRawContactSyncStubs(sourceAccount, nonDuplicates);
             }
+
+            // move the contacts to the destination account
+            updateRawContactsAccount(destAccount, nonDuplicates);
 
             // Last, clear the duplicates.
             // Since these are duplicates, we don't need to do anything else with them
