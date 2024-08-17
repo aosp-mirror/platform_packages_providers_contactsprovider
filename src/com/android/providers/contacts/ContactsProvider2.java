@@ -2710,8 +2710,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return sourceAccount.getDataSet().equals(destAccount.getDataSet());
     }
 
-    private void moveNonSystemGroups(
-            AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
+    private void moveNonSystemGroups(AccountWithDataSet sourceAccount,
+            AccountWithDataSet destAccount, boolean insertSyncStubs) {
         Pair<Set<Long>, Map<Long, Long>> nonSystemGroups = mDbHelper.get()
                 .deDuplicateGroups(sourceAccount, destAccount, /* isSystemGroupQuery= */ false);
         Set<Long> nonSystemUniqueGroups = nonSystemGroups.first;
@@ -2726,20 +2726,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
 
         // For non-system groups that only exist in source:
-        // 1. Get source ids
+        // 1. Write sync stubs for synced groups (if needed)
         // 2. Update account ids
-        // 3. Write tombstones for the source ids with deleted = 1
-        if (sourceAccount.isLocalAccount()) {
-            // we don't need to write stubs if we are migrating from a local account
-            updateGroupAccount(destAccount, nonSystemUniqueGroups);
-        } else {
-            List<ContentValues> nonSystemGroupStubs = mDbHelper.get()
-                    .getGroupSyncStubContentValues(sourceAccount, nonSystemUniqueGroups);
-            updateGroupAccount(destAccount, nonSystemUniqueGroups);
-            for (ContentValues values: nonSystemGroupStubs) {
-                insertGroup(Groups.CONTENT_URI, values, false);
-            }
+        if (!sourceAccount.isLocalAccount() && insertSyncStubs) {
+            mDbHelper.get().insertGroupSyncStubs(sourceAccount, nonSystemUniqueGroups);
         }
+        updateGroupAccount(destAccount, nonSystemUniqueGroups);
     }
 
     private void moveSystemGroups(
@@ -2768,7 +2760,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         // now delete membership data rows for any unique groups we skipped - otherwise the contacts
         // will be left with data rows pointing to the skipped groups in the source account.
-        systemUniqueGroups.removeAll(oldIdToNewValues.keySet());
+        if (!oldIdToNewValues.isEmpty()) {
+            systemUniqueGroups.removeAll(oldIdToNewValues.keySet());
+        }
         delete(Data.CONTENT_URI,
                 GroupMembership.GROUP_ROW_ID
                         + " IN (" + TextUtils.join(",", systemUniqueGroups) + ")"
@@ -2777,14 +2771,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
         );
     }
 
-    private void moveGroups(AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
-        moveNonSystemGroups(sourceAccount, destAccount);
+    private void moveGroups(AccountWithDataSet sourceAccount, AccountWithDataSet destAccount,
+            boolean createSyncStubs) {
+        moveNonSystemGroups(sourceAccount, destAccount, createSyncStubs);
         moveSystemGroups(sourceAccount, destAccount);
     }
 
     @VisibleForTesting
-    Bundle moveRawContacts(
-            AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
+    Bundle moveRawContacts(AccountWithDataSet sourceAccount, AccountWithDataSet destAccount,
+            boolean insertSyncStubs) {
         if (!cp2AccountMoveFlag()) {
             return new Bundle();
         }
@@ -2804,7 +2799,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             // Move any groups and group memberships from the source to destination account
-            moveGroups(sourceAccount, destAccount);
+            moveGroups(sourceAccount, destAccount, insertSyncStubs);
 
             // Next, compare raw contacts from source and destination accounts, find the unique
             // raw contacts from source account;
@@ -2813,27 +2808,18 @@ public class ContactsProvider2 extends AbstractContactsProvider
             Set<Long> nonDuplicates = sourceRawContactIds.first;
             Set<Long> duplicates = sourceRawContactIds.second;
 
-            if (sourceAccount.isLocalAccount()) {
-                // if we are moving from a device account, just perform the move
-                updateRawContactsAccount(destAccount, nonDuplicates);
-            } else {
+            if (!sourceAccount.isLocalAccount() && insertSyncStubs) {
                 /*
-                    If the source account isn't a device account, we'll need to get the sync fields
-                    for any non-duplicate contacts so we can write back stub contacts.
+                    If the source account isn't a device account, and we want to write stub contacts
+                    for the move, create them now.
                     This ensures any sync adapters on the source account won't just sync the moved
                     contacts back down (creating duplicates).
                  */
-                List<ContentValues> syncContentValues = mDbHelper.get()
-                        .getSyncStubContentValues(sourceAccount, nonDuplicates);
-
-                // Move the contacts to the destination account
-                updateRawContactsAccount(destAccount, nonDuplicates);
-
-                // Now actually write the stubs
-                for (ContentValues values: syncContentValues) {
-                    insertRawContact(RawContacts.CONTENT_URI, values, false);
-                }
+                mDbHelper.get().insertRawContactSyncStubs(sourceAccount, nonDuplicates);
             }
+
+            // move the contacts to the destination account
+            updateRawContactsAccount(destAccount, nonDuplicates);
 
             // Last, clear the duplicates.
             // Since these are duplicates, we don't need to do anything else with them
@@ -5569,166 +5555,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 accountsWithDataSetsToDelete.add(knownAccountWithDataSet);
             }
 
-            if (!accountsWithDataSetsToDelete.isEmpty()) {
-                for (AccountWithDataSet accountWithDataSet : accountsWithDataSetsToDelete) {
-                    final Long accountIdOrNull = dbHelper.getAccountIdOrNull(accountWithDataSet);
-
-                    if (accountIdOrNull != null) {
-                        final String accountId = Long.toString(accountIdOrNull);
-                        final String[] accountIdParams =
-                                new String[] {accountId};
-                        db.execSQL(
-                                "DELETE FROM " + Tables.GROUPS +
-                                " WHERE " + GroupsColumns.ACCOUNT_ID + " = ?",
-                                accountIdParams);
-                        db.execSQL(
-                                "DELETE FROM " + Tables.PRESENCE +
-                                " WHERE " + PresenceColumns.RAW_CONTACT_ID + " IN (" +
-                                        "SELECT " + RawContacts._ID +
-                                        " FROM " + Tables.RAW_CONTACTS +
-                                        " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?)",
-                                        accountIdParams);
-                        db.execSQL(
-                                "DELETE FROM " + Tables.STREAM_ITEM_PHOTOS +
-                                " WHERE " + StreamItemPhotos.STREAM_ITEM_ID + " IN (" +
-                                        "SELECT " + StreamItems._ID +
-                                        " FROM " + Tables.STREAM_ITEMS +
-                                        " WHERE " + StreamItems.RAW_CONTACT_ID + " IN (" +
-                                                "SELECT " + RawContacts._ID +
-                                                " FROM " + Tables.RAW_CONTACTS +
-                                                " WHERE " + RawContactsColumns.ACCOUNT_ID + "=?))",
-                                                accountIdParams);
-                        db.execSQL(
-                                "DELETE FROM " + Tables.STREAM_ITEMS +
-                                " WHERE " + StreamItems.RAW_CONTACT_ID + " IN (" +
-                                        "SELECT " + RawContacts._ID +
-                                        " FROM " + Tables.RAW_CONTACTS +
-                                        " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?)",
-                                        accountIdParams);
-
-                        // Delta API is only needed for regular contacts.
-                        if (!inProfileMode()) {
-                            // Contacts are deleted by a trigger on the raw_contacts table.
-                            // But we also need to insert the contact into the delete log.
-                            // This logic is being consolidated into the ContactsTableUtil.
-
-                            // deleteContactIfSingleton() does not work in this case because raw
-                            // contacts will be deleted in a single batch below.  Contacts with
-                            // multiple raw contacts in the same account will be missed.
-
-                            // Find all contacts that do not have raw contacts in other accounts.
-                            // These should be deleted.
-                            Cursor cursor = db.rawQuery(
-                                    "SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            " FROM " + Tables.RAW_CONTACTS +
-                                            " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?1" +
-                                            " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            " IS NOT NULL" +
-                                            " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            " NOT IN (" +
-                                            "    SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            "    FROM " + Tables.RAW_CONTACTS +
-                                            "    WHERE " + RawContactsColumns.ACCOUNT_ID + " != ?1"
-                                            + "  AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            "    IS NOT NULL"
-                                            + ")", accountIdParams);
-                            try {
-                                while (cursor.moveToNext()) {
-                                    final long contactId = cursor.getLong(0);
-                                    ContactsTableUtil.deleteContact(db, contactId);
-                                }
-                            } finally {
-                                MoreCloseables.closeQuietly(cursor);
-                            }
-
-                            // If the contact was not deleted, its last updated timestamp needs to
-                            // be refreshed since one of its raw contacts got removed.
-                            // Find all contacts that will not be deleted (i.e. contacts with
-                            // raw contacts in other accounts)
-                            cursor = db.rawQuery(
-                                    "SELECT DISTINCT " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            " FROM " + Tables.RAW_CONTACTS +
-                                            " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?1" +
-                                            " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            " IN (" +
-                                            "    SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            "    FROM " + Tables.RAW_CONTACTS +
-                                            "    WHERE " + RawContactsColumns.ACCOUNT_ID + " != ?1"
-                                            + ")", accountIdParams);
-                            try {
-                                while (cursor.moveToNext()) {
-                                    final long contactId = cursor.getLong(0);
-                                    ContactsTableUtil.updateContactLastUpdateByContactId(
-                                            db, contactId);
-                                }
-                            } finally {
-                                MoreCloseables.closeQuietly(cursor);
-                            }
-                        }
-
-                        db.execSQL(
-                                "DELETE FROM " + Tables.RAW_CONTACTS +
-                                " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?",
-                                accountIdParams);
-                        db.execSQL(
-                                "DELETE FROM " + Tables.ACCOUNTS +
-                                " WHERE " + AccountsColumns._ID + "=?",
-                                accountIdParams);
-                    }
-                }
-
-                // Find all aggregated contacts that used to contain the raw contacts
-                // we have just deleted and see if they are still referencing the deleted
-                // names or photos.  If so, fix up those contacts.
-                ArraySet<Long> orphanContactIds = new ArraySet<>();
-                Cursor cursor = db.rawQuery("SELECT " + Contacts._ID +
-                        " FROM " + Tables.CONTACTS +
-                        " WHERE (" + Contacts.NAME_RAW_CONTACT_ID + " NOT NULL AND " +
-                                Contacts.NAME_RAW_CONTACT_ID + " NOT IN " +
-                                        "(SELECT " + RawContacts._ID +
-                                        " FROM " + Tables.RAW_CONTACTS + "))" +
-                        " OR (" + Contacts.PHOTO_ID + " NOT NULL AND " +
-                                Contacts.PHOTO_ID + " NOT IN " +
-                                        "(SELECT " + Data._ID +
-                                        " FROM " + Tables.DATA + "))", null);
-                try {
-                    while (cursor.moveToNext()) {
-                        orphanContactIds.add(cursor.getLong(0));
-                    }
-                } finally {
-                    cursor.close();
-                }
-
-                for (Long contactId : orphanContactIds) {
-                    mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
-                }
-                dbHelper.updateAllVisible();
-
-                // Don't bother updating the search index if we're in profile mode - there is no
-                // search index for the profile DB, and updating it for the contacts DB in this case
-                // makes no sense and risks a deadlock.
-                if (!inProfileMode()) {
-                    // TODO Fix it.  It only updates index for contacts/raw_contacts that the
-                    // current transaction context knows updated, but here in this method we don't
-                    // update that information, so effectively it's no-op.
-                    // We can probably just schedule BACKGROUND_TASK_UPDATE_SEARCH_INDEX.
-                    // (But make sure it's not scheduled yet. We schedule this task in initialize()
-                    // too.)
-                    updateSearchIndexInTransaction();
-                }
-            }
-
-            // Second, remove stale rows from Tables.DIRECTORIES
-            removeStaleAccountRows(Tables.DIRECTORIES, Directory.ACCOUNT_NAME,
-                    Directory.ACCOUNT_TYPE, systemAccounts);
-
-            // Third, remaining tasks that must be done in a transaction.
-            // TODO: Should sync state take data set into consideration?
-            dbHelper.getSyncState().onAccountsChanged(db, systemAccounts);
-
-            saveAccounts(systemAccounts);
-
-            db.setTransactionSuccessful();
+            removeDataOfAccount(systemAccounts, accountsWithDataSetsToDelete, dbHelper, db);
         } finally {
             db.endTransaction();
         }
@@ -5737,6 +5564,201 @@ public class ContactsProvider2 extends AbstractContactsProvider
         updateContactsAccountCount(systemAccounts);
         updateProviderStatus();
         return true;
+    }
+
+    private void removeDataOfAccount(Account[] systemAccounts,
+            List<AccountWithDataSet> accountsWithDataSetsToDelete, ContactsDatabaseHelper dbHelper,
+            SQLiteDatabase db) {
+        if (!accountsWithDataSetsToDelete.isEmpty()) {
+            for (AccountWithDataSet accountWithDataSet : accountsWithDataSetsToDelete) {
+                final Long accountIdOrNull = dbHelper.getAccountIdOrNull(accountWithDataSet);
+
+                if (accountIdOrNull != null) {
+                    final String accountId = Long.toString(accountIdOrNull);
+                    final String[] accountIdParams =
+                            new String[] {accountId};
+                    db.execSQL(
+                            "DELETE FROM " + Tables.GROUPS +
+                            " WHERE " + GroupsColumns.ACCOUNT_ID + " = ?",
+                            accountIdParams);
+                    db.execSQL(
+                            "DELETE FROM " + Tables.PRESENCE +
+                            " WHERE " + PresenceColumns.RAW_CONTACT_ID + " IN (" +
+                                    "SELECT " + RawContacts._ID +
+                                    " FROM " + Tables.RAW_CONTACTS +
+                                    " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?)",
+                                    accountIdParams);
+                    db.execSQL(
+                            "DELETE FROM " + Tables.STREAM_ITEM_PHOTOS +
+                            " WHERE " + StreamItemPhotos.STREAM_ITEM_ID + " IN (" +
+                                    "SELECT " + StreamItems._ID +
+                                    " FROM " + Tables.STREAM_ITEMS +
+                                    " WHERE " + StreamItems.RAW_CONTACT_ID + " IN (" +
+                                            "SELECT " + RawContacts._ID +
+                                            " FROM " + Tables.RAW_CONTACTS +
+                                            " WHERE " + RawContactsColumns.ACCOUNT_ID + "=?))",
+                                            accountIdParams);
+                    db.execSQL(
+                            "DELETE FROM " + Tables.STREAM_ITEMS +
+                            " WHERE " + StreamItems.RAW_CONTACT_ID + " IN (" +
+                                    "SELECT " + RawContacts._ID +
+                                    " FROM " + Tables.RAW_CONTACTS +
+                                    " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?)",
+                                    accountIdParams);
+
+                    // Delta API is only needed for regular contacts.
+                    if (!inProfileMode()) {
+                        // Contacts are deleted by a trigger on the raw_contacts table.
+                        // But we also need to insert the contact into the delete log.
+                        // This logic is being consolidated into the ContactsTableUtil.
+
+                        // deleteContactIfSingleton() does not work in this case because raw
+                        // contacts will be deleted in a single batch below.  Contacts with
+                        // multiple raw contacts in the same account will be missed.
+
+                        // Find all contacts that do not have raw contacts in other accounts.
+                        // These should be deleted.
+                        Cursor cursor = db.rawQuery(
+                                "SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        " FROM " + Tables.RAW_CONTACTS +
+                                        " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?1" +
+                                        " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        " IS NOT NULL" +
+                                        " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        " NOT IN (" +
+                                        "    SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        "    FROM " + Tables.RAW_CONTACTS +
+                                        "    WHERE " + RawContactsColumns.ACCOUNT_ID + " != ?1"
+                                        + "  AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        "    IS NOT NULL"
+                                        + ")", accountIdParams);
+                        try {
+                            while (cursor.moveToNext()) {
+                                final long contactId = cursor.getLong(0);
+                                ContactsTableUtil.deleteContact(db, contactId);
+                            }
+                        } finally {
+                            MoreCloseables.closeQuietly(cursor);
+                        }
+
+                        // If the contact was not deleted, its last updated timestamp needs to
+                        // be refreshed since one of its raw contacts got removed.
+                        // Find all contacts that will not be deleted (i.e. contacts with
+                        // raw contacts in other accounts)
+                        cursor = db.rawQuery(
+                                "SELECT DISTINCT " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        " FROM " + Tables.RAW_CONTACTS +
+                                        " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?1" +
+                                        " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        " IN (" +
+                                        "    SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        "    FROM " + Tables.RAW_CONTACTS +
+                                        "    WHERE " + RawContactsColumns.ACCOUNT_ID + " != ?1"
+                                        + ")", accountIdParams);
+                        try {
+                            while (cursor.moveToNext()) {
+                                final long contactId = cursor.getLong(0);
+                                ContactsTableUtil.updateContactLastUpdateByContactId(
+                                        db, contactId);
+                            }
+                        } finally {
+                            MoreCloseables.closeQuietly(cursor);
+                        }
+                    }
+
+                    db.execSQL(
+                            "DELETE FROM " + Tables.RAW_CONTACTS +
+                            " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?",
+                            accountIdParams);
+                    db.execSQL(
+                            "DELETE FROM " + Tables.ACCOUNTS +
+                            " WHERE " + AccountsColumns._ID + "=?",
+                            accountIdParams);
+                }
+            }
+
+            // Find all aggregated contacts that used to contain the raw contacts
+            // we have just deleted and see if they are still referencing the deleted
+            // names or photos.  If so, fix up those contacts.
+            ArraySet<Long> orphanContactIds = new ArraySet<>();
+            Cursor cursor = db.rawQuery("SELECT " + Contacts._ID +
+                    " FROM " + Tables.CONTACTS +
+                    " WHERE (" + Contacts.NAME_RAW_CONTACT_ID + " NOT NULL AND " +
+                            Contacts.NAME_RAW_CONTACT_ID + " NOT IN " +
+                                    "(SELECT " + RawContacts._ID +
+                                    " FROM " + Tables.RAW_CONTACTS + "))" +
+                    " OR (" + Contacts.PHOTO_ID + " NOT NULL AND " +
+                            Contacts.PHOTO_ID + " NOT IN " +
+                                    "(SELECT " + Data._ID +
+                                    " FROM " + Tables.DATA + "))", null);
+            try {
+                while (cursor.moveToNext()) {
+                    orphanContactIds.add(cursor.getLong(0));
+                }
+            } finally {
+                cursor.close();
+            }
+
+            for (Long contactId : orphanContactIds) {
+                mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
+            }
+            dbHelper.updateAllVisible();
+
+            // Don't bother updating the search index if we're in profile mode - there is no
+            // search index for the profile DB, and updating it for the contacts DB in this case
+            // makes no sense and risks a deadlock.
+            if (!inProfileMode()) {
+                // TODO Fix it.  It only updates index for contacts/raw_contacts that the
+                // current transaction context knows updated, but here in this method we don't
+                // update that information, so effectively it's no-op.
+                // We can probably just schedule BACKGROUND_TASK_UPDATE_SEARCH_INDEX.
+                // (But make sure it's not scheduled yet. We schedule this task in initialize()
+                // too.)
+                updateSearchIndexInTransaction();
+            }
+        }
+
+        // Second, remove stale rows from Tables.DIRECTORIES
+        removeStaleAccountRows(Tables.DIRECTORIES, Directory.ACCOUNT_NAME,
+                Directory.ACCOUNT_TYPE, systemAccounts);
+
+        // Third, remaining tasks that must be done in a transaction.
+        // TODO: Should sync state take data set into consideration?
+        dbHelper.getSyncState().onAccountsChanged(db, systemAccounts);
+
+        saveAccounts(systemAccounts);
+
+        db.setTransactionSuccessful();
+    }
+
+    @VisibleForTesting
+    void unSyncAccounts(Account[] accountsToUnSync) {
+        List<AccountWithDataSet> accountWithDataSetList =
+                mDbHelper.get().getAllAccountsWithDataSets().stream().filter(
+                        accountWithDataSet -> accountWithDataSet.inSystemAccounts(
+                                accountsToUnSync)).toList();
+        Account[] accounts = AccountManager.get(getContext()).getAccounts();
+        switchToContactMode();
+        final ContactsDatabaseHelper dbHelper = mDbHelper.get();
+        final SQLiteDatabase db = dbHelper.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            removeDataOfAccount(accounts, accountWithDataSetList, dbHelper,
+                    dbHelper.getWritableDatabase());
+        } finally {
+            db.endTransaction();
+        }
+        switchToProfileMode();
+        db.beginTransaction();
+        try {
+            removeDataOfAccount(accounts, accountWithDataSetList, dbHelper,
+                    dbHelper.getWritableDatabase());
+        } finally {
+            db.endTransaction();
+        }
+        switchToContactMode();
+        updateContactsAccountCount(accounts);
+        updateDirectoriesInBackground(true);
     }
 
     private void updateContactsAccountCount(Account[] accounts) {
