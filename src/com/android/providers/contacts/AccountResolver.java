@@ -43,6 +43,7 @@ public class AccountResolver {
      * in the URI or values (if any).
      * @param uri Current {@link Uri} being operated on.
      * @param values {@link ContentValues} to read and possibly update.
+     * @param applyDefaultAccount Whether to look up default account during account resolution.
      */
     public AccountWithDataSet resolveAccountWithDataSet(Uri uri, ContentValues values,
             boolean applyDefaultAccount) {
@@ -68,7 +69,8 @@ public class AccountResolver {
     /**
      * Resolves the account to be used, taking into consideration the default account settings.
      *
-     * @param accounts The array of resolved accounts.
+     * @param accounts 1-size array which contains specified account, or empty array if account is
+     *                not specified.
      * @param uri The URI used for resolving accounts.
      * @return The resolved account, or null if it's the default device (aka "NULL") account.
      * @throws IllegalArgumentException If there's an issue with the account resolution due to
@@ -76,8 +78,8 @@ public class AccountResolver {
      */
     private Account getAccountWithDefaultAccountApplied(Uri uri, Account[] accounts)
             throws IllegalArgumentException {
-        DefaultAccount defaultAccount = mDefaultAccountManager.pullDefaultAccount();
         if (accounts.length == 0) {
+            DefaultAccount defaultAccount = mDefaultAccountManager.pullDefaultAccount();
             if (defaultAccount.getAccountCategory() == AccountCategory.UNKNOWN) {
                 String exceptionMessage = mDbHelper.exceptionMessage(
                         "Must specify ACCOUNT_NAME and ACCOUNT_TYPE",
@@ -89,17 +91,50 @@ public class AccountResolver {
                 return defaultAccount.getCloudAccount();
             }
         } else {
-            if (defaultAccount.getAccountCategory() == AccountCategory.CLOUD) {
-                if (isDeviceOrSimAccount(accounts[0])) {
-                    String exceptionMessage =
-                            mDbHelper.exceptionMessage(
-                                    "Cannot write contacts to local accounts when default account"
-                                            + " is set to cloud",
-                                    uri);
-                    throw new IllegalArgumentException(exceptionMessage);
-                }
-            }
+            checkAccountIsWritableInternal(accounts[0]);
             return accounts[0];
+        }
+    }
+
+    /**
+     * Checks if the specified account is writable.
+     *
+     * <p>This method verifies if contacts can be written to the given account based on the
+     * current default account settings. It throws an {@link IllegalArgumentException} if
+     * the account is not writable.</p>
+     *
+     * @param accountName The name of the account to check.
+     * @param accountType The type of the account to check.
+     *
+     * @throws IllegalArgumentException if either of the following conditions are met:
+     *     <ul>
+     *         <li>Only one of <code>accountName</code> or <code>accountType</code> is
+     *             specified.</li>
+     *         <li>The default account is set to cloud and the specified account is a local
+     *             (device or SIM) account.</li>
+     *     </ul>
+     */
+    public void checkAccountIsWritable(String accountName, String accountType) {
+        if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
+            throw new IllegalArgumentException(
+                    "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE");
+        }
+        if (TextUtils.isEmpty(accountName)) {
+            checkAccountIsWritableInternal(/*account=*/null);
+        } else {
+            checkAccountIsWritableInternal(new Account(accountName, accountType));
+        }
+    }
+
+    private void checkAccountIsWritableInternal(Account account)
+            throws IllegalArgumentException {
+        DefaultAccount defaultAccount = mDefaultAccountManager.pullDefaultAccount();
+
+        if (defaultAccount.getAccountCategory() == AccountCategory.CLOUD) {
+            if (isDeviceOrSimAccount(account)) {
+                throw new IllegalArgumentException("Cannot write contacts to local accounts "
+                        + "when default account is set to cloud");
+            }
         }
     }
 
@@ -143,6 +178,8 @@ public class AccountResolver {
      *
      * @param uri Current {@link Uri} being operated on.
      * @param values {@link ContentValues} to read and possibly update.
+     * @return 1-size array which contains account specified by {@link Uri} and
+     *             {@link ContentValues}, or empty array if account is not specified.
      * @throws IllegalArgumentException when only one of
      *             {@link RawContacts#ACCOUNT_NAME} or
      *             {@link RawContacts#ACCOUNT_TYPE} is specified, leaving the
