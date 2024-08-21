@@ -1628,6 +1628,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mDefaultAccountManager = new DefaultAccountManager(getContext(), mContactsHelper);
         mAccountResolver = new AccountResolver(mContactsHelper, mDefaultAccountManager);
 
+        mDefaultAccountManager = new DefaultAccountManager(getContext(), mContactsHelper);
+        mAccountResolver = new AccountResolver(mContactsHelper, mDefaultAccountManager);
+
         if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
                 .isPhoneAccountMigrationPending()) {
             IntentFilter filter = new IntentFilter(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
@@ -4243,7 +4246,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         values.put(RawContactsColumns.AGGREGATION_NEEDED, 1);
         values.putNull(RawContacts.CONTACT_ID);
         values.put(RawContacts.DIRTY, 1);
-        return updateRawContact(db, rawContactId, values, callerIsSyncAdapter);
+        return updateRawContact(db, rawContactId, values, callerIsSyncAdapter,
+                /*applyDefaultAccount=*/false);
     }
 
     static int deleteDataUsage(SQLiteDatabase db) {
@@ -4377,7 +4381,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PROFILE_RAW_CONTACTS: {
                 invalidateFastScrollingIndexCache();
                 selection = appendAccountIdToSelection(uri, selection);
-                count = updateRawContacts(values, selection, selectionArgs, callerIsSyncAdapter);
+                count = updateRawContacts(values, selection, selectionArgs, callerIsSyncAdapter,
+                         enableNewDefaultAccountRuleFlag() && match == RAW_CONTACTS);
                 break;
             }
 
@@ -4388,11 +4393,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                     count = updateRawContacts(values, RawContacts._ID + "=?"
                                     + " AND(" + selection + ")", selectionArgs,
-                            callerIsSyncAdapter);
+                            callerIsSyncAdapter, enableNewDefaultAccountRuleFlag());
                 } else {
                     mSelectionArgs1[0] = String.valueOf(rawContactId);
                     count = updateRawContacts(values, RawContacts._ID + "=?", mSelectionArgs1,
-                            callerIsSyncAdapter);
+                            callerIsSyncAdapter, enableNewDefaultAccountRuleFlag());
                 }
                 break;
             }
@@ -4683,6 +4688,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         ? updatedDataSet : c.getString(GroupAccountQuery.DATA_SET);
 
                 if (isAccountChanging) {
+                    if (enableNewDefaultAccountRuleFlag()) {
+                        mAccountResolver.checkAccountIsWritable(updatedAccountName,
+                                updatedAccountType);
+                    }
+
                     final long accountId = dbHelper.getOrCreateAccountIdInTransaction(
                             AccountWithDataSet.get(accountName, accountType, dataSet));
                     updatedValues.put(GroupsColumns.ACCOUNT_ID, accountId);
@@ -4739,7 +4749,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int updateRawContacts(ContentValues values, String selection, String[] selectionArgs,
-            boolean callerIsSyncAdapter) {
+            boolean callerIsSyncAdapter, boolean applyDefaultAccount) {
         if (values.containsKey(RawContacts.CONTACT_ID)) {
             throw new IllegalArgumentException(RawContacts.CONTACT_ID + " should not be included " +
                     "in content values. Contact IDs are assigned automatically");
@@ -4758,7 +4768,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         try {
             while (cursor.moveToNext()) {
                 long rawContactId = cursor.getLong(0);
-                updateRawContact(db, rawContactId, values, callerIsSyncAdapter);
+                updateRawContact(db, rawContactId, values, callerIsSyncAdapter,
+                        applyDefaultAccount);
                 count++;
             }
         } finally {
@@ -4791,7 +4802,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int updateRawContact(SQLiteDatabase db, long rawContactId, ContentValues values,
-            boolean callerIsSyncAdapter) {
+            boolean callerIsSyncAdapter, boolean applyDefaultAccount) {
         final String selection = RawContactsColumns.CONCRETE_ID + " = ?";
         mSelectionArgs1[0] = Long.toString(rawContactId);
 
@@ -4847,6 +4858,23 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         isDataSetChanging
                             ? values.getAsString(RawContacts.DATA_SET) : oldDataSet
                         );
+
+                // The checkAccountIsWritable has to be done at the level of attempting to update
+                // each raw contacts, rather than at the beginning of attempting all selected raw
+                // contacts:
+                // since not all of account field (name, type, data_set) are provided in the
+                // ContentValues @param, the destination account of each raw contact can be
+                // partially derived from the their existing account info, and thus can be
+                // different.
+                // Since the UpdateRawContacts (updating all selected raw contacts) are done in
+                // a single transaction, failing checkAccountIsWritable will fail the entire update
+                // operation, which is clean such that no partial updated will be committed to the
+                // DB.
+                if (applyDefaultAccount) {
+                    mAccountResolver.checkAccountIsWritable(newAccountWithDataSet.getAccountName(),
+                            newAccountWithDataSet.getAccountType());
+                }
+
                 accountId = dbHelper.getOrCreateAccountIdInTransaction(newAccountWithDataSet);
 
                 values.put(RawContactsColumns.ACCOUNT_ID, accountId);
