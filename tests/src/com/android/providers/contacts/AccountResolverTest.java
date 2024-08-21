@@ -509,15 +509,12 @@ public class AccountResolverTest {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 new DefaultAccount(AccountCategory.CLOUD,
                         new Account("test_user2", "com.google")));
-        when(mDbHelper.exceptionMessage(
-                "Cannot write contacts to local accounts when default account is set to cloud",
-                    uri))
-                .thenReturn("Test Exception Message");
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
             mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
         });
-        assertEquals("Test Exception Message", exception.getMessage());
+        assertEquals("Cannot write contacts to local accounts when default account is set to cloud",
+                exception.getMessage());
     }
 
     @Test
@@ -565,15 +562,12 @@ public class AccountResolverTest {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 new DefaultAccount(AccountCategory.CLOUD,
                         new Account("test_user2", "com.google")));
-        when(mDbHelper.exceptionMessage(
-                "Cannot write contacts to local accounts when default account is set to cloud",
-                uri))
-                .thenReturn("Test Exception Message");
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
             mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
         });
-        assertEquals("Test Exception Message", exception.getMessage());
+        assertEquals("Cannot write contacts to local accounts when default account is set to cloud",
+                exception.getMessage());
     }
 
     @Test
@@ -630,19 +624,94 @@ public class AccountResolverTest {
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
                 uri, values, /*applyDefaultAccount=*/false);
+
         assertNull(result); // Expect null result as account is effectively absent
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 new DefaultAccount(AccountCategory.CLOUD,
                         new Account("test_user2", "com.google")));
-        when(mDbHelper.exceptionMessage(
-                "Cannot write contacts to local accounts when default account is set to cloud",
-                uri))
-                .thenReturn("Test Exception Message");
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
             mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
         });
-        assertEquals("Test Exception Message", exception.getMessage());
+        assertEquals("Cannot write contacts to local accounts when default account is set to cloud",
+                exception.getMessage());
+    }
+
+
+    @Test
+    public void testCheckAccountIsWritable_bothAccountNameAndTypeAreNullOrEmpty_NoException() {
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
+                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+
+        mAccountResolver.checkAccountIsWritable("", "");
+        mAccountResolver.checkAccountIsWritable(null, "");
+        mAccountResolver.checkAccountIsWritable("", null);
+        mAccountResolver.checkAccountIsWritable(null, null);
+        // No exception expected
+    }
+
+    @Test
+    public void testCheckAccountIsWritable_eitherAccountNameOrTypeEmpty_ThrowsException() {
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
+                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            mAccountResolver.checkAccountIsWritable("accountName", "");
+        });
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            mAccountResolver.checkAccountIsWritable("accountName", null);
+        });
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            mAccountResolver.checkAccountIsWritable("", "accountType");
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            mAccountResolver.checkAccountIsWritable(null, "accountType");
+        });
+    }
+
+    @Test
+    public void testCheckAccountIsWritable_defaultAccountIsCloud() {
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
+                new DefaultAccount(AccountCategory.CLOUD,
+                        new Account("test_user1", "com.google")));
+
+        mAccountResolver.checkAccountIsWritable("test_user1", "com.google");
+        mAccountResolver.checkAccountIsWritable("test_user2", "com.google");
+        mAccountResolver.checkAccountIsWritable("test_user3", "com.whatsapp");
+        assertThrows(IllegalArgumentException.class, () ->
+                mAccountResolver.checkAccountIsWritable("", ""));
+        assertThrows(IllegalArgumentException.class, () ->
+                mAccountResolver.checkAccountIsWritable(null, null));
+        // No exception expected
+    }
+
+    @Test
+    public void testCheckAccountIsWritable_defaultAccountIsDevice() {
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
+                DefaultAccount.DEVICE_DEFAULT_ACCOUNT);
+
+        mAccountResolver.checkAccountIsWritable("test_user1", "com.google");
+        mAccountResolver.checkAccountIsWritable("test_user2", "com.google");
+        mAccountResolver.checkAccountIsWritable("test_user3", "com.whatsapp");
+        mAccountResolver.checkAccountIsWritable("", "");
+        mAccountResolver.checkAccountIsWritable(null, null);
+        // No exception expected
+    }
+
+
+    @Test
+    public void testCheckAccountIsWritable_defaultAccountIsUnknown() {
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
+                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+
+        mAccountResolver.checkAccountIsWritable("test_user1", "com.google");
+        mAccountResolver.checkAccountIsWritable("test_user2", "com.google");
+        mAccountResolver.checkAccountIsWritable("test_user3", "com.whatsapp");
+        mAccountResolver.checkAccountIsWritable("", "");
+        mAccountResolver.checkAccountIsWritable(null, null);
+        // No exception expected
     }
 }
