@@ -19,18 +19,38 @@ import android.accounts.Account;
 import android.content.ContentValues;
 import android.net.Uri;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.SimAccount;
 import android.text.TextUtils;
 
+import com.android.providers.contacts.DefaultAccount.AccountCategory;
+
+import java.util.List;
+
 public class AccountResolver {
+    private static final String TAG = "AccountResolver";
+
+    private final ContactsDatabaseHelper mDbHelper;
+    private final DefaultAccountManager mDefaultAccountManager;
+
+    public AccountResolver(ContactsDatabaseHelper dbHelper,
+            DefaultAccountManager defaultAccountManager) {
+        mDbHelper = dbHelper;
+        mDefaultAccountManager = defaultAccountManager;
+    }
+
     /**
      * Resolves the account and builds an {@link AccountWithDataSet} based on the data set specified
      * in the URI or values (if any).
      * @param uri Current {@link Uri} being operated on.
      * @param values {@link ContentValues} to read and possibly update.
      */
-    public static AccountWithDataSet resolveAccountWithDataSet(Uri uri, ContentValues values,
-            ContactsDatabaseHelper dbHelper) {
-        final Account account = resolveAccount(uri, values, dbHelper);
+    public AccountWithDataSet resolveAccountWithDataSet(Uri uri, ContentValues values,
+            boolean applyDefaultAccount) {
+        final Account[] accounts = resolveAccount(uri, values);
+        final Account account =  applyDefaultAccount
+                ? getAccountWithDefaultAccountApplied(uri, accounts)
+                : getFirstAccountOrNull(accounts);
+
         AccountWithDataSet accountWithDataSet = null;
         if (account != null) {
             String dataSet = ContactsProvider2.getQueryParameter(uri, RawContacts.DATA_SET);
@@ -41,7 +61,79 @@ public class AccountResolver {
             }
             accountWithDataSet = AccountWithDataSet.get(account.name, account.type, dataSet);
         }
+
         return accountWithDataSet;
+    }
+
+    /**
+     * Resolves the account to be used, taking into consideration the default account settings.
+     *
+     * @param accounts The array of resolved accounts.
+     * @param uri The URI used for resolving accounts.
+     * @return The resolved account, or null if it's the default device (aka "NULL") account.
+     * @throws IllegalArgumentException If there's an issue with the account resolution due to
+     *  default account incompatible account types.
+     */
+    private Account getAccountWithDefaultAccountApplied(Uri uri, Account[] accounts)
+            throws IllegalArgumentException {
+        DefaultAccount defaultAccount = mDefaultAccountManager.pullDefaultAccount();
+        if (accounts.length == 0) {
+            if (defaultAccount.getAccountCategory() == AccountCategory.UNKNOWN) {
+                String exceptionMessage = mDbHelper.exceptionMessage(
+                        "Must specify ACCOUNT_NAME and ACCOUNT_TYPE",
+                        uri);
+                throw new IllegalArgumentException(exceptionMessage);
+            } else if (defaultAccount.getAccountCategory() == AccountCategory.DEVICE) {
+                return getLocalAccount();
+            } else {
+                return defaultAccount.getCloudAccount();
+            }
+        } else {
+            if (defaultAccount.getAccountCategory() == AccountCategory.CLOUD) {
+                if (isDeviceOrSimAccount(accounts[0])) {
+                    String exceptionMessage =
+                            mDbHelper.exceptionMessage(
+                                    "Cannot write contacts to local accounts when default account"
+                                            + " is set to cloud",
+                                    uri);
+                    throw new IllegalArgumentException(exceptionMessage);
+                }
+            }
+            return accounts[0];
+        }
+    }
+
+    private static Account getLocalAccount() {
+        if (TextUtils.isEmpty(AccountWithDataSet.LOCAL.getAccountName())) {
+            // AccountWithDataSet.LOCAL's getAccountType() must be null as well, thus we return
+            // the NULL account.
+            return null;
+        } else {
+            // AccountWithDataSet.LOCAL's getAccountType() must not be null as well, thus we return
+            // the customized local account.
+            return new Account(AccountWithDataSet.LOCAL.getAccountName(),
+                    AccountWithDataSet.LOCAL.getAccountType());
+        }
+    }
+
+    /**
+     * Gets the first account from the array, or null if the array is empty.
+     *
+     * @param accounts The array of accounts.
+     * @return The first account, or null if the array is empty.
+     */
+    private Account getFirstAccountOrNull(Account[] accounts) {
+        return accounts.length > 0 ? accounts[0] : null;
+    }
+
+
+    private boolean isDeviceOrSimAccount(Account account) {
+        AccountWithDataSet accountWithDataSet = account == null
+                ? new AccountWithDataSet(null, null, null)
+                : new AccountWithDataSet(account.name, account.type, null);
+
+        List<SimAccount> simAccounts = mDbHelper.getAllSimAccounts();
+        return accountWithDataSet.isLocalAccount() || accountWithDataSet.inSimAccounts(simAccounts);
     }
 
     /**
@@ -59,20 +151,28 @@ public class AccountResolver {
      *             and {@link RawContacts#ACCOUNT_TYPE} are inconsistent between
      *             the given {@link Uri} and {@link ContentValues}.
      */
-    private static Account resolveAccount(Uri uri, ContentValues values,
-            ContactsDatabaseHelper dbHelper) throws IllegalArgumentException {
+    private Account[] resolveAccount(Uri uri, ContentValues values)
+            throws IllegalArgumentException {
         String accountName = ContactsProvider2.getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
         String accountType = ContactsProvider2.getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
         final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
 
+        if (accountName == null && accountType == null
+                && !values.containsKey(RawContacts.ACCOUNT_NAME)
+                && !values.containsKey(RawContacts.ACCOUNT_TYPE)) {
+            // Account is not specified.
+            return new Account[0];
+        }
+
         String valueAccountName = values.getAsString(RawContacts.ACCOUNT_NAME);
         String valueAccountType = values.getAsString(RawContacts.ACCOUNT_TYPE);
+
         final boolean partialValues = TextUtils.isEmpty(valueAccountName)
                 ^ TextUtils.isEmpty(valueAccountType);
 
         if (partialUri || partialValues) {
             // Throw when either account is incomplete.
-            throw new IllegalArgumentException(dbHelper.exceptionMessage(
+            throw new IllegalArgumentException(mDbHelper.exceptionMessage(
                     "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE", uri));
         }
 
@@ -86,7 +186,7 @@ public class AccountResolver {
             final boolean accountMatch = TextUtils.equals(accountName, valueAccountName)
                     && TextUtils.equals(accountType, valueAccountType);
             if (!accountMatch) {
-                throw new IllegalArgumentException(dbHelper.exceptionMessage(
+                throw new IllegalArgumentException(mDbHelper.exceptionMessage(
                         "When both specified, ACCOUNT_NAME and ACCOUNT_TYPE must match", uri));
             }
         } else if (validUri) {
@@ -97,9 +197,9 @@ public class AccountResolver {
             accountName = valueAccountName;
             accountType = valueAccountType;
         } else {
-            return null;
+            return new Account[]{null};
         }
 
-        return new Account(accountName, accountType);
+        return new Account[]{new Account(accountName, accountType)};
     }
 }
