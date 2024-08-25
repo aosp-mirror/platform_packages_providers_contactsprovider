@@ -19,6 +19,7 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.annotation.Nullable;
 import android.content.Context;
+import android.content.res.Resources;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Pair;
@@ -37,9 +38,9 @@ import java.util.List;
 public class DefaultAccountManager {
     private static final String TAG = "DefaultAccountManager";
 
-    // TODO: Load eligible system cloud account type from overlayable config.
-    private static final HashSet<String> ELIGIBLE_SYSTEM_CLOUD_ACCOUNT_TYPES = new HashSet<>();
+    private static HashSet<String> sEligibleSystemCloudAccountTypes = null;
 
+    private final Context mContext;
     private final ContactsDatabaseHelper mDbHelper;
     private final SyncSettingsHelper mSyncSettingsHelper;
     private final AccountManager mAccountManager;
@@ -52,15 +53,21 @@ public class DefaultAccountManager {
     @NeededForTesting
     DefaultAccountManager(Context context, ContactsDatabaseHelper dbHelper,
             SyncSettingsHelper syncSettingsHelper, AccountManager accountManager) {
+        mContext = context;
         mDbHelper = dbHelper;
         mSyncSettingsHelper = syncSettingsHelper;
         mAccountManager = accountManager;
     }
 
-    @NeededForTesting
-    static void setEligibleSystemAccountTypes(String[] accountTypes) {
-        ELIGIBLE_SYSTEM_CLOUD_ACCOUNT_TYPES.clear();
-        ELIGIBLE_SYSTEM_CLOUD_ACCOUNT_TYPES.addAll(Arrays.asList(accountTypes));
+    private static synchronized HashSet<String> getEligibleSystemAccountTypes(Context context) {
+        if (sEligibleSystemCloudAccountTypes == null) {
+            sEligibleSystemCloudAccountTypes = new HashSet<>();
+            Resources res = context.getResources();
+            String[] accountTypesArray = res.getStringArray(
+                    R.array.eligible_system_cloud_account_types);
+            sEligibleSystemCloudAccountTypes.addAll(Arrays.asList(accountTypesArray));
+        }
+        return sEligibleSystemCloudAccountTypes;
     }
 
     /**
@@ -158,7 +165,7 @@ public class DefaultAccountManager {
     }
 
     private boolean isSystemCloudAccounts(Account account) {
-        if (account == null || !ELIGIBLE_SYSTEM_CLOUD_ACCOUNT_TYPES.contains(account.type)) {
+        if (account == null || !getEligibleSystemAccountTypes(mContext).contains(account.type)) {
             return false;
         }
 
@@ -176,7 +183,7 @@ public class DefaultAccountManager {
         List<Account> systemCloudAccount = new ArrayList<>();
 
         for (Account account : accountsOnDevice) {
-            if (ELIGIBLE_SYSTEM_CLOUD_ACCOUNT_TYPES.contains(account.type)) {
+            if (getEligibleSystemAccountTypes(mContext).contains(account.type)) {
                 if (includeSyncOffAccounts || !mSyncSettingsHelper.isSyncOff(account)) {
                     systemCloudAccount.add(account);
                 }
