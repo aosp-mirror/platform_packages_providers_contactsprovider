@@ -17,22 +17,21 @@
 package com.android.providers.contacts;
 
 import static com.android.providers.contacts.flags.Flags.cp2AccountMoveFlag;
+import static com.android.providers.contacts.flags.Flags.cp2AccountMoveSyncStubFlag;
 
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
-import android.os.Bundle;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
 import android.text.TextUtils;
+import android.util.Log;
 import android.util.Pair;
 
 import com.android.providers.contacts.util.NeededForTesting;
-
-import com.google.common.annotations.VisibleForTesting;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -196,13 +195,39 @@ public class ContactMover {
         moveSystemGroups(sourceAccount, destAccount);
     }
 
+    /**
+     * Moves {@link RawContacts} and {@link Groups} from one account to another.
+     * @param sourceAccount the source {@link AccountWithDataSet} to move contacts and groups from.
+     * @param destAccount the destination {@link AccountWithDataSet} to move contacts and groups to.
+     */
     @NeededForTesting
-    @VisibleForTesting
-    Bundle moveRawContacts(AccountWithDataSet sourceAccount, AccountWithDataSet destAccount,
-            boolean insertSyncStubs) {
+    void moveRawContacts(AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
         if (!cp2AccountMoveFlag()) {
-            return new Bundle();
+            Log.w(TAG, "moveRawContacts: flag disabled");
+            return;
         }
+        moveRawContactsInternal(sourceAccount, destAccount, /* insertSyncStubs= */ false);
+    }
+
+    /**
+     * Moves {@link RawContacts} and {@link Groups} from one account to another, while writing sync
+     * stubs in the source account to notify relevant sync adapters in the source account of the
+     * move.
+     * @param sourceAccount the source {@link AccountWithDataSet} to move contacts and groups from.
+     * @param destAccount the destination {@link AccountWithDataSet} to move contacts and groups to.
+     */
+    @NeededForTesting
+    void moveRawContactsWithSyncStubs(AccountWithDataSet sourceAccount,
+            AccountWithDataSet destAccount) {
+        if (!cp2AccountMoveFlag() || !cp2AccountMoveSyncStubFlag()) {
+            Log.w(TAG, "moveRawContactsWithSyncStubs: flags disabled");
+            return;
+        }
+        moveRawContactsInternal(sourceAccount, destAccount, /* insertSyncStubs= */ true);
+    }
+
+    private void moveRawContactsInternal(AccountWithDataSet sourceAccount,
+            AccountWithDataSet destAccount, boolean insertSyncStubs) {
         if (sourceAccount.equals(destAccount)) {
             throw new IllegalArgumentException("Source and destination accounts must differ");
         }
@@ -255,7 +280,6 @@ public class ContactMover {
         } finally {
             db.endTransaction();
         }
-        return new Bundle();
     }
 
 }
