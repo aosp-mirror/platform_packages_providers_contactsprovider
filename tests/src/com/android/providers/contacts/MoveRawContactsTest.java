@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 The Android Open Source Project
+ * Copyright (C) 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,6 +74,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     ContactsProvider2 mCp;
     AccountWithDataSet mSource;
     AccountWithDataSet mDest;
+    ContactMover mMover;
 
     @Before
     @Override
@@ -84,6 +85,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT});
         mSource = AccountWithDataSet.get(SOURCE_ACCOUNT.name, SOURCE_ACCOUNT.type, null);
         mDest = AccountWithDataSet.get(DEST_ACCOUNT.name, DEST_ACCOUNT.type, null);
+        mMover = new ContactMover(mCp, mCp.getDatabaseHelper());
+
     }
 
     @After
@@ -330,7 +333,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 DEST_ACCOUNT);
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContacts(mSource, mDest);
 
         // verify the duplicate raw contact in dest has been deleted in place
         assertMovedContactIsDeleted(sourceDupeRawContactId, mSource);
@@ -354,7 +357,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         DataUtil.insertStructuredName(mResolver, destRawContactId2, "firstB", "lastB");
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContacts(mSource, mDest);
 
         // Verify no stub was written since no source ID existed
         assertMoveStubDoesNotExist(sourceRawContactId, mSource);
@@ -368,7 +371,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
     public void testMoveUniqueRawContacts() {
         // create a near duplicate in the destination account
         long destContactId = RawContactUtil.createRawContactWithName(
@@ -379,7 +382,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 "Foo", "Bar", SOURCE_ID, SOURCE_ACCOUNT);
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContactsWithSyncStubs(mSource, mDest);
 
         // verify the unique raw contact has been moved from the old -> new account
         assertMovedRawContact(uniqueContactId, mDest, true);
@@ -393,6 +396,30 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
     @Test
     @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    public void testMoveUniqueRawContactsStubDisabled() {
+        // create a near duplicate in the destination account
+        long destContactId = RawContactUtil.createRawContactWithName(
+                mResolver, "Foo", "Bar", DEST_ACCOUNT);
+
+        // create a near duplicate, unique contact in the source account
+        long uniqueContactId = createStarredRawContactForMove(
+                "Foo", "Bar", SOURCE_ID, SOURCE_ACCOUNT);
+
+        // trigger the move
+        mMover.moveRawContacts(mSource, mDest);
+
+        // verify the unique raw contact has been moved from the old -> new account
+        assertMovedRawContact(uniqueContactId, mDest, true);
+
+        // verify a stub has been written for the unique raw contact in the source account
+        assertMoveStubDoesNotExist(uniqueContactId, mSource);
+
+        // verify no stub was created (since we've disabled stub creation)
+        assertMovedRawContact(destContactId, mDest, false);
+    }
+
+    @Test
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
     public void testMoveUniqueRawContactsFromNullAccount() {
         mActor.setAccounts(new Account[]{DEST_ACCOUNT});
         AccountWithDataSet source =
@@ -407,7 +434,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 "Foo", "Bar", SOURCE_ID, /* account= */ null);
 
         // trigger the move
-        mCp.moveRawContacts(source, mDest);
+        mMover.moveRawContactsWithSyncStubs(source, mDest);
 
         // verify the unique raw contact has been moved from the old -> new account
         assertMovedRawContact(uniqueContactId, mDest, true);
@@ -427,7 +454,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
     public void testMoveUniqueRawContactsFromNullAccountToEmptyDestination() {
         mActor.setAccounts(new Account[]{DEST_ACCOUNT});
         AccountWithDataSet source =
@@ -438,7 +465,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 "Foo", "Bar", SOURCE_ID, /* account= */ null);
 
         // trigger the move
-        mCp.moveRawContacts(source, mDest);
+        mMover.moveRawContactsWithSyncStubs(source, mDest);
 
         // verify the unique raw contact has been moved from the old -> new account
         assertMovedRawContact(uniqueContactId, mDest, true);
@@ -455,7 +482,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
     public void testMoveUniqueRawContactsToNullAccount() {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT});
         AccountWithDataSet dest =
@@ -466,13 +493,34 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 "Foo", "Bar", SOURCE_ID, SOURCE_ACCOUNT);
 
         // trigger the move
-        mCp.moveRawContacts(mSource, dest);
+        mMover.moveRawContactsWithSyncStubs(mSource, dest);
 
         // verify the unique raw contact has been moved from the old -> new account
         assertMovedRawContact(uniqueContactId, dest, true);
 
         // verify a stub has been written for the unique raw contact in the source account
         assertMoveStubExists(uniqueContactId, SOURCE_ID, mSource);
+    }
+
+    @Test
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    public void testMoveUniqueRawContactsToNullAccountStubDisabled() {
+        mActor.setAccounts(new Account[]{SOURCE_ACCOUNT});
+        AccountWithDataSet dest =
+                AccountWithDataSet.get(null, null, null);
+
+        // create a unique contact in the source account
+        long uniqueContactId = createStarredRawContactForMove(
+                "Foo", "Bar", SOURCE_ID, SOURCE_ACCOUNT);
+
+        // trigger the move
+        mMover.moveRawContacts(mSource, dest);
+
+        // verify the unique raw contact has been moved from the old -> new account
+        assertMovedRawContact(uniqueContactId, dest, true);
+
+        // verify no stub was created (since stub creation is disabled)
+        assertMoveStubDoesNotExist(uniqueContactId, mSource);
     }
 
     /**
@@ -482,7 +530,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
      * will be deleted as a duplicate.
      */
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
     public void testMoveUniqueRawContactWithNonPortableDataRows() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -494,7 +542,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         DataUtil.insertStructuredName(mResolver, destRawContactId, "firstA", "lastA");
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContactsWithSyncStubs(mSource, mDest);
 
         // Verify no stub was written since no source ID existed
         assertMoveStubDoesNotExist(sourceRawContactId, mSource);
@@ -521,7 +569,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     *  be treated as unique.
      */
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
     public void testMoveUniqueRawContactsWithNonPortableDataRowsAccountTypesMatch() {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT_WITH_SOURCE_TYPE});
         AccountWithDataSet dest =
@@ -539,7 +587,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         DataUtil.insertStructuredName(mResolver, destRawContactId, "firstA", "lastA");
 
         // trigger the move
-        mCp.moveRawContacts(mSource, dest);
+        mMover.moveRawContactsWithSyncStubs(mSource, dest);
 
         // Verify no stub was written since no source ID existed
         assertMoveStubDoesNotExist(sourceRawContactId, mSource);
@@ -584,7 +632,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         insertNonPortableData(mResolver, destRawContactId, "foo");
 
         // trigger the move
-        mCp.moveRawContacts(mSource, dest);
+        mMover.moveRawContacts(mSource, dest);
 
         // verify the duplicate contact has been deleted
         assertMovedContactIsDeleted(sourceRawContactId, mSource);
@@ -599,7 +647,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
     public void testMoveDuplicateNonSystemGroup() {
         // create a duplicate pair of contacts
         long sourceDupeRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -613,7 +661,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 "groupTitleRes", List.of(destDupeRawContactId));
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContactsWithSyncStubs(mSource, mDest);
 
         // verify the duplicate raw contact in dest has been deleted in place instead of creating
         // a stub (because this is a duplicate non-system group, we delete in-place even if there's
@@ -629,7 +677,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
     public void testMoveUniqueNonSystemGroup() {
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
                 SOURCE_ACCOUNT);
@@ -638,7 +686,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContactsWithSyncStubs(mSource, mDest);
 
         // verify group and contact have been moved from the source account to the dest account
         assertMovedRawContact(sourceRawContactId, mDest, false);
@@ -655,7 +703,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
     public void testMoveUniqueNonSystemGroupWithSourceId() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -666,7 +714,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContactsWithSyncStubs(mSource, mDest);
 
         // verify group and contact have been moved from the source account to the dest account
         assertMovedRawContact(sourceRawContactId, mDest, false);
@@ -678,6 +726,35 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
     @Test
     @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    public void testMoveUniqueNonSystemGroupWithSourceIdStubsDisabled() {
+        // create a duplicate pair of contacts
+        long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
+                SOURCE_ACCOUNT);
+        long sourceGroup = createGroupWithMembers(mSource, "groupTitle",
+                "groupTitleRes", List.of(sourceRawContactId));
+        setGroupSourceId(sourceGroup, SOURCE_ID);
+
+
+        // trigger the move
+        mMover.moveRawContacts(mSource, mDest);
+
+        // verify group and contact have been moved from the source account to the dest account
+        assertMovedRawContact(sourceRawContactId, mDest, false);
+        assertGroup(sourceGroup, mDest, Set.of(sourceRawContactId));
+
+        // check that the only group in source got moved and no stub was written (because we
+        // disabled stub creation)
+        assertEquals(0, getCount(Groups.CONTENT_URI,
+                Groups.ACCOUNT_NAME + " = ? AND "
+                        + Groups.ACCOUNT_TYPE + " = ?",
+                new String[] {
+                        mSource.getAccountName(),
+                        mSource.getAccountType()
+                }));
+    }
+
+    @Test
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
     public void testMoveUniqueRawContactsWithGroups() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -700,7 +777,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 List.of(destRawContactId2));
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContactsWithSyncStubs(mSource, mDest);
 
         // Verify no stub was written since no source ID existed
         assertMoveStubDoesNotExist(sourceRawContactId, mSource);
@@ -735,7 +812,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 "groupTitleRes", List.of(destDupeRawContactId));
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContacts(mSource, mDest);
 
         // verify the duplicate raw contact in dest has been deleted in place
         assertMovedContactIsDeleted(sourceDupeRawContactId, mSource);
@@ -763,7 +840,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         setGroupSourceId(sourceGroup, SOURCE_ID);
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContacts(mSource, mDest);
 
         // verify the duplicate raw contact in dest has been deleted in place
         assertMovedRawContact(sourceRawContactId, mDest, false);
@@ -787,7 +864,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         promoteToSystemGroup(sourceGroup, null, true);
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContacts(mSource, mDest);
 
         // since sourceGroup is a system group, it cannot be deleted
         assertGroup(sourceGroup, mSource, Set.of());
@@ -827,7 +904,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 });
 
         // trigger the move
-        mCp.moveRawContacts(mSource, mDest);
+        mMover.moveRawContacts(mSource, mDest);
 
         // since sourceGroup is a system group, it cannot be deleted
         assertGroup(sourceGroup, mSource, Set.of());
