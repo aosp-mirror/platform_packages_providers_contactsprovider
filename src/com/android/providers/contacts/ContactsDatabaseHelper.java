@@ -4244,6 +4244,18 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Clear the previous set default account from Accounts table.
+     */
+    public void clearDefaultAccount() {
+        SQLiteDatabase db = getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+        values.put(AccountsColumns.IS_DEFAULT, 0);
+
+        db.update(Tables.ACCOUNTS, values, null, null);
+    }
+
+    /**
      * Set is_default column for the given account name and account type.
      *
      * @param accountName The account name to be set to default.
@@ -4854,6 +4866,34 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Update GroupMembership DataRows from oldGroup to newGroup.
+     * @param oldGroup the old group.
+     * @param newGroup the new group.
+     */
+    public void updateGroupMemberships(Long oldGroup, Long newGroup) {
+        Long groupMembershipMimeType =
+                mCommonMimeTypeIdsCache.get(GroupMembership.CONTENT_ITEM_TYPE);
+        if (groupMembershipMimeType == null) {
+            // if we don't have a mimetype ID for group membership we know we don't have anything
+            // to update.
+            return;
+        }
+
+        try (SQLiteStatement updateGroupMembershipQuery = getWritableDatabase().compileStatement(
+                "UPDATE " + Tables.DATA
+                        + " SET " + GroupMembership.GROUP_ROW_ID + "= ?"
+                        + " WHERE "
+                        + GroupMembership.GROUP_ROW_ID + "= ?"
+                        + " AND " + DataColumns.MIMETYPE_ID + " = ?")) {
+
+            updateGroupMembershipQuery.bindLong(1, newGroup);
+            updateGroupMembershipQuery.bindLong(2, oldGroup);
+            updateGroupMembershipQuery.bindLong(3, groupMembershipMimeType);
+            updateGroupMembershipQuery.execute();
+        }
+    }
+
+    /**
      * Compares the Groups in source and dest accounts, dividing the Groups in the
      * source account into two sets - those which are duplicated in the destination account and
      * those which are not.
@@ -4989,6 +5029,11 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             }
         }
 
+        // if there are no potential duplicates at this point, then we are done
+        if (potentialDupIds.isEmpty()) {
+            return Pair.create(nonDuplicates, Set.of());
+        }
+
         /*
             Next, hash the potential duplicates.
         */
@@ -5110,6 +5155,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     private Set<Long> filterEmptyGroups(Set<Long> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return Set.of();
+        }
         Set<Long> nonEmptyGroupIds = new HashSet<>();
         try (Cursor c = getReadableDatabase().query(
                 /* distinct= */ true,
@@ -5117,10 +5165,10 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 new String[] {
                         GroupMembership.GROUP_ROW_ID,
                 },
-                GroupMembership.GROUP_ROW_ID + " IN (?)"
+                GroupMembership.GROUP_ROW_ID + " IN (" + TextUtils.join(",", groupIds) + ")"
                 + " AND " + DataColumns.MIMETYPE_ID + " = "
                         + mCommonMimeTypeIdsCache.get(GroupMembership.CONTENT_ITEM_TYPE),
-                new String[] {TextUtils.join(",", groupIds)},
+                new String[] {},
                 null, null, null, null)) {
             while (c.moveToNext()) {
                 nonEmptyGroupIds.add(c.getLong(0));
@@ -5141,6 +5189,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
             Set<Long> groupIds) {
         // we only want move copies for non-empty groups
         Set<Long> nonEmptyGroupIds = filterEmptyGroups(groupIds);
+        if (nonEmptyGroupIds == null || nonEmptyGroupIds.isEmpty()) {
+            return Map.of();
+        }
         Map<Long, ContentValues> idToContentValues = new HashMap<>();
         try (Cursor c = getReadableDatabase().query(
                 Tables.GROUPS,
@@ -5152,9 +5203,9 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                         Groups.TITLE,
                         Groups.TITLE_RES,
                 },
-                Groups._ID + " IN (?)"
+                Groups._ID + " IN (" + TextUtils.join(",", nonEmptyGroupIds) + ")"
                 + " AND " + Groups.AUTO_ADD + " = 0",
-                new String[] {TextUtils.join(",", nonEmptyGroupIds)},
+                new String[] {},
                 null, null, null)) {
             while (c.moveToNext()) {
                 Long originalGroupId = c.getLong(0);
@@ -5173,90 +5224,111 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
-     * Gets content values for the Group sync stubs.
+     * Inserts sync stubs in account, for the groups in groupIds.
      * The stubs consist of just the {@link ContactsContract.Groups#SOURCE_ID},
      * {@link ContactsContract.Groups#SYNC1}, {@link ContactsContract.Groups#SYNC2},
      * {@link ContactsContract.Groups#SYNC3}, and {@link ContactsContract.Groups#SYNC4} columns,
      * with {@link ContactsContract.Groups#DELETED} and {@link ContactsContract.Groups#DIRTY} = 1.
+     * @param account the account to create the sync stubs in.
+     * @param groupIds the group ids to create sync stubs for.
      */
-    public List<ContentValues> getGroupSyncStubContentValues(AccountWithDataSet account,
+    public void insertGroupSyncStubs(AccountWithDataSet account,
             Set<Long> groupIds) {
-        List<ContentValues> syncContentValues = new ArrayList<>();
-        try (Cursor c = getReadableDatabase().query(
-                Tables.GROUPS,
-                new String[] {
-                        Groups.SOURCE_ID,
-                        Groups.SYNC1,
-                        Groups.SYNC2,
-                        Groups.SYNC3,
-                        Groups.SYNC4
-                },
-                Groups._ID + " IN (?)",
-                new String[] {TextUtils.join(",", groupIds)},
-                null, null, null)) {
-            while (c.moveToNext()) {
-                String sourceId = c.getString(0);
-                // if there's no source id, then we won't need to write a stub
-                if (sourceId != null && !sourceId.isEmpty()) {
-                    ContentValues values = new ContentValues();
-                    DatabaseUtils.cursorRowToContentValues(c, values);
-                    values.put(Groups.ACCOUNT_NAME, account.getAccountName());
-                    values.put(Groups.ACCOUNT_TYPE, account.getAccountType());
-                    values.put(Groups.DELETED, 1);
-                    values.put(Groups.DIRTY, 1);
-                    values.put(Groups.SOURCE_ID, sourceId);
-                    values.put(Groups.DATA_SET, account.getDataSet());
-                    syncContentValues.add(values);
-                }
-
-            }
+        if (groupIds == null || groupIds.isEmpty()) {
+            return;
         }
+        final long accountId = getOrCreateAccountIdInTransaction(account);
 
-        return syncContentValues;
+        try (SQLiteStatement insertStubs = getWritableDatabase().compileStatement(
+                "INSERT INTO " + Tables.GROUPS
+                        + "("
+                        + Groups.SOURCE_ID + ","
+                        + Groups.SYNC1 + ","
+                        + Groups.SYNC2 + ","
+                        + Groups.SYNC3 + ","
+                        + Groups.SYNC4 + ","
+                        + Groups.DELETED + ","
+                        + Groups.DIRTY + ","
+                        + GroupsColumns.ACCOUNT_ID
+                        + ")"
+                        + " SELECT "
+                        + Groups.SOURCE_ID + ","
+                        + Groups.SYNC1 + ","
+                        + Groups.SYNC2 + ","
+                        + Groups.SYNC3 + ","
+                        + Groups.SYNC4 + ","
+                        /* Groups.DELETED */ + "?,"
+                        /* Groups.DIRTY */ + "?,"
+                        /* GroupsColumns.ACCOUNT_ID */ + "?"
+                        + " FROM " + Tables.GROUPS
+                        + " WHERE "
+                        + Groups._ID + " IN (" + TextUtils.join(",", groupIds) + ")"
+                        + " AND " + Groups.SOURCE_ID + " IS NOT NULL"
+        )) {
+            // Groups.DELETED
+            insertStubs.bindLong(1, 1);
+            // Groups.DIRTY
+            insertStubs.bindLong(2, 1);
+            // GroupsColumns.ACCOUNT_ID
+            insertStubs.bindLong(3, accountId);
+            insertStubs.execute();
+        }
     }
 
     /**
-     * Gets content values for the sync stubs.
-     * The stubs consist of just the {@link ContactsContract.RawContacts#SOURCE_ID},
-     * {@link ContactsContract.RawContacts#SYNC1}, {@link ContactsContract.RawContacts#SYNC2},
-     * {@link ContactsContract.RawContacts#SYNC3}, and {@link ContactsContract.RawContacts#SYNC4}
-     * columns, with {@link ContactsContract.RawContacts#DELETED} and
+     * Inserts sync stubs in account, for the raw contacts in rawContactIds.
+     * The stubs consist of just the {@link ContactsContract.RawContacts#CONTACT_ID},
+     * {@link ContactsContract.RawContacts#SOURCE_ID}, {@link ContactsContract.RawContacts#SYNC1},
+     * {@link ContactsContract.RawContacts#SYNC2}, {@link ContactsContract.RawContacts#SYNC3}, and
+     * {@link ContactsContract.RawContacts#SYNC4}  columns, with
+     * {@link ContactsContract.RawContacts#DELETED} and
      * {@link ContactsContract.RawContacts#DIRTY} = 1.
+     * @param account the account to create the sync stubs in.
+     * @param rawContactIds the raw contact ids to create sync stubs for.
      */
-    public List<ContentValues> getSyncStubContentValues(AccountWithDataSet account,
+    public void insertRawContactSyncStubs(AccountWithDataSet account,
             Set<Long> rawContactIds) {
-        List<ContentValues> syncContentValues = new ArrayList<>();
-        try (Cursor c = getReadableDatabase().query(
-                Tables.RAW_CONTACTS,
-                new String[] {
-                        RawContacts.SOURCE_ID,
-                        RawContacts.SYNC1,
-                        RawContacts.SYNC2,
-                        RawContacts.SYNC3,
-                        RawContacts.SYNC4
-                },
-                RawContacts._ID + " IN (?)",
-                new String[] {TextUtils.join(",", rawContactIds)},
-                null, null, null)) {
-            while (c.moveToNext()) {
-                String sourceId = c.getString(0);
-                // if there's no source id, then we won't need to write a stub
-                if (sourceId != null && !sourceId.isEmpty()) {
-                    ContentValues values = new ContentValues();
-                    DatabaseUtils.cursorRowToContentValues(c, values);
-                    values.put(RawContacts.ACCOUNT_NAME, account.getAccountName());
-                    values.put(RawContacts.ACCOUNT_TYPE, account.getAccountType());
-                    values.put(RawContacts.DELETED, 1);
-                    values.put(RawContacts.DIRTY, 1);
-                    values.put(RawContacts.SOURCE_ID, sourceId);
-                    values.put(RawContacts.DATA_SET, account.getDataSet());
-                    syncContentValues.add(values);
-                }
-
-            }
+        if (rawContactIds == null || rawContactIds.isEmpty()) {
+            return;
         }
+        final long accountId = getOrCreateAccountIdInTransaction(account);
 
-        return syncContentValues;
+        try (SQLiteStatement insertStubs = getWritableDatabase().compileStatement(
+                "INSERT INTO " + Tables.RAW_CONTACTS
+                        + "("
+                        + RawContacts.CONTACT_ID + ","
+                        + RawContacts.SOURCE_ID + ","
+                        + RawContacts.SYNC1 + ","
+                        + RawContacts.SYNC2 + ","
+                        + RawContacts.SYNC3 + ","
+                        + RawContacts.SYNC4 + ","
+                        + RawContacts.DELETED + ","
+                        + RawContacts.DIRTY + ","
+                        + RawContactsColumns.ACCOUNT_ID
+                        + ")"
+                        + " SELECT "
+                        + RawContacts.CONTACT_ID + ","
+                        + RawContacts.SOURCE_ID + ","
+                        + RawContacts.SYNC1 + ","
+                        + RawContacts.SYNC2 + ","
+                        + RawContacts.SYNC3 + ","
+                        + RawContacts.SYNC4 + ","
+                        /* RawContacts.DELETED */ + "?,"
+                        /* RawContacts.DIRTY */ + "?,"
+                        /* RawContactsColumns.ACCOUNT_ID */ + "?"
+                        + " FROM " + Tables.RAW_CONTACTS
+                        + " WHERE "
+                        + RawContacts._ID + " IN (" + TextUtils.join(",", rawContactIds) + ")"
+                        + " AND " + RawContacts.SOURCE_ID + " IS NOT NULL"
+        )) {
+            // RawContacts.DELETED
+            insertStubs.bindLong(1, 1);
+            // RawContacts.DIRTY
+            insertStubs.bindLong(2, 1);
+            // RawContactsColumns.ACCOUNT_ID
+            insertStubs.bindLong(3, accountId);
+            insertStubs.execute();
+        }
     }
 
     public void deleteStatusUpdate(long dataId) {
