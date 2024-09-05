@@ -53,7 +53,6 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
         mDefaultAccountManager = new DefaultAccountManager(getContactsProvider().getContext(),
                 mDbHelper, mSyncSettingsHelper, mMockAccountManager); // Inject mockAccountManager
 
-        DefaultAccountManager.setEligibleSystemAccountTypes(new String[]{"com.google"});
         setAccounts(new Account[0]);
     }
 
@@ -185,8 +184,7 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
                 mDefaultAccountManager.pullDefaultAccount());
         assertFalse(mSyncSettingsHelper.isSyncOff(SYSTEM_CLOUD_ACCOUNT_1));
 
-        // Try to set DCA to the same system cloud account, which should fail and thus make no
-        // change.
+        // Try to set DCA to the same system cloud account, which should fail and make no change.
         assertFalse(mDefaultAccountManager.tryPushDefaultAccount(SYSTEM_CLOUD_ACCOUNT_1));
         assertEquals(
                 new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, SYSTEM_CLOUD_ACCOUNT_1),
