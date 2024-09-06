@@ -21,7 +21,7 @@ java_library {
     name: "ContactsProviderTestUtils",
     srcs: ["src/**/*.java"],
     libs: [
-        "android.test.runner",
+        "android.test.runner.stubs.system",
         "androidx.test.rules",
         "mockito-target-minus-junit4",
     ],
