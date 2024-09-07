@@ -25,8 +25,8 @@
     <string name="default_directory" msgid="93961630309570294">"ଯୋଗାଯୋଗ"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"ଅନ୍ଯ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ଏହାଙ୍କଠାରୁ ଭଏସମେଲ୍‌ "</string>
-    <string name="debug_dump_title" msgid="4916885724165570279">"କଣ୍ଟାକ୍ଟ ଡାଟାବେସକୁ କପି କରନ୍ତୁ"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"ଆପଣ 1) ଇଣ୍ଟର୍ନଲ ଷ୍ଟୋରେଜରେ ନିଜ ଡାଟାବେସର ଏକ କପି ବନାନ୍ତୁ, ଯେଉଁଥିରେ କଣ୍ଟାକ୍ଟ ସମ୍ବନ୍ଧିତ ସମସ୍ତ ତଥ୍ୟ ଏବଂ କଲ ଲଗ ରହିବ, ଏବଂ 2) ଏହାକୁ ଇମେଲ କରନ୍ତୁ। ମନେରଖନ୍ତୁ, ଡିଭାଇସରୁ ସଫଳତାର ସହ ଏହାକୁ କପି କରିସାରିବା ପରେ କିମ୍ୱା ଇମେଲ ମିଳିବା ପରେ, ଏହି କପିକୁ ଡିଲିଟ କରିଦେବେ।"</string>
+    <string name="debug_dump_title" msgid="4916885724165570279">"ଯୋଗାଯୋଗ ଡାଟାବେସ୍ କପୀ କରନ୍ତୁ"</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"ଆପଣ 1) ଇଣ୍ଟର୍ନଲ ଷ୍ଟୋରେଜରେ ନିଜ ଡାଟାବେସ୍‌ର ଏକ କପୀ ବନାନ୍ତୁ, ଯେଉଁଥିରେ ଯୋଗାଯୋଗ ସମ୍ବନ୍ଧିତ ସମସ୍ତ ତଥ୍ୟ ଏବଂ କଲ୍ ଲଗ୍ ସାମିଲ ରହିବ ଏବଂ 2) ଏହାକୁ ଇମେଲ୍ କରନ୍ତୁ। ମନେରଖନ୍ତୁ, ଡିଭାଇସ୍‌ରୁ ସଫଳତାପୂର୍ବକ ଏହାର କପୀ କରିସାରିବା ପରେ କିମ୍ୱା ଇମେଲ୍ ପ୍ରାପ୍ତ ହୋଇସାରିବା ପରେ, ଏହି କପୀକୁ ଡିଲିଟ୍ କରିଦେବେ।"</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"ବର୍ତ୍ତମାନ ଡିଲିଟ୍ କରନ୍ତୁ"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"ଆରମ୍ଭ କରନ୍ତୁ"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"ନିଜ ଫାଇଲ ପଠାଇବା ପାଇଁ ଗୋଟିଏ ପ୍ରୋଗ୍ରାମ୍ ବାଛନ୍ତୁ"</string>
