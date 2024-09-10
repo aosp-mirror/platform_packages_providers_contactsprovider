@@ -12,11 +12,12 @@ android_test {
         "mockito-target-minus-junit4",
         "flag-junit",
         "android.content.pm.flags-aconfig-java",
+        "contactsprovider_flags_java_lib",
     ],
     libs: [
-        "android.test.runner",
-        "android.test.base",
-        "android.test.mock",
+        "android.test.runner.stubs.system",
+        "android.test.base.stubs.system",
+        "android.test.mock.stubs.system",
     ],
 
     // Only compile source java files in this apk.
