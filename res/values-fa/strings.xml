@@ -21,7 +21,7 @@
     <string name="provider_label" msgid="6012150850819899907">"مخاطبین"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"برای ارتقای مخاطبین به حافظه بیشتری نیاز است."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"ارتقا حافظه برای مخاطبین"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"برای تکمیل ارتقا تک‌ضرب بزنید."</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"برای تکمیل ارتقا ضربه بزنید."</string>
     <string name="default_directory" msgid="93961630309570294">"مخاطبین"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"سایر موارد"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"پست صوتی از "</string>
