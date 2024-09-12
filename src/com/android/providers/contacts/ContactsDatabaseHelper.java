@@ -114,11 +114,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Database helper for contacts. Designed as a singleton to make sure that all
@@ -4806,6 +4808,28 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
                 + " FROM " + Tables.GROUPS
                 + " WHERE " + GroupsColumns.ACCOUNT_ID + " = ?"
                     + " AND " + Groups.DELETED + " = 0");
+    }
+
+    /**
+     * Count the number of {@link RawContacts} associated with the specified accounts.
+     * @param accounts the set of {@link AccountWithDataSet} to consider.
+     * @return the number of {@link RawContacts}.
+     */
+    public int countRawContactsQuery(Set<AccountWithDataSet> accounts) {
+        Set<Long> accountIds = accounts.stream()
+                .map(this::getAccountIdOrNull)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        try (Cursor c = getReadableDatabase().rawQuery("SELECT"
+                + " count(*) FROM " + Tables.RAW_CONTACTS
+                + " WHERE " + RawContactsColumns.ACCOUNT_ID + " IN "
+                + " (" + TextUtils.join(",", accountIds) + ")"
+                + " AND " + RawContacts.DELETED + " = 0",
+                new String[] {}
+        )) {
+            c.moveToFirst();
+            return c.getInt(0);
+        }
     }
 
     private Cursor getGroupDeduplicationQuery(
