@@ -20,7 +20,7 @@ import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
-import static com.android.providers.contacts.flags.Flags.cp2AccountMoveFlag;
+import static com.android.providers.contacts.flags.Flags.enableNewDefaultAccountRuleFlag;
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
 import android.accounts.Account;
@@ -135,7 +135,6 @@ import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
-import android.util.Pair;
 import android.util.SparseArray;
 
 import com.android.common.content.ProjectionMap;
@@ -1490,8 +1489,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private boolean mIsPhoneInitialized;
     private boolean mIsPhone;
 
-    private Account mAccount;
-
     private AbstractContactAggregator mContactAggregator;
     private AbstractContactAggregator mProfileAggregator;
 
@@ -1501,6 +1498,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private LegacyApiSupport mLegacyApiSupport;
     private GlobalSearchSupport mGlobalSearchSupport;
     private SearchIndexManager mSearchIndexManager;
+
+    private DefaultAccountManager mDefaultAccountManager;
+    private AccountResolver mAccountResolver;
 
     private int mProviderStatus = STATUS_NORMAL;
     private boolean mProviderStatusUpdateNeeded;
@@ -1625,6 +1625,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         mContactDirectoryManager = new ContactDirectoryManager(this);
         mGlobalSearchSupport = new GlobalSearchSupport(this);
+        mDefaultAccountManager = new DefaultAccountManager(getContext(), mContactsHelper);
+        mAccountResolver = new AccountResolver(mContactsHelper, mDefaultAccountManager);
+
+        mDefaultAccountManager = new DefaultAccountManager(getContext(), mContactsHelper);
+        mAccountResolver = new AccountResolver(mContactsHelper, mDefaultAccountManager);
 
         if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
                 .isPhoneAccountMigrationPending()) {
@@ -2578,8 +2583,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
             final Bundle response = new Bundle();
 
-            final Account defaultAccount = mDbHelper.get().getDefaultAccount();
-            response.putParcelable(Settings.KEY_DEFAULT_ACCOUNT, defaultAccount);
+            final Account[] defaultAccount = mDbHelper.get().getDefaultAccountIfAny();
+
+            if (defaultAccount.length > 0) {
+                response.putParcelable(Settings.KEY_DEFAULT_ACCOUNT, defaultAccount[0]);
+            } else {
+                response.putParcelable(Settings.KEY_DEFAULT_ACCOUNT, null);
+            }
 
             return response;
         } else if (Settings.SET_DEFAULT_ACCOUNT_METHOD.equals(method)) {
@@ -2633,90 +2643,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
         return response;
     }
-
-    private void updateRawContactsAccount(
-            AccountWithDataSet destAccount, Set<Long> rawContactIds) {
-        if (rawContactIds.isEmpty()) {
-            return;
-        }
-        ContentValues values = new ContentValues();
-        values.put(RawContacts.ACCOUNT_NAME, destAccount.getAccountName());
-        values.put(RawContacts.ACCOUNT_TYPE, destAccount.getAccountType());
-        values.put(RawContacts.DATA_SET, destAccount.getDataSet());
-        values.putNull(RawContacts.SOURCE_ID);
-        values.putNull(RawContacts.SYNC1);
-        values.putNull(RawContacts.SYNC2);
-        values.putNull(RawContacts.SYNC3);
-        values.putNull(RawContacts.SYNC4);
-
-        // actually update the account columns and break the source ID
-        updateRawContacts(
-                values,
-                RawContacts._ID + " IN (" + TextUtils.join(",", rawContactIds) + ")",
-                new String[] {},
-                false);
-    }
-
-    @VisibleForTesting
-    Bundle moveRawContacts(
-            AccountWithDataSet sourceAccount, AccountWithDataSet destAccount) {
-        if (!cp2AccountMoveFlag()) {
-            return new Bundle();
-        }
-        if (sourceAccount.equals(destAccount)) {
-            throw new IllegalArgumentException("Source and destination accounts must differ");
-        }
-
-
-        final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
-        db.beginTransaction();
-        try {
-            // First, compare raw contacts from source and destination accounts, find the unique
-            // raw contacts from source account;
-            Pair<Set<Long>, Set<Long>> sourceRawContactIds =
-                    mDbHelper.get().deDuplicateRawContacts(sourceAccount, destAccount);
-            Set<Long> nonDuplicates = sourceRawContactIds.first;
-            Set<Long> duplicates = sourceRawContactIds.second;
-
-            if (sourceAccount.isLocalAccount()) {
-                // if we are moving from a device account, just perform the move
-                updateRawContactsAccount(destAccount, nonDuplicates);
-            } else {
-                /*
-                    If the source account isn't a device account, we'll need to get the sync fields
-                    for any non-duplicate contacts so we can write back stub contacts.
-                    This ensures any sync adapters on the source account won't just sync the moved
-                    contacts back down (creating duplicates).
-                 */
-                List<ContentValues> syncContentValues = mDbHelper.get()
-                        .getSyncStubContentValues(sourceAccount, nonDuplicates);
-
-                // Move the contacts to the destination account
-                updateRawContactsAccount(destAccount, nonDuplicates);
-
-                // Now actually write the stubs
-                for (ContentValues values: syncContentValues) {
-                    insertRawContact(RawContacts.CONTENT_URI, values, false);
-                }
-            }
-
-            // Last, clear the duplicates.
-            // Since these are duplicates, we don't need to do anything else with them
-            for (long rawContactId: duplicates) {
-                deleteRawContact(
-                        rawContactId,
-                        mDbHelper.get().getContactId(rawContactId),
-                        false);
-            }
-
-
-            db.setTransactionSuccessful();
-        } finally {
-            db.endTransaction();
-        }
-        return new Bundle();
-    }
-
 
     /**
      * Pre-authorizes the given URI, adding an expiring permission token to it and placing that
@@ -3061,7 +2987,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case RAW_CONTACTS:
             case PROFILE_RAW_CONTACTS: {
                 invalidateFastScrollingIndexCache();
-                id = insertRawContact(uri, values, callerIsSyncAdapter);
+                id = insertRawContact(uri, values, callerIsSyncAdapter,
+                        enableNewDefaultAccountRuleFlag() && match == RAW_CONTACTS);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -3092,7 +3019,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             case GROUPS: {
-                id = insertGroup(uri, values, callerIsSyncAdapter);
+                id = insertGroup(uri, values, callerIsSyncAdapter,
+                        enableNewDefaultAccountRuleFlag());
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -3140,91 +3068,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return ContentUris.withAppendedId(uri, id);
     }
 
-    /**
-     * If account is non-null then store it in the values. If the account is
-     * already specified in the values then it must be consistent with the
-     * account, if it is non-null.
-     *
-     * @param uri Current {@link Uri} being operated on.
-     * @param values {@link ContentValues} to read and possibly update.
-     * @throws IllegalArgumentException when only one of
-     *             {@link RawContacts#ACCOUNT_NAME} or
-     *             {@link RawContacts#ACCOUNT_TYPE} is specified, leaving the
-     *             other undefined.
-     * @throws IllegalArgumentException when {@link RawContacts#ACCOUNT_NAME}
-     *             and {@link RawContacts#ACCOUNT_TYPE} are inconsistent between
-     *             the given {@link Uri} and {@link ContentValues}.
-     */
-    private Account resolveAccount(Uri uri, ContentValues values) throws IllegalArgumentException {
-        String accountName = getQueryParameter(uri, RawContacts.ACCOUNT_NAME);
-        String accountType = getQueryParameter(uri, RawContacts.ACCOUNT_TYPE);
-        final boolean partialUri = TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType);
-
-        String valueAccountName = values.getAsString(RawContacts.ACCOUNT_NAME);
-        String valueAccountType = values.getAsString(RawContacts.ACCOUNT_TYPE);
-        final boolean partialValues = TextUtils.isEmpty(valueAccountName)
-                ^ TextUtils.isEmpty(valueAccountType);
-
-        if (partialUri || partialValues) {
-            // Throw when either account is incomplete.
-            throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
-                    "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE", uri));
-        }
-
-        // Accounts are valid by only checking one parameter, since we've
-        // already ruled out partial accounts.
-        final boolean validUri = !TextUtils.isEmpty(accountName);
-        final boolean validValues = !TextUtils.isEmpty(valueAccountName);
-
-        if (validValues && validUri) {
-            // Check that accounts match when both present
-            final boolean accountMatch = TextUtils.equals(accountName, valueAccountName)
-                    && TextUtils.equals(accountType, valueAccountType);
-            if (!accountMatch) {
-                throw new IllegalArgumentException(mDbHelper.get().exceptionMessage(
-                        "When both specified, ACCOUNT_NAME and ACCOUNT_TYPE must match", uri));
-            }
-        } else if (validUri) {
-            // Fill values from the URI when not present.
-            values.put(RawContacts.ACCOUNT_NAME, accountName);
-            values.put(RawContacts.ACCOUNT_TYPE, accountType);
-        } else if (validValues) {
-            accountName = valueAccountName;
-            accountType = valueAccountType;
-        } else {
-            return null;
-        }
-
-        // Use cached Account object when matches, otherwise create
-        if (mAccount == null
-                || !mAccount.name.equals(accountName)
-                || !mAccount.type.equals(accountType)) {
-            mAccount = new Account(accountName, accountType);
-        }
-
-        return mAccount;
-    }
-
-    /**
-     * Resolves the account and builds an {@link AccountWithDataSet} based on the data set specified
-     * in the URI or values (if any).
-     * @param uri Current {@link Uri} being operated on.
-     * @param values {@link ContentValues} to read and possibly update.
-     */
-    private AccountWithDataSet resolveAccountWithDataSet(Uri uri, ContentValues values) {
-        final Account account = resolveAccount(uri, values);
-        AccountWithDataSet accountWithDataSet = null;
-        if (account != null) {
-            String dataSet = getQueryParameter(uri, RawContacts.DATA_SET);
-            if (dataSet == null) {
-                dataSet = values.getAsString(RawContacts.DATA_SET);
-            } else {
-                values.put(RawContacts.DATA_SET, dataSet);
-            }
-            accountWithDataSet = AccountWithDataSet.get(account.name, account.type, dataSet);
-        }
-        return accountWithDataSet;
-    }
 
     /**
      * Inserts an item in the contacts table
@@ -3246,7 +3089,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @return the ID of the newly-created row.
      */
     private long insertRawContact(
-            Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter) {
+            Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter,
+            boolean applyDefaultAccount) {
 
         inputValues = fixUpUsageColumnsForEdit(inputValues);
 
@@ -3255,7 +3099,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         values.putNull(RawContacts.CONTACT_ID);
 
         // Populate the relevant values before inserting the new entry into the database.
-        final long accountId = replaceAccountInfoByAccountId(uri, values);
+        final long accountId = replaceAccountInfoByAccountId(uri, values,
+                applyDefaultAccount);
         if (flagIsSet(values, RawContacts.DELETED)) {
             values.put(RawContacts.AGGREGATION_MODE, RawContacts.AGGREGATION_MODE_DISABLED);
         }
@@ -3615,12 +3460,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
      *     and false otherwise.
      * @return the ID of the newly-created row.
      */
-    private long insertGroup(Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter) {
+    private long insertGroup(Uri uri, ContentValues inputValues, boolean callerIsSyncAdapter,
+            boolean applyDefaultAccount) {
         // Create a shallow copy.
         final ContentValues values = new ContentValues(inputValues);
 
         // Populate the relevant values before inserting the new entry into the database.
-        final long accountId = replaceAccountInfoByAccountId(uri, values);
+        final long accountId = replaceAccountInfoByAccountId(uri, values,
+                applyDefaultAccount);
         replacePackageNameByPackageId(values);
         if (!callerIsSyncAdapter) {
             values.put(Groups.DIRTY, 1);
@@ -3659,7 +3506,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private Uri insertSettings(Uri uri, ContentValues values) {
-        final AccountWithDataSet account = resolveAccountWithDataSet(uri, values);
+        final AccountWithDataSet account = mAccountResolver.resolveAccountWithDataSet(uri, values,
+                /*applyDefaultAccount=*/false);
 
         // Note that the following check means the local account settings cannot be created with
         // an insert because resolveAccountWithDataSet returns null for it. However, the settings
@@ -4398,7 +4246,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         values.put(RawContactsColumns.AGGREGATION_NEEDED, 1);
         values.putNull(RawContacts.CONTACT_ID);
         values.put(RawContacts.DIRTY, 1);
-        return updateRawContact(db, rawContactId, values, callerIsSyncAdapter);
+        return updateRawContact(db, rawContactId, values, callerIsSyncAdapter,
+                /*applyDefaultAccount=*/false);
     }
 
     static int deleteDataUsage(SQLiteDatabase db) {
@@ -4532,7 +4381,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PROFILE_RAW_CONTACTS: {
                 invalidateFastScrollingIndexCache();
                 selection = appendAccountIdToSelection(uri, selection);
-                count = updateRawContacts(values, selection, selectionArgs, callerIsSyncAdapter);
+                count = updateRawContacts(values, selection, selectionArgs, callerIsSyncAdapter,
+                         enableNewDefaultAccountRuleFlag() && match == RAW_CONTACTS);
                 break;
             }
 
@@ -4543,11 +4393,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                     count = updateRawContacts(values, RawContacts._ID + "=?"
                                     + " AND(" + selection + ")", selectionArgs,
-                            callerIsSyncAdapter);
+                            callerIsSyncAdapter, enableNewDefaultAccountRuleFlag());
                 } else {
                     mSelectionArgs1[0] = String.valueOf(rawContactId);
                     count = updateRawContacts(values, RawContacts._ID + "=?", mSelectionArgs1,
-                            callerIsSyncAdapter);
+                            callerIsSyncAdapter, enableNewDefaultAccountRuleFlag());
                 }
                 break;
             }
@@ -4838,6 +4688,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         ? updatedDataSet : c.getString(GroupAccountQuery.DATA_SET);
 
                 if (isAccountChanging) {
+                    if (enableNewDefaultAccountRuleFlag()) {
+                        mAccountResolver.checkAccountIsWritable(updatedAccountName,
+                                updatedAccountType);
+                    }
+
                     final long accountId = dbHelper.getOrCreateAccountIdInTransaction(
                             AccountWithDataSet.get(accountName, accountType, dataSet));
                     updatedValues.put(GroupsColumns.ACCOUNT_ID, accountId);
@@ -4894,7 +4749,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int updateRawContacts(ContentValues values, String selection, String[] selectionArgs,
-            boolean callerIsSyncAdapter) {
+            boolean callerIsSyncAdapter, boolean applyDefaultAccount) {
         if (values.containsKey(RawContacts.CONTACT_ID)) {
             throw new IllegalArgumentException(RawContacts.CONTACT_ID + " should not be included " +
                     "in content values. Contact IDs are assigned automatically");
@@ -4913,7 +4768,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
         try {
             while (cursor.moveToNext()) {
                 long rawContactId = cursor.getLong(0);
-                updateRawContact(db, rawContactId, values, callerIsSyncAdapter);
+                updateRawContact(db, rawContactId, values, callerIsSyncAdapter,
+                        applyDefaultAccount);
                 count++;
             }
         } finally {
@@ -4946,7 +4802,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private int updateRawContact(SQLiteDatabase db, long rawContactId, ContentValues values,
-            boolean callerIsSyncAdapter) {
+            boolean callerIsSyncAdapter, boolean applyDefaultAccount) {
         final String selection = RawContactsColumns.CONCRETE_ID + " = ?";
         mSelectionArgs1[0] = Long.toString(rawContactId);
 
@@ -5002,6 +4858,23 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         isDataSetChanging
                             ? values.getAsString(RawContacts.DATA_SET) : oldDataSet
                         );
+
+                // The checkAccountIsWritable has to be done at the level of attempting to update
+                // each raw contacts, rather than at the beginning of attempting all selected raw
+                // contacts:
+                // since not all of account field (name, type, data_set) are provided in the
+                // ContentValues @param, the destination account of each raw contact can be
+                // partially derived from the their existing account info, and thus can be
+                // different.
+                // Since the UpdateRawContacts (updating all selected raw contacts) are done in
+                // a single transaction, failing checkAccountIsWritable will fail the entire update
+                // operation, which is clean such that no partial updated will be committed to the
+                // DB.
+                if (applyDefaultAccount) {
+                    mAccountResolver.checkAccountIsWritable(newAccountWithDataSet.getAccountName(),
+                            newAccountWithDataSet.getAccountType());
+                }
+
                 accountId = dbHelper.getOrCreateAccountIdInTransaction(newAccountWithDataSet);
 
                 values.put(RawContactsColumns.ACCOUNT_ID, accountId);
@@ -5518,166 +5391,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 accountsWithDataSetsToDelete.add(knownAccountWithDataSet);
             }
 
-            if (!accountsWithDataSetsToDelete.isEmpty()) {
-                for (AccountWithDataSet accountWithDataSet : accountsWithDataSetsToDelete) {
-                    final Long accountIdOrNull = dbHelper.getAccountIdOrNull(accountWithDataSet);
-
-                    if (accountIdOrNull != null) {
-                        final String accountId = Long.toString(accountIdOrNull);
-                        final String[] accountIdParams =
-                                new String[] {accountId};
-                        db.execSQL(
-                                "DELETE FROM " + Tables.GROUPS +
-                                " WHERE " + GroupsColumns.ACCOUNT_ID + " = ?",
-                                accountIdParams);
-                        db.execSQL(
-                                "DELETE FROM " + Tables.PRESENCE +
-                                " WHERE " + PresenceColumns.RAW_CONTACT_ID + " IN (" +
-                                        "SELECT " + RawContacts._ID +
-                                        " FROM " + Tables.RAW_CONTACTS +
-                                        " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?)",
-                                        accountIdParams);
-                        db.execSQL(
-                                "DELETE FROM " + Tables.STREAM_ITEM_PHOTOS +
-                                " WHERE " + StreamItemPhotos.STREAM_ITEM_ID + " IN (" +
-                                        "SELECT " + StreamItems._ID +
-                                        " FROM " + Tables.STREAM_ITEMS +
-                                        " WHERE " + StreamItems.RAW_CONTACT_ID + " IN (" +
-                                                "SELECT " + RawContacts._ID +
-                                                " FROM " + Tables.RAW_CONTACTS +
-                                                " WHERE " + RawContactsColumns.ACCOUNT_ID + "=?))",
-                                                accountIdParams);
-                        db.execSQL(
-                                "DELETE FROM " + Tables.STREAM_ITEMS +
-                                " WHERE " + StreamItems.RAW_CONTACT_ID + " IN (" +
-                                        "SELECT " + RawContacts._ID +
-                                        " FROM " + Tables.RAW_CONTACTS +
-                                        " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?)",
-                                        accountIdParams);
-
-                        // Delta API is only needed for regular contacts.
-                        if (!inProfileMode()) {
-                            // Contacts are deleted by a trigger on the raw_contacts table.
-                            // But we also need to insert the contact into the delete log.
-                            // This logic is being consolidated into the ContactsTableUtil.
-
-                            // deleteContactIfSingleton() does not work in this case because raw
-                            // contacts will be deleted in a single batch below.  Contacts with
-                            // multiple raw contacts in the same account will be missed.
-
-                            // Find all contacts that do not have raw contacts in other accounts.
-                            // These should be deleted.
-                            Cursor cursor = db.rawQuery(
-                                    "SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            " FROM " + Tables.RAW_CONTACTS +
-                                            " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?1" +
-                                            " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            " IS NOT NULL" +
-                                            " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            " NOT IN (" +
-                                            "    SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            "    FROM " + Tables.RAW_CONTACTS +
-                                            "    WHERE " + RawContactsColumns.ACCOUNT_ID + " != ?1"
-                                            + "  AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            "    IS NOT NULL"
-                                            + ")", accountIdParams);
-                            try {
-                                while (cursor.moveToNext()) {
-                                    final long contactId = cursor.getLong(0);
-                                    ContactsTableUtil.deleteContact(db, contactId);
-                                }
-                            } finally {
-                                MoreCloseables.closeQuietly(cursor);
-                            }
-
-                            // If the contact was not deleted, its last updated timestamp needs to
-                            // be refreshed since one of its raw contacts got removed.
-                            // Find all contacts that will not be deleted (i.e. contacts with
-                            // raw contacts in other accounts)
-                            cursor = db.rawQuery(
-                                    "SELECT DISTINCT " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            " FROM " + Tables.RAW_CONTACTS +
-                                            " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?1" +
-                                            " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            " IN (" +
-                                            "    SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
-                                            "    FROM " + Tables.RAW_CONTACTS +
-                                            "    WHERE " + RawContactsColumns.ACCOUNT_ID + " != ?1"
-                                            + ")", accountIdParams);
-                            try {
-                                while (cursor.moveToNext()) {
-                                    final long contactId = cursor.getLong(0);
-                                    ContactsTableUtil.updateContactLastUpdateByContactId(
-                                            db, contactId);
-                                }
-                            } finally {
-                                MoreCloseables.closeQuietly(cursor);
-                            }
-                        }
-
-                        db.execSQL(
-                                "DELETE FROM " + Tables.RAW_CONTACTS +
-                                " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?",
-                                accountIdParams);
-                        db.execSQL(
-                                "DELETE FROM " + Tables.ACCOUNTS +
-                                " WHERE " + AccountsColumns._ID + "=?",
-                                accountIdParams);
-                    }
-                }
-
-                // Find all aggregated contacts that used to contain the raw contacts
-                // we have just deleted and see if they are still referencing the deleted
-                // names or photos.  If so, fix up those contacts.
-                ArraySet<Long> orphanContactIds = new ArraySet<>();
-                Cursor cursor = db.rawQuery("SELECT " + Contacts._ID +
-                        " FROM " + Tables.CONTACTS +
-                        " WHERE (" + Contacts.NAME_RAW_CONTACT_ID + " NOT NULL AND " +
-                                Contacts.NAME_RAW_CONTACT_ID + " NOT IN " +
-                                        "(SELECT " + RawContacts._ID +
-                                        " FROM " + Tables.RAW_CONTACTS + "))" +
-                        " OR (" + Contacts.PHOTO_ID + " NOT NULL AND " +
-                                Contacts.PHOTO_ID + " NOT IN " +
-                                        "(SELECT " + Data._ID +
-                                        " FROM " + Tables.DATA + "))", null);
-                try {
-                    while (cursor.moveToNext()) {
-                        orphanContactIds.add(cursor.getLong(0));
-                    }
-                } finally {
-                    cursor.close();
-                }
-
-                for (Long contactId : orphanContactIds) {
-                    mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
-                }
-                dbHelper.updateAllVisible();
-
-                // Don't bother updating the search index if we're in profile mode - there is no
-                // search index for the profile DB, and updating it for the contacts DB in this case
-                // makes no sense and risks a deadlock.
-                if (!inProfileMode()) {
-                    // TODO Fix it.  It only updates index for contacts/raw_contacts that the
-                    // current transaction context knows updated, but here in this method we don't
-                    // update that information, so effectively it's no-op.
-                    // We can probably just schedule BACKGROUND_TASK_UPDATE_SEARCH_INDEX.
-                    // (But make sure it's not scheduled yet. We schedule this task in initialize()
-                    // too.)
-                    updateSearchIndexInTransaction();
-                }
-            }
-
-            // Second, remove stale rows from Tables.DIRECTORIES
-            removeStaleAccountRows(Tables.DIRECTORIES, Directory.ACCOUNT_NAME,
-                    Directory.ACCOUNT_TYPE, systemAccounts);
-
-            // Third, remaining tasks that must be done in a transaction.
-            // TODO: Should sync state take data set into consideration?
-            dbHelper.getSyncState().onAccountsChanged(db, systemAccounts);
-
-            saveAccounts(systemAccounts);
-
-            db.setTransactionSuccessful();
+            removeDataOfAccount(systemAccounts, accountsWithDataSetsToDelete, dbHelper, db);
         } finally {
             db.endTransaction();
         }
@@ -5686,6 +5400,201 @@ public class ContactsProvider2 extends AbstractContactsProvider
         updateContactsAccountCount(systemAccounts);
         updateProviderStatus();
         return true;
+    }
+
+    private void removeDataOfAccount(Account[] systemAccounts,
+            List<AccountWithDataSet> accountsWithDataSetsToDelete, ContactsDatabaseHelper dbHelper,
+            SQLiteDatabase db) {
+        if (!accountsWithDataSetsToDelete.isEmpty()) {
+            for (AccountWithDataSet accountWithDataSet : accountsWithDataSetsToDelete) {
+                final Long accountIdOrNull = dbHelper.getAccountIdOrNull(accountWithDataSet);
+
+                if (accountIdOrNull != null) {
+                    final String accountId = Long.toString(accountIdOrNull);
+                    final String[] accountIdParams =
+                            new String[] {accountId};
+                    db.execSQL(
+                            "DELETE FROM " + Tables.GROUPS +
+                            " WHERE " + GroupsColumns.ACCOUNT_ID + " = ?",
+                            accountIdParams);
+                    db.execSQL(
+                            "DELETE FROM " + Tables.PRESENCE +
+                            " WHERE " + PresenceColumns.RAW_CONTACT_ID + " IN (" +
+                                    "SELECT " + RawContacts._ID +
+                                    " FROM " + Tables.RAW_CONTACTS +
+                                    " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?)",
+                                    accountIdParams);
+                    db.execSQL(
+                            "DELETE FROM " + Tables.STREAM_ITEM_PHOTOS +
+                            " WHERE " + StreamItemPhotos.STREAM_ITEM_ID + " IN (" +
+                                    "SELECT " + StreamItems._ID +
+                                    " FROM " + Tables.STREAM_ITEMS +
+                                    " WHERE " + StreamItems.RAW_CONTACT_ID + " IN (" +
+                                            "SELECT " + RawContacts._ID +
+                                            " FROM " + Tables.RAW_CONTACTS +
+                                            " WHERE " + RawContactsColumns.ACCOUNT_ID + "=?))",
+                                            accountIdParams);
+                    db.execSQL(
+                            "DELETE FROM " + Tables.STREAM_ITEMS +
+                            " WHERE " + StreamItems.RAW_CONTACT_ID + " IN (" +
+                                    "SELECT " + RawContacts._ID +
+                                    " FROM " + Tables.RAW_CONTACTS +
+                                    " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?)",
+                                    accountIdParams);
+
+                    // Delta API is only needed for regular contacts.
+                    if (!inProfileMode()) {
+                        // Contacts are deleted by a trigger on the raw_contacts table.
+                        // But we also need to insert the contact into the delete log.
+                        // This logic is being consolidated into the ContactsTableUtil.
+
+                        // deleteContactIfSingleton() does not work in this case because raw
+                        // contacts will be deleted in a single batch below.  Contacts with
+                        // multiple raw contacts in the same account will be missed.
+
+                        // Find all contacts that do not have raw contacts in other accounts.
+                        // These should be deleted.
+                        Cursor cursor = db.rawQuery(
+                                "SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        " FROM " + Tables.RAW_CONTACTS +
+                                        " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?1" +
+                                        " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        " IS NOT NULL" +
+                                        " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        " NOT IN (" +
+                                        "    SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        "    FROM " + Tables.RAW_CONTACTS +
+                                        "    WHERE " + RawContactsColumns.ACCOUNT_ID + " != ?1"
+                                        + "  AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        "    IS NOT NULL"
+                                        + ")", accountIdParams);
+                        try {
+                            while (cursor.moveToNext()) {
+                                final long contactId = cursor.getLong(0);
+                                ContactsTableUtil.deleteContact(db, contactId);
+                            }
+                        } finally {
+                            MoreCloseables.closeQuietly(cursor);
+                        }
+
+                        // If the contact was not deleted, its last updated timestamp needs to
+                        // be refreshed since one of its raw contacts got removed.
+                        // Find all contacts that will not be deleted (i.e. contacts with
+                        // raw contacts in other accounts)
+                        cursor = db.rawQuery(
+                                "SELECT DISTINCT " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        " FROM " + Tables.RAW_CONTACTS +
+                                        " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?1" +
+                                        " AND " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        " IN (" +
+                                        "    SELECT " + RawContactsColumns.CONCRETE_CONTACT_ID +
+                                        "    FROM " + Tables.RAW_CONTACTS +
+                                        "    WHERE " + RawContactsColumns.ACCOUNT_ID + " != ?1"
+                                        + ")", accountIdParams);
+                        try {
+                            while (cursor.moveToNext()) {
+                                final long contactId = cursor.getLong(0);
+                                ContactsTableUtil.updateContactLastUpdateByContactId(
+                                        db, contactId);
+                            }
+                        } finally {
+                            MoreCloseables.closeQuietly(cursor);
+                        }
+                    }
+
+                    db.execSQL(
+                            "DELETE FROM " + Tables.RAW_CONTACTS +
+                            " WHERE " + RawContactsColumns.ACCOUNT_ID + " = ?",
+                            accountIdParams);
+                    db.execSQL(
+                            "DELETE FROM " + Tables.ACCOUNTS +
+                            " WHERE " + AccountsColumns._ID + "=?",
+                            accountIdParams);
+                }
+            }
+
+            // Find all aggregated contacts that used to contain the raw contacts
+            // we have just deleted and see if they are still referencing the deleted
+            // names or photos.  If so, fix up those contacts.
+            ArraySet<Long> orphanContactIds = new ArraySet<>();
+            Cursor cursor = db.rawQuery("SELECT " + Contacts._ID +
+                    " FROM " + Tables.CONTACTS +
+                    " WHERE (" + Contacts.NAME_RAW_CONTACT_ID + " NOT NULL AND " +
+                            Contacts.NAME_RAW_CONTACT_ID + " NOT IN " +
+                                    "(SELECT " + RawContacts._ID +
+                                    " FROM " + Tables.RAW_CONTACTS + "))" +
+                    " OR (" + Contacts.PHOTO_ID + " NOT NULL AND " +
+                            Contacts.PHOTO_ID + " NOT IN " +
+                                    "(SELECT " + Data._ID +
+                                    " FROM " + Tables.DATA + "))", null);
+            try {
+                while (cursor.moveToNext()) {
+                    orphanContactIds.add(cursor.getLong(0));
+                }
+            } finally {
+                cursor.close();
+            }
+
+            for (Long contactId : orphanContactIds) {
+                mAggregator.get().updateAggregateData(mTransactionContext.get(), contactId);
+            }
+            dbHelper.updateAllVisible();
+
+            // Don't bother updating the search index if we're in profile mode - there is no
+            // search index for the profile DB, and updating it for the contacts DB in this case
+            // makes no sense and risks a deadlock.
+            if (!inProfileMode()) {
+                // TODO Fix it.  It only updates index for contacts/raw_contacts that the
+                // current transaction context knows updated, but here in this method we don't
+                // update that information, so effectively it's no-op.
+                // We can probably just schedule BACKGROUND_TASK_UPDATE_SEARCH_INDEX.
+                // (But make sure it's not scheduled yet. We schedule this task in initialize()
+                // too.)
+                updateSearchIndexInTransaction();
+            }
+        }
+
+        // Second, remove stale rows from Tables.DIRECTORIES
+        removeStaleAccountRows(Tables.DIRECTORIES, Directory.ACCOUNT_NAME,
+                Directory.ACCOUNT_TYPE, systemAccounts);
+
+        // Third, remaining tasks that must be done in a transaction.
+        // TODO: Should sync state take data set into consideration?
+        dbHelper.getSyncState().onAccountsChanged(db, systemAccounts);
+
+        saveAccounts(systemAccounts);
+
+        db.setTransactionSuccessful();
+    }
+
+    @VisibleForTesting
+    void unSyncAccounts(Account[] accountsToUnSync) {
+        List<AccountWithDataSet> accountWithDataSetList =
+                mDbHelper.get().getAllAccountsWithDataSets().stream().filter(
+                        accountWithDataSet -> accountWithDataSet.inSystemAccounts(
+                                accountsToUnSync)).toList();
+        Account[] accounts = AccountManager.get(getContext()).getAccounts();
+        switchToContactMode();
+        final ContactsDatabaseHelper dbHelper = mDbHelper.get();
+        final SQLiteDatabase db = dbHelper.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            removeDataOfAccount(accounts, accountWithDataSetList, dbHelper,
+                    dbHelper.getWritableDatabase());
+        } finally {
+            db.endTransaction();
+        }
+        switchToProfileMode();
+        db.beginTransaction();
+        try {
+            removeDataOfAccount(accounts, accountWithDataSetList, dbHelper,
+                    dbHelper.getWritableDatabase());
+        } finally {
+            db.endTransaction();
+        }
+        switchToContactMode();
+        updateContactsAccountCount(accounts);
+        updateDirectoriesInBackground(true);
     }
 
     private void updateContactsAccountCount(Account[] accounts) {
@@ -10376,8 +10285,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @param values The {@link ContentValues} object to operate on.
      * @return The corresponding account ID.
      */
-    private long replaceAccountInfoByAccountId(Uri uri, ContentValues values) {
-        final AccountWithDataSet account = resolveAccountWithDataSet(uri, values);
+    private long replaceAccountInfoByAccountId(Uri uri, ContentValues values,
+            boolean applyDefaultAccount) {
+        final AccountWithDataSet account = mAccountResolver.resolveAccountWithDataSet(uri, values,
+                applyDefaultAccount);
         final long id = mDbHelper.get().getOrCreateAccountIdInTransaction(account);
         values.put(RawContactsColumns.ACCOUNT_ID, id);
 
