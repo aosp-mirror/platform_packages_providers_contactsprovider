@@ -49,6 +49,15 @@ public class DefaultAccount {
     public static final DefaultAccount DEVICE_DEFAULT_ACCOUNT = new DefaultAccount(
             AccountCategory.DEVICE, null);
 
+    /**
+     * Create a DefaultAccount object which points to the cloud.
+     * @param cloudAccount The cloud account that is being set as the default account.
+     * @return The DefaultAccount object.
+     */
+    public static DefaultAccount ofCloud(Account cloudAccount) {
+        return new DefaultAccount(AccountCategory.CLOUD, cloudAccount);
+    }
+
     private final AccountCategory mAccountCategory;
     private final Account mCloudAccount;
 
