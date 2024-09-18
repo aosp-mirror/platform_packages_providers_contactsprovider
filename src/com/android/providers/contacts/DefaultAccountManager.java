@@ -21,10 +21,12 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.util.Log;
 
+import com.android.internal.R;
 import com.android.providers.contacts.util.NeededForTesting;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Set;
 
 /**
  * A utility class to provide methods to load and set the default account.
@@ -54,15 +56,22 @@ public class DefaultAccountManager {
         mAccountManager = accountManager;
     }
 
-    private static synchronized HashSet<String> getEligibleSystemAccountTypes(Context context) {
+    private static synchronized Set<String> getEligibleSystemAccountTypes(Context context) {
         if (sEligibleSystemCloudAccountTypes == null) {
             sEligibleSystemCloudAccountTypes = new HashSet<>();
-            Resources res = context.getResources();
-            String[] accountTypesArray = res.getStringArray(
-                    R.array.eligible_system_cloud_account_types);
+
+            Resources resources = Resources.getSystem();
+            String[] accountTypesArray =
+                    resources.getStringArray(R.array.config_rawContactsEligibleDefaultAccountTypes);
+
             sEligibleSystemCloudAccountTypes.addAll(Arrays.asList(accountTypesArray));
         }
         return sEligibleSystemCloudAccountTypes;
+    }
+
+    @NeededForTesting
+    static synchronized void setEligibleSystemCloudAccountTypesForTesting(String[] accountTypes) {
+        sEligibleSystemCloudAccountTypes = new HashSet<>(Arrays.asList(accountTypes));
     }
 
     /**
@@ -108,6 +117,7 @@ public class DefaultAccountManager {
         if (isValidDefaultAccount(defaultAccount)) {
             return defaultAccount;
         } else {
+            Log.w(TAG, "Default account stored in the DB is no longer valid.");
             directlySetDefaultAccountInDb(DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
             return DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT;
         }
