@@ -54,6 +54,8 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
                 mDbHelper, mSyncSettingsHelper, mMockAccountManager); // Inject mockAccountManager
 
         setAccounts(new Account[0]);
+        DefaultAccountManager.setEligibleSystemCloudAccountTypesForTesting(
+                new String[]{SYSTEM_CLOUD_ACCOUNT_1.type});
     }
 
     private void setAccounts(Account[] accounts) {
