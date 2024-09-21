@@ -274,6 +274,60 @@ public class ContactMover {
     }
 
     /**
+     * Gets the number of {@link RawContacts} in the local account(s) which may be moved using
+     * {@link ContactMover#moveLocalToCloudDefaultAccount} (if any).
+     * @return the number of {@link RawContacts} in the local account(s), or 0 if there is no Cloud
+     * Default Account.
+     */
+    // Keep it in proguard for testing: once it's used in production code, remove this annotation.
+    @NeededForTesting
+    int getNumberLocalContacts() {
+        if (!cp2AccountMoveFlag()) {
+            Log.w(TAG, "getNumberLocalContacts: flag disabled");
+            return 0;
+        }
+
+        // Check if there is a cloud default account set
+        // - if not, then we don't need to do anything, count = 0
+        // - if there is, then do the count
+        Account account = mDefaultAccountManager.pullDefaultAccount().getCloudAccount();
+        if (account == null) {
+            Log.w(TAG, "getNumberLocalContacts with no default cloud account set");
+            return 0;
+        }
+
+        // Count any contacts in the local account(s)
+        return countRawContactsForAccounts(getLocalAccounts());
+    }
+
+    /**
+     * Gets the number of {@link RawContacts} in the SIM account(s) which may be moved using
+     * {@link ContactMover#moveSimToCloudDefaultAccount} (if any).
+     * @return the number of {@link RawContacts} in the SIM account(s), or 0 if there is no Cloud
+     * Default Account.
+     */
+    // Keep it in proguard for testing: once it's used in production code, remove this annotation.
+    @NeededForTesting
+    int getNumberSimContacts() {
+        if (!cp2AccountMoveFlag()) {
+            Log.w(TAG, "getNumberSimContacts: flag disabled");
+            return 0;
+        }
+
+        // Check if there is a cloud default account set
+        // - if not, then we don't need to do anything, count = 0
+        // - if there is, then do the count
+        Account account = mDefaultAccountManager.pullDefaultAccount().getCloudAccount();
+        if (account == null) {
+            Log.w(TAG, "getNumberSimContacts with no default cloud account set");
+            return 0;
+        }
+
+        // Count any contacts in the sim accounts.
+        return countRawContactsForAccounts(getSimAccounts());
+    }
+
+    /**
      * Moves {@link RawContacts} and {@link Groups} from one account to another.
      * @param sourceAccounts the source {@link AccountWithDataSet}s to move contacts and groups
      *                       from.
@@ -307,6 +361,10 @@ public class ContactMover {
             return;
         }
         moveRawContactsForAccounts(sourceAccounts, destAccount, /* insertSyncStubs= */ true);
+    }
+
+    private int countRawContactsForAccounts(Set<AccountWithDataSet> sourceAccounts) {
+        return mDbHelper.countRawContactsQuery(sourceAccounts);
     }
 
     private void moveRawContactsForAccounts(Set<AccountWithDataSet> sourceAccounts,
