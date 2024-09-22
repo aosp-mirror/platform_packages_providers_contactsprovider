@@ -54,6 +54,8 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
                 mDbHelper, mSyncSettingsHelper, mMockAccountManager); // Inject mockAccountManager
 
         setAccounts(new Account[0]);
+        DefaultAccountManager.setEligibleSystemCloudAccountTypesForTesting(
+                new String[]{SYSTEM_CLOUD_ACCOUNT_1.type});
     }
 
     private void setAccounts(Account[] accounts) {
@@ -85,16 +87,18 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
     }
 
     public void testPushDca_noCloudAccountsSignedIn() {
-        assertEquals(DefaultAccount.DEVICE_DEFAULT_ACCOUNT,
+        assertEquals(DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT,
                 mDefaultAccountManager.pullDefaultAccount());
 
-        // Push the DCA which is same as the current DCA, expect failure.
-        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(null));
+        // Push the DCA which is device account, which should succeed.
+        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.DEVICE_DEFAULT_ACCOUNT));
         assertEquals(DefaultAccount.DEVICE_DEFAULT_ACCOUNT,
                 mDefaultAccountManager.pullDefaultAccount());
 
         // Push the DCA which is not signed in, expect failure.
-        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(SYSTEM_CLOUD_ACCOUNT_1));
+        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.ofCloud(SYSTEM_CLOUD_ACCOUNT_1)));
         assertEquals(DefaultAccount.DEVICE_DEFAULT_ACCOUNT,
                 mDefaultAccountManager.pullDefaultAccount());
     }
@@ -102,22 +106,25 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
     public void testPushDeviceAccountAsDca_cloudSyncIsOff() {
         setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
 
-        // All cloud accounts are sync off, and thus there DCA is now DEVICE.
+        // The initial DCA should be unknown, regardless of the cloud account existence and their
+        // sync status.
         mSyncSettingsHelper.turnOffSync(SYSTEM_CLOUD_ACCOUNT_1);
+        assertEquals(DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT,
+                mDefaultAccountManager.pullDefaultAccount());
+
+        // Try to set the DCA as DEVICE account, which should succeed
+        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.DEVICE_DEFAULT_ACCOUNT));
         assertEquals(DefaultAccount.DEVICE_DEFAULT_ACCOUNT,
                 mDefaultAccountManager.pullDefaultAccount());
 
-        // Try to set the DCA as DEVICE account, which shouldn't change DCA.
-        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(null));
-        assertEquals(DefaultAccount.DEVICE_DEFAULT_ACCOUNT,
-                mDefaultAccountManager.pullDefaultAccount());
-
-        // Try to set the DCA as the system cloud account, which should succeed.
-        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(SYSTEM_CLOUD_ACCOUNT_1));
+        // Try to set the DCA as the system cloud account which sync is currently off, should fail.
+        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.ofCloud(SYSTEM_CLOUD_ACCOUNT_1)));
         assertEquals(
-                new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, SYSTEM_CLOUD_ACCOUNT_1),
+                DefaultAccount.DEVICE_DEFAULT_ACCOUNT,
                 mDefaultAccountManager.pullDefaultAccount());
-        assertFalse(mSyncSettingsHelper.isSyncOff(SYSTEM_CLOUD_ACCOUNT_1));
+        assertTrue(mSyncSettingsHelper.isSyncOff(SYSTEM_CLOUD_ACCOUNT_1));
     }
 
     public void testPushCustomizedDeviceAccountAsDca_cloudSyncIsOff() {
@@ -125,20 +132,23 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
         mSyncSettingsHelper.turnOffSync(SYSTEM_CLOUD_ACCOUNT_1);
 
         // No cloud account remains sync on, and thus DCA reverts to the DEVICE.
+        assertEquals(DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT,
+                mDefaultAccountManager.pullDefaultAccount());
+
+        // Try to set DCA to be device account, which should succeed.
+        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.DEVICE_DEFAULT_ACCOUNT));
         assertEquals(DefaultAccount.DEVICE_DEFAULT_ACCOUNT,
                 mDefaultAccountManager.pullDefaultAccount());
 
-        // Try to set DCA to be device account 1 more time, which would be a non-op.
-        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(null));
-        assertEquals(DefaultAccount.DEVICE_DEFAULT_ACCOUNT,
-                mDefaultAccountManager.pullDefaultAccount());
-
-        // Try to set DCA to be a system cloud account, which should succeed.
-        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(SYSTEM_CLOUD_ACCOUNT_1));
+        // Try to set DCA to be a system cloud account which sync is off, should fail.
+        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.ofCloud(SYSTEM_CLOUD_ACCOUNT_1)));
         assertEquals(
-                new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, SYSTEM_CLOUD_ACCOUNT_1),
+                DefaultAccount.DEVICE_DEFAULT_ACCOUNT,
                 mDefaultAccountManager.pullDefaultAccount());
-        assertFalse(mSyncSettingsHelper.isSyncOff(SYSTEM_CLOUD_ACCOUNT_1));
+        // Sync state should still remains off.
+        assertTrue(mSyncSettingsHelper.isSyncOff(SYSTEM_CLOUD_ACCOUNT_1));
     }
 
     public void testPushDca_dcaWasUnknown_tryPushDeviceAndThenCloudAccount() {
@@ -152,17 +162,20 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
 
         // Try to set the DCA to be local, which should succeed. In addition, it should turn
         // all system cloud account's sync off.
-        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(null));
+        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.DEVICE_DEFAULT_ACCOUNT));
         assertEquals(DefaultAccount.DEVICE_DEFAULT_ACCOUNT,
                 mDefaultAccountManager.pullDefaultAccount());
-        assertTrue(mSyncSettingsHelper.isSyncOff(SYSTEM_CLOUD_ACCOUNT_1));
+        // Sync setting should remain to be on.
+        assertFalse(mSyncSettingsHelper.isSyncOff(SYSTEM_CLOUD_ACCOUNT_1));
 
-        // Try to set the DCA to be system cloud account, which should succeed. In addition,
-        // it should turn the DCA account's sync on.
-        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(SYSTEM_CLOUD_ACCOUNT_1));
+        // Try to set the DCA to be system cloud account, which should succeed.
+        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.ofCloud(SYSTEM_CLOUD_ACCOUNT_1)));
         assertEquals(
                 new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, SYSTEM_CLOUD_ACCOUNT_1),
                 mDefaultAccountManager.pullDefaultAccount());
+        // Sync setting should remain to be on.
         assertFalse(mSyncSettingsHelper.isSyncOff(SYSTEM_CLOUD_ACCOUNT_1));
     }
 
@@ -176,16 +189,18 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
                 new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, SYSTEM_CLOUD_ACCOUNT_1),
                 mDefaultAccountManager.pullDefaultAccount());
 
-        // Try to set DCA to a device (null) account, which is expected to fail, since not all
-        // system cloud account's sync is off.
-        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(null));
+        // Try to set DCA to a device (null) account, which should succeed, and it shouldn't
+        // change the cloud account's sync status.
+        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.DEVICE_DEFAULT_ACCOUNT));
         assertEquals(
-                new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, SYSTEM_CLOUD_ACCOUNT_1),
+                DefaultAccount.DEVICE_DEFAULT_ACCOUNT,
                 mDefaultAccountManager.pullDefaultAccount());
         assertFalse(mSyncSettingsHelper.isSyncOff(SYSTEM_CLOUD_ACCOUNT_1));
 
-        // Try to set DCA to the same system cloud account, which should fail and make no change.
-        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(SYSTEM_CLOUD_ACCOUNT_1));
+        // Try to set DCA to the same system cloud account again, which should succeed
+        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.ofCloud(SYSTEM_CLOUD_ACCOUNT_1)));
         assertEquals(
                 new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, SYSTEM_CLOUD_ACCOUNT_1),
                 mDefaultAccountManager.pullDefaultAccount());
@@ -199,7 +214,7 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
 
         // Try to set the DCA to be an account not signed in, which should fail.
         assertFalse(mDefaultAccountManager.tryPushDefaultAccount(
-                new Account("unknown1@gmail.com", "com.google")));
+                DefaultAccount.ofCloud(new Account("unknown1@gmail.com", "com.google"))));
         assertEquals(DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT,
                 mDefaultAccountManager.pullDefaultAccount());
     }
@@ -211,7 +226,8 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
 
         // Try to set the DCA to be an account which is not a system cloud account, which should
         // fail.
-        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(NON_SYSTEM_CLOUD_ACCOUNT_1));
+        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.ofCloud(NON_SYSTEM_CLOUD_ACCOUNT_1)));
         assertEquals(DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT,
                 mDefaultAccountManager.pullDefaultAccount());
     }
@@ -225,7 +241,7 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
 
         // Try to set the DCA to be an account not signed in, which should fail.
         assertFalse(mDefaultAccountManager.tryPushDefaultAccount(
-                new Account("unknown1@gmail.com", "com.google")));
+                DefaultAccount.ofCloud(new Account("unknown1@gmail.com", "com.google"))));
         assertEquals(
                 new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, SYSTEM_CLOUD_ACCOUNT_1),
                 mDefaultAccountManager.pullDefaultAccount());
@@ -240,7 +256,8 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
 
         // Try to set the DCA to be an account which is not a system cloud account, which should
         // fail.
-        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(NON_SYSTEM_CLOUD_ACCOUNT_1));
+        assertFalse(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccount.ofCloud(NON_SYSTEM_CLOUD_ACCOUNT_1)));
         assertEquals(
                 new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, SYSTEM_CLOUD_ACCOUNT_1),
                 mDefaultAccountManager.pullDefaultAccount());
