@@ -20,6 +20,7 @@ import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
+import static com.android.providers.contacts.flags.Flags.cp2SyncSearchIndexFlag;
 import static com.android.providers.contacts.flags.Flags.enableNewDefaultAccountRuleFlag;
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
@@ -5472,6 +5473,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             while (cursor.moveToNext()) {
                                 final long contactId = cursor.getLong(0);
                                 ContactsTableUtil.deleteContact(db, contactId);
+                                if (cp2SyncSearchIndexFlag()) {
+                                    mTransactionContext.get()
+                                            .invalidateSearchIndexForContact(contactId);
+                                }
                             }
                         } finally {
                             MoreCloseables.closeQuietly(cursor);
@@ -5496,6 +5501,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                 final long contactId = cursor.getLong(0);
                                 ContactsTableUtil.updateContactLastUpdateByContactId(
                                         db, contactId);
+                                if (cp2SyncSearchIndexFlag()) {
+                                    mTransactionContext.get()
+                                            .invalidateSearchIndexForContact(contactId);
+                                }
                             }
                         } finally {
                             MoreCloseables.closeQuietly(cursor);
@@ -5544,12 +5553,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
             // search index for the profile DB, and updating it for the contacts DB in this case
             // makes no sense and risks a deadlock.
             if (!inProfileMode()) {
-                // TODO Fix it.  It only updates index for contacts/raw_contacts that the
-                // current transaction context knows updated, but here in this method we don't
-                // update that information, so effectively it's no-op.
-                // We can probably just schedule BACKGROUND_TASK_UPDATE_SEARCH_INDEX.
-                // (But make sure it's not scheduled yet. We schedule this task in initialize()
-                // too.)
+                // Will remove the deleted contact ids of the account from the search index and
+                // will update the contacts in the search index which had a raw contact deleted.
                 updateSearchIndexInTransaction();
             }
         }
@@ -10446,5 +10451,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
     @VisibleForTesting
     public ProfileProvider getProfileProviderForTest() {
         return mProfileProvider;
+    }
+
+    /** Should be only used in tests. */
+    @NeededForTesting
+    void setSearchIndexMaxUpdateFilterContacts(int maxUpdateFilterContacts) {
+        mSearchIndexManager.setMaxUpdateFilterContacts(maxUpdateFilterContacts);
     }
 }

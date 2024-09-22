@@ -569,4 +569,72 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
             assertEquals(3, cursor.getCount());
         }
     }
+
+    void createRawContact(AccountWithDataSet account) {
+        createRawContact(account, /* deleted= */ false);
+    }
+
+    void createRawContact(AccountWithDataSet account, boolean deleted) {
+        // Create an account.
+        final long accountId = mDbHelper.getOrCreateAccountIdInTransaction(account);
+        // Create a raw contact.
+        ContentValues rawContactValues = new ContentValues();
+        rawContactValues.put(ContactsDatabaseHelper.RawContactsColumns.ACCOUNT_ID, accountId);
+        if (deleted) {
+            rawContactValues.put(RawContactsColumns.CONCRETE_DELETED, 1);
+        }
+        mDb.insert(Tables.RAW_CONTACTS, null, rawContactValues);
+    }
+
+    public void testCountRawContactsForAccount() {
+        createRawContact(
+                new AccountWithDataSet("testName", "testType", /* dataSet= */ null));
+
+        int count = mDbHelper.countRawContactsQuery(Set.of(
+                new AccountWithDataSet("testName", "testType", /* dataSet= */ null)
+        ));
+
+        assertEquals(1, count);
+    }
+
+    public void testCountRawContactsForAccountsNullAccount() {
+        createRawContact(new AccountWithDataSet(null, null, null));
+        createRawContact(new AccountWithDataSet(null, null, null));
+
+        int count = mDbHelper.countRawContactsQuery(Set.of(
+                new AccountWithDataSet(null, null, null)
+        ));
+
+        assertEquals(2, count);
+    }
+
+    public void testCountRawContactsDoesNotIncludeDeletedContacts() {
+        createRawContact(new AccountWithDataSet(null, null, null));
+        createRawContact(new AccountWithDataSet(null, null, null),
+                /* deleted= */ true
+        );
+
+        int count = mDbHelper.countRawContactsQuery(Set.of(
+                new AccountWithDataSet(null, null, null)
+        ));
+
+        assertEquals(1, count);
+    }
+
+    public void testCountRawContactsForAccountsEmptyLocalAccount() {
+        int count = mDbHelper.countRawContactsQuery(Set.of(AccountWithDataSet.LOCAL));
+
+        assertEquals(0, count);
+    }
+
+    public void testCountRawContactsForUnrelatedAccount() {
+        createRawContact(
+                new AccountWithDataSet("testName", "testType", /* dataSet= */ null));
+
+        int count = mDbHelper.countRawContactsQuery(Set.of(
+                new AccountWithDataSet(null, null, null)
+        ));
+
+        assertEquals(0, count);
+    }
 }
