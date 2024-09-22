@@ -15,6 +15,8 @@
  */
 package com.android.providers.contacts;
 
+import static com.android.providers.contacts.flags.Flags.cp2SyncSearchIndexFlag;
+
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -52,6 +54,7 @@ public class SearchIndexManager {
 
     private static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
 
+    public static final int MAX_UPDATE_FILTER_CONTACTS = 5000;
     private static final int MAX_STRING_BUILDER_SIZE = 1024 * 10;
 
     public static final String PROPERTY_SEARCH_INDEX_VERSION = "search_index";
@@ -246,6 +249,7 @@ public class SearchIndexManager {
     private IndexBuilder mIndexBuilder = new IndexBuilder();
     private ContentValues mValues = new ContentValues();
     private String[] mSelectionArgs1 = new String[1];
+    private int mMaxUpdateFilterContacts = MAX_UPDATE_FILTER_CONTACTS;
 
     public SearchIndexManager(ContactsProvider2 contactsProvider) {
         this.mContactsProvider = contactsProvider;
@@ -296,44 +300,70 @@ public class SearchIndexManager {
             Log.v(TAG, "Updating search index for " + contactIds.size() +
                     " contacts / " + rawContactIds.size() + " raw contacts");
         }
+
+        final long contactsCount = contactIds.size() + rawContactIds.size();
+
         StringBuilder sb = new StringBuilder();
-        sb.append("(");
-        if (!contactIds.isEmpty()) {
-            // Select all raw contacts that belong to all contacts in contactIds
-            sb.append(RawContacts.CONTACT_ID + " IN (");
-            sb.append(TextUtils.join(",", contactIds));
-            sb.append(')');
-        }
-        if (!rawContactIds.isEmpty()) {
+        if (!cp2SyncSearchIndexFlag() || contactsCount <= mMaxUpdateFilterContacts) {
+            sb.append("(");
             if (!contactIds.isEmpty()) {
-                sb.append(" OR ");
+                // Select all raw contacts that belong to all contacts in contactIds
+                sb.append(RawContacts.CONTACT_ID + " IN (");
+                sb.append(TextUtils.join(",", contactIds));
+                sb.append(')');
             }
-            // Select all raw contacts that belong to the same contact as all raw contacts
-            // in rawContactIds. For every raw contact in rawContactIds that we are updating
-            // the index for, we need to rebuild the search index for all raw contacts belonging
-            // to the same contact, because we can only update the search index on a per-contact
-            // basis.
-            sb.append(RawContacts.CONTACT_ID + " IN " +
-                    "(SELECT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS +
-                    " WHERE " + RawContactsColumns.CONCRETE_ID + " IN (");
-            sb.append(TextUtils.join(",", rawContactIds));
-            sb.append("))");
+            if (!rawContactIds.isEmpty()) {
+                if (!contactIds.isEmpty()) {
+                    sb.append(" OR ");
+                }
+                // Select all raw contacts that belong to the same contact as all raw contacts
+                // in rawContactIds. For every raw contact in rawContactIds that we are updating
+                // the index for, we need to rebuild the search index for all raw contacts belonging
+                // to the same contact, because we can only update the search index on a per-contact
+                // basis.
+                sb.append(RawContacts.CONTACT_ID + " IN "
+                        + "(SELECT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS
+                        + " WHERE " + RawContactsColumns.CONCRETE_ID + " IN (");
+                sb.append(TextUtils.join(",", rawContactIds));
+                sb.append("))");
+            }
+            sb.append(")");
         }
 
-        sb.append(")");
-
-        // The selection to select raw_contacts.
-        final String rawContactsSelection = sb.toString();
+        // The selection to select raw_contacts. If the selection string is empty
+        // the entire search index table will be rebuilt.
+        String rawContactsSelection = sb.toString();
 
         // Remove affected search_index rows.
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
-        final int deleted = db.delete(Tables.SEARCH_INDEX,
-                ROW_ID_KEY + " IN (SELECT " +
-                    RawContacts.CONTACT_ID +
-                    " FROM " + Tables.RAW_CONTACTS +
-                    " WHERE " + rawContactsSelection +
-                    ")"
-                , null);
+        if (cp2SyncSearchIndexFlag()) {
+            // If the amount of contacts which need to be re-synced in the search index
+            // surpasses the limit, then simply clear the entire search index table and
+            // and rebuild it.
+            String whereClause = null;
+            if (contactsCount <= mMaxUpdateFilterContacts) {
+                // Only remove the provided contacts
+                whereClause =
+                    "rowid IN ("
+                        + TextUtils.join(",", contactIds)
+                    + """
+                    ) OR rowid IN (
+                        SELECT contact_id
+                        FROM raw_contacts
+                        WHERE raw_contacts._id IN ("""
+                            + TextUtils.join(",", rawContactIds)
+                    + "))";
+            }
+            db.delete(Tables.SEARCH_INDEX, whereClause, null);
+        } else {
+            db.delete(Tables.SEARCH_INDEX,
+                    ROW_ID_KEY + " IN (SELECT "
+                        + RawContacts.CONTACT_ID
+                        + " FROM " + Tables.RAW_CONTACTS
+                        + " WHERE " + rawContactsSelection
+                        + ")",
+                    null);
+        }
 
         // Then rebuild index for them.
         final int count = buildAndInsertIndex(db, rawContactsSelection);
@@ -404,12 +434,18 @@ public class SearchIndexManager {
         mValues.put(ROW_ID_KEY, contactId);
         db.insert(Tables.SEARCH_INDEX, null, mValues);
     }
+
     private int getSearchIndexVersion() {
         return Integer.parseInt(mDbHelper.getProperty(PROPERTY_SEARCH_INDEX_VERSION, "0"));
     }
 
     private void setSearchIndexVersion(int version) {
         mDbHelper.setProperty(PROPERTY_SEARCH_INDEX_VERSION, String.valueOf(version));
+    }
+
+    @VisibleForTesting
+    void setMaxUpdateFilterContacts(int maxUpdateFilterContacts) {
+        mMaxUpdateFilterContacts = maxUpdateFilterContacts;
     }
 
     /**
