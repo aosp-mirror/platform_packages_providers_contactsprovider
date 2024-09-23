@@ -4382,7 +4382,7 @@ public class ContactsDatabaseHelper extends SQLiteOpenHelper {
         if (newVisibility) {
             db.execSQL("INSERT OR IGNORE INTO " + Tables.DEFAULT_DIRECTORY + " VALUES(?)",
                     new String[] {contactIdAsString});
-            txContext.invalidateSearchIndexForContact(contactId);
+            txContext.invalidateSearchIndexForContact(db, contactId);
         } else {
             db.execSQL("DELETE FROM " + Tables.DEFAULT_DIRECTORY +
                         " WHERE " + Contacts._ID + "=?",
