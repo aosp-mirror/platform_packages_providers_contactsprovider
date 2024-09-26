@@ -2600,6 +2600,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // Ignore the call if the flag is disabled.
                 Log.w(TAG, "Query default account for new contacts is not supported.");
             }
+        } else if (DefaultAccount.QUERY_ELIGIBLE_DEFAULT_ACCOUNTS_METHOD.equals(method)) {
+            if (newDefaultAccountApiEnabled()) {
+                return queryEligibleDefaultAccounts();
+            } else {
+                Log.w(TAG, "Query eligible account that can be set as cloud default account "
+                        + "is not supported.");
+            }
         } else if (Settings.SET_DEFAULT_ACCOUNT_METHOD.equals(method)) {
             return setDefaultAccountSetting(extras);
         } else if (DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD.equals(
@@ -2639,6 +2646,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
             throw new IllegalStateException(
                     "queryDefaultAccountForNewContacts: Invalid default account state");
         }
+        return response;
+    }
+
+    private Bundle queryEligibleDefaultAccounts() {
+        ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                SET_DEFAULT_ACCOUNT_PERMISSION);
+        final Bundle response = new Bundle();
+        final List<Account> eligibleCloudAccounts =
+                mDefaultAccountManager.getEligibleCloudAccounts();
+        response.putParcelableList(DefaultAccount.KEY_ELIGIBLE_DEFAULT_ACCOUNTS,
+                eligibleCloudAccounts);
         return response;
     }
 
