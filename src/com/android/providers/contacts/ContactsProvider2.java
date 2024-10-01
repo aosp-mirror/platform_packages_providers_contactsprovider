@@ -19,9 +19,9 @@ package com.android.providers.contacts;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import static android.provider.Flags.newDefaultAccountApiEnabled;
 
 import static com.android.providers.contacts.flags.Flags.cp2SyncSearchIndexFlag;
-import static com.android.providers.contacts.flags.Flags.enableNewDefaultAccountRuleFlag;
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
 import android.accounts.Account;
@@ -2989,7 +2989,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             case PROFILE_RAW_CONTACTS: {
                 invalidateFastScrollingIndexCache();
                 id = insertRawContact(uri, values, callerIsSyncAdapter,
-                        enableNewDefaultAccountRuleFlag() && match == RAW_CONTACTS);
+                        newDefaultAccountApiEnabled() && match == RAW_CONTACTS);
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -3021,7 +3021,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
             case GROUPS: {
                 id = insertGroup(uri, values, callerIsSyncAdapter,
-                        enableNewDefaultAccountRuleFlag());
+                        newDefaultAccountApiEnabled());
                 mSyncToNetwork |= !callerIsSyncAdapter;
                 break;
             }
@@ -4383,7 +4383,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 invalidateFastScrollingIndexCache();
                 selection = appendAccountIdToSelection(uri, selection);
                 count = updateRawContacts(values, selection, selectionArgs, callerIsSyncAdapter,
-                         enableNewDefaultAccountRuleFlag() && match == RAW_CONTACTS);
+                         newDefaultAccountApiEnabled() && match == RAW_CONTACTS);
                 break;
             }
 
@@ -4394,11 +4394,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     selectionArgs = insertSelectionArg(selectionArgs, String.valueOf(rawContactId));
                     count = updateRawContacts(values, RawContacts._ID + "=?"
                                     + " AND(" + selection + ")", selectionArgs,
-                            callerIsSyncAdapter, enableNewDefaultAccountRuleFlag());
+                            callerIsSyncAdapter, newDefaultAccountApiEnabled());
                 } else {
                     mSelectionArgs1[0] = String.valueOf(rawContactId);
                     count = updateRawContacts(values, RawContacts._ID + "=?", mSelectionArgs1,
-                            callerIsSyncAdapter, enableNewDefaultAccountRuleFlag());
+                            callerIsSyncAdapter, newDefaultAccountApiEnabled());
                 }
                 break;
             }
@@ -4689,7 +4689,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         ? updatedDataSet : c.getString(GroupAccountQuery.DATA_SET);
 
                 if (isAccountChanging) {
-                    if (enableNewDefaultAccountRuleFlag()) {
+                    if (newDefaultAccountApiEnabled()) {
                         mAccountResolver.checkAccountIsWritable(updatedAccountName,
                                 updatedAccountType);
                     }
