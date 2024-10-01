@@ -33,6 +33,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 
 import androidx.test.filters.MediumTest;
 
@@ -60,29 +61,25 @@ import java.util.Set;
  *
  * Run the test like this:
  * <code>
-   adb shell am instrument -e class com.android.providers.contacts.MoveRawContactsTest -w \
-           com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
+ * adb shell am instrument -e class com.android.providers.contacts.MoveRawContactsTest -w \
+ * com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
 @MediumTest
 @RunWith(JUnit4.class)
 public class MoveRawContactsTest extends BaseContactsProvider2Test {
-    @ClassRule public static final SetFlagsRule.ClassRule mClassRule = new SetFlagsRule.ClassRule();
-
-    @Rule public final SetFlagsRule mSetFlagsRule = mClassRule.createSetFlagsRule();
-
+    @ClassRule
+    public static final SetFlagsRule.ClassRule mClassRule = new SetFlagsRule.ClassRule();
     static final Account SOURCE_ACCOUNT = new Account("sourceName", "sourceType");
     static final Account DEST_ACCOUNT = new Account("destName", "destType");
     static final Account DEST_ACCOUNT_WITH_SOURCE_TYPE = new Account("destName", "sourceType");
     static final Account DEST_CLOUD_ACCOUNT = new Account("destName", "com.google");
     static final Account SIM_ACCOUNT = new Account("simName", "simType");
-
     static final String SOURCE_ID = "uniqueSourceId";
-
     static final String NON_PORTABLE_MIMETYPE = "test/mimetype";
-
     static final String RES_PACKAGE = "testpackage";
-
+    @Rule
+    public final SetFlagsRule mSetFlagsRule = mClassRule.createSetFlagsRule();
     ContactsProvider2 mCp;
     AccountWithDataSet mSource;
     AccountWithDataSet mDest;
@@ -198,7 +195,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 RawContacts._ID + " <> ? and " + RawContacts.SOURCE_ID + " = ? and "
                         + RawContacts.DELETED + " = 1 and " + RawContacts.ACCOUNT_NAME + " = ? and "
                         + RawContacts.ACCOUNT_TYPE + " = ? and " + RawContacts.DIRTY + " = 1",
-                new String[] {
+                new String[]{
                         Long.toString(rawContactId),
                         sourceId,
                         account.getAccountName(),
@@ -211,7 +208,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 RawContacts._ID + " <> ? and "
                         + RawContacts.DELETED + " = 1 and " + RawContacts.ACCOUNT_NAME + " = ? and "
                         + RawContacts.ACCOUNT_TYPE + " = ?",
-                new String[] {
+                new String[]{
                         Long.toString(rawContactId),
                         account.getAccountName(),
                         account.getAccountType()
@@ -252,7 +249,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 Data.RAW_CONTACT_ID + " == ? AND "
                         + Data.MIMETYPE + " = ? AND "
                         + Data.DATA1 + " = ?",
-                new String[] {
+                new String[]{
                         Long.toString(rawContactId),
                         mimetype,
                         data1
@@ -279,7 +276,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         mResolver.insert(Groups.CONTENT_URI, values);
         Long groupId = getGroupWithName(account, title, titleRes);
 
-        for (Long rawContactId: memberIds) {
+        for (Long rawContactId : memberIds) {
             values = new ContentValues();
             values.put(GroupMembership.GROUP_ROW_ID, groupId);
             values.put(GroupMembership.RAW_CONTACT_ID, rawContactId);
@@ -315,7 +312,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 GroupMembership.GROUP_ROW_ID + " == ? AND "
                         + Data.MIMETYPE + " = ? AND "
                         + GroupMembership.RAW_CONTACT_ID + " = ?",
-                new String[] {
+                new String[]{
                         Long.toString(groupId),
                         GroupMembership.CONTENT_ITEM_TYPE,
                         Long.toString(rawContactId)
@@ -339,12 +336,12 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         assertEquals(members.size(), getCount(Data.CONTENT_URI,
                 GroupMembership.GROUP_ROW_ID + " == ? AND "
                         + Data.MIMETYPE + " = ?",
-                new String[] {
+                new String[]{
                         Long.toString(groupId),
                         GroupMembership.CONTENT_ITEM_TYPE
                 }));
 
-        for (Long member: members) {
+        for (Long member : members) {
             assertInGroup(member, groupId);
         }
     }
@@ -363,7 +360,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 Groups._ID + " <> ? and " + Groups.SOURCE_ID + " = ? and "
                         + Groups.DELETED + " = 1 and " + Groups.ACCOUNT_NAME + " = ? and "
                         + Groups.ACCOUNT_TYPE + " = ? and " + Groups.DIRTY + " = 1",
-                new String[] {
+                new String[]{
                         Long.toString(groupId),
                         sourceId,
                         account.getAccountName(),
@@ -373,12 +370,12 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
     private Long getGroupWithName(AccountWithDataSet account, String title, String titleRes) {
         try (Cursor c = mResolver.query(Groups.CONTENT_URI,
-                new String[] { Groups._ID, },
+                new String[]{Groups._ID, },
                 Groups.ACCOUNT_NAME + " = ? AND "
                         + Groups.ACCOUNT_TYPE + " = ? AND "
                         + Groups.TITLE + " = ? AND "
                         + Groups.TITLE_RES + " = ?",
-                new String[] {
+                new String[]{
                         account.getAccountName(),
                         account.getAccountType(),
                         title,
@@ -512,7 +509,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 RawContacts._ID + " <> ? and " + RawContacts.SOURCE_ID + " = ? and "
                         + RawContacts.DELETED + " = 1 and " + RawContacts.ACCOUNT_NAME + " IS NULL"
                         + " and " + RawContacts.ACCOUNT_TYPE + " IS NULL",
-                new String[] {
+                new String[]{
                         Long.toString(uniqueContactId),
                         SOURCE_ID
                 }));
@@ -543,7 +540,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 RawContacts._ID + " <> ? and " + RawContacts.SOURCE_ID + " = ? and "
                         + RawContacts.DELETED + " = 1 and " + RawContacts.ACCOUNT_NAME + " IS NULL"
                         + " and " + RawContacts.ACCOUNT_TYPE + " IS NULL",
-                new String[] {
+                new String[]{
                         Long.toString(uniqueContactId),
                         SOURCE_ID
                 }));
@@ -632,9 +629,9 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
     /**
      * Moves a contact between source and dest where both accounts have the same account type.
-    *  The contact is unique because of a non-portable data row. Because the account types match,
-    *  the non-portable data row will be considered while matching the contacts and the contact will
-    *  be treated as unique.
+     * The contact is unique because of a non-portable data row. Because the account types match,
+     * the non-portable data row will be considered while matching the contacts and the contact will
+     * be treated as unique.
      */
     @Test
     @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
@@ -764,7 +761,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         assertEquals(0, getCount(Groups.CONTENT_URI,
                 Groups.ACCOUNT_NAME + " = ? AND "
                         + Groups.ACCOUNT_TYPE + " = ?",
-                new String[] {
+                new String[]{
                         mSource.getAccountName(),
                         mSource.getAccountType()
                 }));
@@ -815,7 +812,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         assertEquals(0, getCount(Groups.CONTENT_URI,
                 Groups.ACCOUNT_NAME + " = ? AND "
                         + Groups.ACCOUNT_TYPE + " = ?",
-                new String[] {
+                new String[]{
                         mSource.getAccountName(),
                         mSource.getAccountType()
                 }));
@@ -946,7 +943,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                         + Groups.ACCOUNT_TYPE + " = ? AND "
                         + Groups.TITLE + " = ? AND "
                         + Groups.TITLE_RES + " = ?",
-                new String[] {
+                new String[]{
                         mDest.getAccountName(),
                         mDest.getAccountType(),
                         "groupTitle",
@@ -986,7 +983,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                         + Groups.ACCOUNT_TYPE + " = ? AND "
                         + Groups.TITLE + " = ? AND "
                         + Groups.TITLE_RES + " = ?",
-                new String[] {
+                new String[]{
                         mDest.getAccountName(),
                         mDest.getAccountType(),
                         "groupTitle",
@@ -1001,7 +998,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         setDefaultAccountManagerAccounts(new Account[]{
                 DEST_CLOUD_ACCOUNT,
         });
-        mDefaultAccountManager.tryPushDefaultAccount(DefaultAccount.ofCloud(DEST_CLOUD_ACCOUNT));
+        mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccountAndState.ofCloud(DEST_CLOUD_ACCOUNT));
 
         // create a unique contact in the (null/local) source account
         long uniqueContactId = createStarredRawContactForMove(
@@ -1023,7 +1021,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         setDefaultAccountManagerAccounts(new Account[]{
                 DEST_ACCOUNT,
         });
-        mDefaultAccountManager.tryPushDefaultAccount(DefaultAccount.ofCloud(DEST_ACCOUNT));
+        mDefaultAccountManager.tryPushDefaultAccount(DefaultAccountAndState.ofCloud(DEST_ACCOUNT));
 
         // create a unique contact in the (null/local) source account
         long uniqueContactId = createStarredRawContactForMove(
@@ -1044,7 +1042,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 SOURCE_ACCOUNT,
                 DEST_ACCOUNT,
         });
-        mDefaultAccountManager.tryPushDefaultAccount(DefaultAccount.ofCloud(DEST_ACCOUNT));
+        mDefaultAccountManager.tryPushDefaultAccount(DefaultAccountAndState.ofCloud(DEST_ACCOUNT));
 
         // create a unique contact in the source account
         long uniqueContactId = createStarredRawContactForMove(
@@ -1066,7 +1064,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 SIM_ACCOUNT,
                 DEST_CLOUD_ACCOUNT,
         });
-        mDefaultAccountManager.tryPushDefaultAccount(DefaultAccount.ofCloud(DEST_CLOUD_ACCOUNT));
+        mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccountAndState.ofCloud(DEST_CLOUD_ACCOUNT));
 
         // create a unique contact in the (null/local) source account
         long uniqueContactId = createStarredRawContactForMove(
@@ -1088,7 +1087,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
                 SIM_ACCOUNT,
                 DEST_CLOUD_ACCOUNT,
         });
-        mDefaultAccountManager.tryPushDefaultAccount(DefaultAccount.ofCloud(DEST_CLOUD_ACCOUNT));
+        mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccountAndState.ofCloud(DEST_CLOUD_ACCOUNT));
 
         // create a unique contact in a sim account
         createStarredRawContactForMove(
@@ -1113,7 +1113,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         setDefaultAccountManagerAccounts(new Account[]{
                 DEST_CLOUD_ACCOUNT,
         });
-        mDefaultAccountManager.tryPushDefaultAccount(DefaultAccount.ofCloud(DEST_CLOUD_ACCOUNT));
+        mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccountAndState.ofCloud(DEST_CLOUD_ACCOUNT));
 
         // create a unique contact in the (null/local) source account
         createStarredRawContactForMove(
