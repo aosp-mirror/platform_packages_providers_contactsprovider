@@ -72,7 +72,7 @@ public class AccountResolverTest {
     }
 
     @Test
-    public void testResolveAccountWithDataSet_defaultAccountIsUnknown_accountAndDataSetInUri() {
+    public void testResolveAccountWithDataSet_defaultAccountIsNotSet_accountAndDataSetInUri() {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 DefaultAccountAndState.ofNotSet());
 
@@ -126,7 +126,7 @@ public class AccountResolverTest {
         values.put(RawContacts.DATA_SET, "test_data_set");
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/true);
 
         assertEquals("test_account", result.getAccountName());
         assertEquals("com.google", result.getAccountType());
@@ -142,11 +142,13 @@ public class AccountResolverTest {
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
                 uri, values, /*applyDefaultAccount=*/false);
 
+        // When default account is not used, uri/values without account is always resolved as
+        // the local account, which is null AccountWithDataSet in this case.
         assertNull(result);
     }
 
     @Test
-    public void testResolveAccountWithDataSet_defaultAccountIsUnknown_noAccount() {
+    public void testResolveAccountWithDataSet_defaultAccountIsNotSet_noAccount() {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 DefaultAccountAndState.ofNotSet());
 
@@ -154,8 +156,11 @@ public class AccountResolverTest {
         ContentValues values = new ContentValues();
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/true);
 
+        // When default account is used and the default account is not set, uri/values without
+        // account is always resolved as the local account, which is null AccountWithDataSet in this
+        // case.
         assertNull(result);
     }
 
@@ -168,23 +173,31 @@ public class AccountResolverTest {
         ContentValues values = new ContentValues();
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/true);
 
+        // When default account is used and the default account is set to 'local', uri/values
+        // without account is always resolved as the local account, which is null
+        // AccountWithDataSet in this case.
         assertNull(result);
     }
 
     @Test
     public void testResolveAccountWithDataSet_defaultAccountIsCloud_noAccount() {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(DefaultAccountAndState.ofCloud(
-                new Account("randomaccount1@gmail.com", "com.google")));
+                new Account("test_account", "com.google")));
 
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts");
         ContentValues values = new ContentValues();
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/true);
 
-        assertNull(result);
+        // When default account is used and the default account is set to 'cloud', uri/values
+        // without account is always resolved as the cloud account, which is null
+        // AccountWithDataSet in this case.
+        assertEquals("test_account", result.getAccountName());
+        assertEquals("com.google", result.getAccountType());
+        assertNull(result.getDataSet());
     }
 
     @Test
@@ -294,7 +307,7 @@ public class AccountResolverTest {
                 DefaultAccountAndState.ofLocal());
 
         AccountWithDataSet result2 = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/true);
 
         assertEquals("test_account", result2.getAccountName());
         assertEquals("com.google", result2.getAccountType());
@@ -399,14 +412,14 @@ public class AccountResolverTest {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 DefaultAccountAndState.ofLocal());
         exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
         });
         assertEquals("Test Exception Message", exception.getMessage());
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 DefaultAccountAndState.ofNotSet());
         exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
         });
         assertEquals("Test Exception Message", exception.getMessage());
 
@@ -415,7 +428,7 @@ public class AccountResolverTest {
                         "test_account", "com.google"
                 )));
         exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
         });
         assertEquals("Test Exception Message", exception.getMessage());
     }
@@ -445,7 +458,7 @@ public class AccountResolverTest {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 DefaultAccountAndState.ofNotSet());
         exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
         });
         assertEquals("Test Exception Message", exception.getMessage());
 
@@ -454,7 +467,7 @@ public class AccountResolverTest {
                         "test_account", "com.google"
                 )));
         exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
         });
         assertEquals("Test Exception Message", exception.getMessage());
     }
@@ -475,7 +488,7 @@ public class AccountResolverTest {
     }
 
     @Test
-    public void testResolveAccountWithDataSet_defaultAccountIsDeviceOrUnknown_emptyAccountInUri() {
+    public void testResolveAccountWithDataSet_defaultAccountIsDeviceOrNotSet_emptyAccountInUri() {
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
                 .buildUpon()
                 .appendQueryParameter(RawContacts.ACCOUNT_NAME, "")
@@ -531,7 +544,7 @@ public class AccountResolverTest {
 
 
     @Test
-    public void testResolveAccountWithDataSet_defaultAccountDeviceOrUnknown_emptyAccountInValues() {
+    public void testResolveAccountWithDataSet_defaultAccountDeviceOrNotSet_emptyAccountInValues() {
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts");
         ContentValues values = new ContentValues();
         values.put(RawContacts.ACCOUNT_NAME, "");
@@ -587,7 +600,7 @@ public class AccountResolverTest {
     }
 
     @Test
-    public void testResolveAccountWithDataSet_defaultDeviceOrUnknown_emptyAccountInUriAndValues() {
+    public void testResolveAccountWithDataSet_defaultDeviceOrNotSet_emptyAccountInUriAndValues() {
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
                 .buildUpon()
                 .appendQueryParameter(RawContacts.ACCOUNT_NAME, "")
@@ -702,7 +715,7 @@ public class AccountResolverTest {
 
 
     @Test
-    public void testCheckAccountIsWritable_defaultAccountIsUnknown() {
+    public void testCheckAccountIsWritable_defaultAccountIsNotSet() {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 DefaultAccountAndState.ofNotSet());
 
