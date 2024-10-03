@@ -293,11 +293,11 @@ public class ContactsActor {
         }
 
         @Override
-        public List<String> getPackagesWithCarrierPrivileges() {
+        public Set<String> getPackagesWithCarrierPrivileges() {
             if (!mHasCarrierPrivileges) {
-                return Collections.emptyList();
+                return Collections.emptySet();
             }
-            return Collections.singletonList(packageName);
+            return Collections.singleton(packageName);
         }
     }
 
