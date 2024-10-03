@@ -1629,9 +1629,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mDefaultAccountManager = new DefaultAccountManager(getContext(), mContactsHelper);
         mAccountResolver = new AccountResolver(mContactsHelper, mDefaultAccountManager);
 
-        mDefaultAccountManager = new DefaultAccountManager(getContext(), mContactsHelper);
-        mAccountResolver = new AccountResolver(mContactsHelper, mDefaultAccountManager);
-
         if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
                 .isPhoneAccountMigrationPending()) {
             IntentFilter filter = new IntentFilter(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
