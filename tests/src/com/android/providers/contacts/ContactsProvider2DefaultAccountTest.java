@@ -16,10 +16,13 @@
 
 package com.android.providers.contacts;
 
+import static android.provider.ContactsContract.SimAccount.SDN_EF_TYPE;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertThrows;
 
 import android.accounts.Account;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.platform.test.annotations.RequiresFlagsDisabled;
 import android.platform.test.annotations.RequiresFlagsEnabled;
@@ -29,10 +32,9 @@ import android.provider.ContactsContract;
 import android.provider.ContactsContract.RawContacts.DefaultAccount;
 import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 import android.provider.ContactsContract.Settings;
+import android.provider.Flags;
 
 import androidx.test.filters.MediumTest;
-
-import com.android.providers.contacts.flags.Flags;
 
 import org.junit.After;
 import org.junit.Before;
@@ -62,7 +64,9 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
     static final Account SYSTEM_CLOUD_ACCOUNT_2 = new Account("sourceName2", "com.google");
     static final Account SYSTEM_CLOUD_ACCOUNT_NOT_SIGNED_IN = new Account("sourceName3",
             "com.google");
-    static final Account NON_SYSTEM_CLOUD_ACCOUNT_1 = new Account("sourceNam1", "com.whatsapp");
+    static final Account NON_SYSTEM_CLOUD_ACCOUNT_1 = new Account("sourceName1", "com.whatsapp");
+    static final Account SIM_ACCOUNT_1 = new Account("simName1", "SIM");
+
     static final String RES_PACKAGE = "testpackage";
     @Rule
     public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
@@ -73,6 +77,7 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
     public void setUp() throws Exception {
         super.setUp();
         mCp = (ContactsProvider2) getContactsProvider();
+        createSimAccount(SIM_ACCOUNT_1);
         DefaultAccountManager.setEligibleSystemCloudAccountTypesForTesting(
                 new String[]{"com.google"});
     }
@@ -88,7 +93,9 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
         assertEquals(expectedDefaultAccount.getState(),
                 response.getInt(DefaultAccount.KEY_DEFAULT_ACCOUNT_STATE, -1));
         if (expectedDefaultAccount.getState()
-                == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
+                == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD
+                || expectedDefaultAccount.getState()
+                == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM) {
             assertEquals(expectedDefaultAccount.getAccount().name,
                     response.getString(Settings.ACCOUNT_NAME));
             assertEquals(expectedDefaultAccount.getAccount().type,
@@ -104,15 +111,31 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
         Bundle bundle = new Bundle();
         bundle.putInt(DefaultAccount.KEY_DEFAULT_ACCOUNT_STATE, expectedDefaultAccount.getState());
         if (expectedDefaultAccount.getState()
-                == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
+                == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD
+                || expectedDefaultAccount.getState()
+                == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM) {
             bundle.putString(Settings.ACCOUNT_NAME, expectedDefaultAccount.getAccount().name);
             bundle.putString(Settings.ACCOUNT_TYPE, expectedDefaultAccount.getAccount().type);
         }
         return bundle;
     }
 
+    private void createSimAccount(Account account) {
+        AccountWithDataSet accountWithDataSet =
+                new AccountWithDataSet(account.name, account.type, null);
+        final SQLiteDatabase db = mCp.getDatabaseHelper().getWritableDatabase();
+        db.beginTransaction();
+        try {
+            mCp.getDatabaseHelper().createSimAccountIdInTransaction(accountWithDataSet, 1,
+                    SDN_EF_TYPE);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
     @Test
-    @RequiresFlagsDisabled(Flags.FLAG_ENABLE_NEW_DEFAULT_ACCOUNT_RULE_FLAG)
+    @RequiresFlagsDisabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testSetAndGetDefaultAccountForNewContacts_flagOff() throws Exception {
         // Default account is Unknown initially.
         assertEquals(0, mCp.getDatabaseHelper().getDefaultAccountIfAny().length);
@@ -144,7 +167,7 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
     }
 
     @Test
-    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_NEW_DEFAULT_ACCOUNT_RULE_FLAG)
+    @RequiresFlagsEnabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testSetDefaultAccountForNewContacts_flagOn_permissionDenied() throws Exception {
         mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
         assertThrows(SecurityException.class, () ->
@@ -154,7 +177,7 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
     }
 
     @Test
-    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_NEW_DEFAULT_ACCOUNT_RULE_FLAG)
+    @RequiresFlagsEnabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testSetDefaultAccountForNewContacts_flagOn_invalidRequests() throws Exception {
         mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
         mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
@@ -241,7 +264,7 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
     }
 
     @Test
-    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_NEW_DEFAULT_ACCOUNT_RULE_FLAG)
+    @RequiresFlagsEnabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testSetAndGetDefaultAccountForNewContacts_flagOn_normal() throws Exception {
         // Default account is Unknown initially.
         assertEquals(0, mCp.getDatabaseHelper().getDefaultAccountIfAny().length);
@@ -281,21 +304,6 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
         assertArrayEquals(new Account[]{SYSTEM_CLOUD_ACCOUNT_2},
                 mCp.getDatabaseHelper().getDefaultAccountIfAny());
 
-        // Attempt to set the default account (for new contacts) to a non-system cloud account.
-        assertThrows(IllegalArgumentException.class,
-                () -> mResolver.call(ContactsContract.AUTHORITY_URI,
-                        DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
-                        bundleToSetDefaultAccountForNewContacts(
-                                DefaultAccountAndState.ofCloud(NON_SYSTEM_CLOUD_ACCOUNT_1))));
-
-        response = mResolver.call(ContactsContract.AUTHORITY_URI,
-                DefaultAccount.QUERY_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null, null);
-        // Default account for new contacts is not changed.
-        assertResponseContainsDefaultAccount(DefaultAccountAndState.ofCloud(SYSTEM_CLOUD_ACCOUNT_2),
-                response);
-        assertArrayEquals(new Account[]{SYSTEM_CLOUD_ACCOUNT_2},
-                mCp.getDatabaseHelper().getDefaultAccountIfAny());
-
         // Attempt to set the default account (for new contacts) to a system cloud account which
         // is not signed in.
         assertThrows(IllegalArgumentException.class,
@@ -312,6 +320,21 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
         assertArrayEquals(new Account[]{SYSTEM_CLOUD_ACCOUNT_2},
                 mCp.getDatabaseHelper().getDefaultAccountIfAny());
 
+        // Attempt to set the default account (for new contacts) to a non-system cloud account.
+        mResolver.call(ContactsContract.AUTHORITY_URI,
+                DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
+                bundleToSetDefaultAccountForNewContacts(
+                        DefaultAccountAndState.ofCloud(NON_SYSTEM_CLOUD_ACCOUNT_1)));
+
+        response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                DefaultAccount.QUERY_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null, null);
+        // Default account for new contacts is changed to non-system cloud account.
+        assertResponseContainsDefaultAccount(
+                DefaultAccountAndState.ofCloud(NON_SYSTEM_CLOUD_ACCOUNT_1),
+                response);
+        assertArrayEquals(new Account[]{NON_SYSTEM_CLOUD_ACCOUNT_1},
+                mCp.getDatabaseHelper().getDefaultAccountIfAny());
+
         // Set the default account (for new contacts) to the local account and then query.
         mResolver.call(ContactsContract.AUTHORITY_URI,
                 DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
@@ -321,6 +344,17 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
                 DefaultAccount.QUERY_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null, null);
         assertResponseContainsDefaultAccount(DefaultAccountAndState.ofLocal(), response);
         assertArrayEquals(new Account[]{null}, mCp.getDatabaseHelper().getDefaultAccountIfAny());
+
+        // Set the default account (for new contacts) to a SIM account.
+        mResolver.call(ContactsContract.AUTHORITY_URI,
+                DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
+                bundleToSetDefaultAccountForNewContacts(
+                        DefaultAccountAndState.ofSim(SIM_ACCOUNT_1)));
+        response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                DefaultAccount.QUERY_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null, null);
+        assertResponseContainsDefaultAccount(DefaultAccountAndState.ofSim(SIM_ACCOUNT_1), response);
+        assertArrayEquals(new Account[]{SIM_ACCOUNT_1},
+                mCp.getDatabaseHelper().getDefaultAccountIfAny());
 
         // Set the default account (for new contacts) to a "not set" state
         mResolver.call(ContactsContract.AUTHORITY_URI,
@@ -335,7 +369,7 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
 
 
     @Test
-    @RequiresFlagsDisabled(Flags.FLAG_ENABLE_NEW_DEFAULT_ACCOUNT_RULE_FLAG)
+    @RequiresFlagsDisabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testGetEligibleCloudAccounts_flagOff() throws Exception {
         mActor.setAccounts(new Account[0]);
         assertNull(mResolver.call(ContactsContract.AUTHORITY_URI,
@@ -349,7 +383,7 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
     }
 
     @Test
-    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_NEW_DEFAULT_ACCOUNT_RULE_FLAG)
+    @RequiresFlagsEnabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testGetEligibleCloudAccounts_flagOn_permissionDenied() throws Exception {
         mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
         assertThrows(SecurityException.class, () ->
@@ -359,7 +393,7 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
     }
 
     @Test
-    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_NEW_DEFAULT_ACCOUNT_RULE_FLAG)
+    @RequiresFlagsEnabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testGetEligibleCloudAccounts_flagOn_normal() throws Exception {
         mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
         Bundle response = mResolver.call(ContactsContract.AUTHORITY_URI,
