@@ -95,12 +95,8 @@ public class AccountResolver {
             DefaultAccountAndState defaultAccountAndState =
                     mDefaultAccountManager.pullDefaultAccount();
             if (defaultAccountAndState.getState()
-                    == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_NOT_SET) {
-                String exceptionMessage = mDbHelper.exceptionMessage(
-                        "Must specify ACCOUNT_NAME and ACCOUNT_TYPE",
-                        uri);
-                throw new IllegalArgumentException(exceptionMessage);
-            } else if (defaultAccountAndState.getState()
+                    == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_NOT_SET
+                    || defaultAccountAndState.getState()
                     == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_LOCAL) {
                 return getLocalAccount();
             } else {

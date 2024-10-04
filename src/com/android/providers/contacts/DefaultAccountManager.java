@@ -102,8 +102,7 @@ public class DefaultAccountManager {
     private boolean isValidDefaultAccount(DefaultAccountAndState defaultAccount) {
         if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
             return defaultAccount.getAccount() != null
-                    && isSystemCloudAccount(defaultAccount.getAccount())
-                    && !mSyncSettingsHelper.isSyncOff(defaultAccount.getAccount());
+                    && isCloudAccount(defaultAccount.getAccount());
         }
         return defaultAccount.getAccount() == null;
     }
@@ -146,8 +145,8 @@ public class DefaultAccountManager {
         }
     }
 
-    private boolean isSystemCloudAccount(Account account) {
-        if (account == null || !getEligibleSystemAccountTypes(mContext).contains(account.type)) {
+    private boolean isCloudAccount(Account account) {
+        if (account == null) {
             return false;
         }
 
