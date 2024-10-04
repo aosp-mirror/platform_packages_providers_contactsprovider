@@ -1021,7 +1021,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
         setDefaultAccountManagerAccounts(new Account[]{
                 DEST_ACCOUNT,
         });
-        mDefaultAccountManager.tryPushDefaultAccount(DefaultAccountAndState.ofCloud(DEST_ACCOUNT));
+        mDefaultAccountManager.tryPushDefaultAccount(DefaultAccountAndState.ofLocal());
 
         // create a unique contact in the (null/local) source account
         long uniqueContactId = createStarredRawContactForMove(
