@@ -79,7 +79,7 @@ public class DefaultAccountManager {
      * Try to push an account as the default account.
      *
      * @param defaultAccount account to be set as the default account.
-     * @return true if the default account is successfully updated.
+     * @return true if the default account is successfully updated, or no update is needed.
      */
     @NeededForTesting
     public boolean tryPushDefaultAccount(DefaultAccountAndState defaultAccount) {
@@ -92,10 +92,9 @@ public class DefaultAccountManager {
 
         if (defaultAccount.equals(previousDefaultAccount)) {
             Log.w(TAG, "Account has already been set as default before");
-            return false;
+        } else {
+            directlySetDefaultAccountInDb(defaultAccount);
         }
-
-        directlySetDefaultAccountInDb(defaultAccount);
         return true;
     }
 
