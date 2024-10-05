@@ -115,6 +115,8 @@ import android.provider.ContactsContract.PinnedPositions;
 import android.provider.ContactsContract.Profile;
 import android.provider.ContactsContract.ProviderStatus;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.RawContacts.DefaultAccount;
+import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 import android.provider.ContactsContract.RawContactsEntity;
 import android.provider.ContactsContract.SearchSnippets;
 import android.provider.ContactsContract.Settings;
@@ -1629,9 +1631,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mDefaultAccountManager = new DefaultAccountManager(getContext(), mContactsHelper);
         mAccountResolver = new AccountResolver(mContactsHelper, mDefaultAccountManager);
 
-        mDefaultAccountManager = new DefaultAccountManager(getContext(), mContactsHelper);
-        mAccountResolver = new AccountResolver(mContactsHelper, mDefaultAccountManager);
-
         if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
                 .isPhoneAccountMigrationPending()) {
             IntentFilter filter = new IntentFilter(TelecomManager.ACTION_PHONE_ACCOUNT_REGISTERED);
@@ -2593,10 +2592,54 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
 
             return response;
+        } else if (DefaultAccount.QUERY_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD.equals(
+                method)) {
+            if (newDefaultAccountApiEnabled()) {
+                return queryDefaultAccountForNewContacts();
+            } else {
+                // Ignore the call if the flag is disabled.
+                Log.w(TAG, "Query default account for new contacts is not supported.");
+            }
         } else if (Settings.SET_DEFAULT_ACCOUNT_METHOD.equals(method)) {
             return setDefaultAccountSetting(extras);
+        } else if (DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD.equals(
+                method)) {
+            if (newDefaultAccountApiEnabled()) {
+                return setDefaultAccountForNewContactsSetting(extras);
+            } else {
+                // Ignore the call if the flag is disabled.
+                Log.w(TAG, "Set default account for new contacts is not supported.");
+            }
         }
         return null;
+    }
+
+    private @NonNull Bundle queryDefaultAccountForNewContacts() {
+        ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
+        final Bundle response = new Bundle();
+
+        DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
+
+        if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
+            response.putInt(DefaultAccount.KEY_DEFAULT_ACCOUNT_STATE,
+                    DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD);
+            assert defaultAccount.getAccount() != null;
+
+            response.putString(Settings.ACCOUNT_NAME, defaultAccount.getAccount().name);
+            response.putString(Settings.ACCOUNT_TYPE, defaultAccount.getAccount().type);
+        } else if (defaultAccount.getState()
+                == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_LOCAL) {
+            response.putInt(ContactsContract.RawContacts.DefaultAccount.KEY_DEFAULT_ACCOUNT_STATE,
+                    DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_LOCAL);
+        } else if (defaultAccount.getState()
+                == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_NOT_SET) {
+            response.putInt(ContactsContract.RawContacts.DefaultAccount.KEY_DEFAULT_ACCOUNT_STATE,
+                    DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_NOT_SET);
+        } else {
+            throw new IllegalStateException(
+                    "queryDefaultAccountForNewContacts: Invalid default account state");
+        }
+        return response;
     }
 
     private Bundle setDefaultAccountSetting(Bundle extras) {
@@ -2638,6 +2681,65 @@ public class ContactsProvider2 extends AbstractContactsProvider
         db.beginTransaction();
         try {
             mDbHelper.get().setDefaultAccount(accountName, accountType);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        return response;
+    }
+
+
+    private Bundle setDefaultAccountForNewContactsSetting(Bundle extras) {
+        ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                SET_DEFAULT_ACCOUNT_PERMISSION);
+        final int defaultAccountState = extras.getInt(DefaultAccount.KEY_DEFAULT_ACCOUNT_STATE);
+        final String accountName = extras.getString(Settings.ACCOUNT_NAME);
+        final String accountType = extras.getString(Settings.ACCOUNT_TYPE);
+        final String dataSet = extras.getString(Settings.DATA_SET);
+
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, String.format(
+                    "setDefaultAccountSettings: name = %s, type = %s, data_set = %s",
+                    TextUtils.emptyIfNull(accountName), TextUtils.emptyIfNull(accountType),
+                    TextUtils.emptyIfNull(dataSet)));
+        }
+
+        if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
+            throw new IllegalArgumentException(
+                    "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE");
+        }
+        if (!TextUtils.isEmpty(dataSet)) {
+            throw new IllegalArgumentException(
+                    "Cannot set default account with non-null data set.");
+        }
+
+        if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD
+                ^ !TextUtils.isEmpty(accountName)) {
+            throw new IllegalArgumentException(
+                    "Must provide non-null account name when Default Contacts Account "
+                            + "is set to cloud, and vice versa");
+        }
+
+        DefaultAccountAndState defaultAccount;
+        if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
+            assert accountType != null;
+            defaultAccount = DefaultAccountAndState.ofCloud(new Account(accountName, accountType));
+        } else if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_LOCAL) {
+            defaultAccount = DefaultAccountAndState.ofLocal();
+        } else if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_NOT_SET) {
+            defaultAccount = DefaultAccountAndState.ofNotSet();
+        } else {
+            throw new IllegalArgumentException(String.format(
+                    "Invalid Default contacts account state: %d", defaultAccountState));
+        }
+
+        final Bundle response = new Bundle();
+        final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
+        db.beginTransaction();
+        try {
+            if (!mDefaultAccountManager.tryPushDefaultAccount(defaultAccount)) {
+                throw new IllegalArgumentException("Failed to set the Default Contacts Account");
+            }
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
