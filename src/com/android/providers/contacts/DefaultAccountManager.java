@@ -79,7 +79,7 @@ public class DefaultAccountManager {
      * Try to push an account as the default account.
      *
      * @param defaultAccount account to be set as the default account.
-     * @return true if the default account is successfully updated.
+     * @return true if the default account is successfully updated, or no update is needed.
      */
     @NeededForTesting
     public boolean tryPushDefaultAccount(DefaultAccountAndState defaultAccount) {
@@ -92,18 +92,16 @@ public class DefaultAccountManager {
 
         if (defaultAccount.equals(previousDefaultAccount)) {
             Log.w(TAG, "Account has already been set as default before");
-            return false;
+        } else {
+            directlySetDefaultAccountInDb(defaultAccount);
         }
-
-        directlySetDefaultAccountInDb(defaultAccount);
         return true;
     }
 
     private boolean isValidDefaultAccount(DefaultAccountAndState defaultAccount) {
         if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
             return defaultAccount.getAccount() != null
-                    && isSystemCloudAccount(defaultAccount.getAccount())
-                    && !mSyncSettingsHelper.isSyncOff(defaultAccount.getAccount());
+                    && isCloudAccount(defaultAccount.getAccount());
         }
         return defaultAccount.getAccount() == null;
     }
@@ -146,8 +144,8 @@ public class DefaultAccountManager {
         }
     }
 
-    private boolean isSystemCloudAccount(Account account) {
-        if (account == null || !getEligibleSystemAccountTypes(mContext).contains(account.type)) {
+    private boolean isCloudAccount(Account account) {
+        if (account == null) {
             return false;
         }
 
