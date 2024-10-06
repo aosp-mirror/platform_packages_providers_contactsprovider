@@ -19,6 +19,7 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.content.Context;
 import android.content.res.Resources;
+import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 import android.util.Log;
 
 import com.android.internal.R;
@@ -78,65 +79,64 @@ public class DefaultAccountManager {
      * Try to push an account as the default account.
      *
      * @param defaultAccount account to be set as the default account.
-     * @return true if the default account is successfully updated.
+     * @return true if the default account is successfully updated, or no update is needed.
      */
     @NeededForTesting
-    public boolean tryPushDefaultAccount(DefaultAccount defaultAccount) {
+    public boolean tryPushDefaultAccount(DefaultAccountAndState defaultAccount) {
         if (!isValidDefaultAccount(defaultAccount)) {
             Log.w(TAG, "Attempt to push an invalid default account.");
             return false;
         }
 
-        DefaultAccount previousDefaultAccount = pullDefaultAccount();
+        DefaultAccountAndState previousDefaultAccount = pullDefaultAccount();
 
         if (defaultAccount.equals(previousDefaultAccount)) {
             Log.w(TAG, "Account has already been set as default before");
-            return false;
+        } else {
+            directlySetDefaultAccountInDb(defaultAccount);
         }
-
-        directlySetDefaultAccountInDb(defaultAccount);
         return true;
     }
 
-    private boolean isValidDefaultAccount(DefaultAccount defaultAccount) {
-        if (defaultAccount.getAccountCategory() == DefaultAccount.AccountCategory.CLOUD) {
-            return defaultAccount.getCloudAccount() != null
-                    && isSystemCloudAccount(defaultAccount.getCloudAccount())
-                    && !mSyncSettingsHelper.isSyncOff(defaultAccount.getCloudAccount());
+    private boolean isValidDefaultAccount(DefaultAccountAndState defaultAccount) {
+        if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
+            return defaultAccount.getAccount() != null
+                    && isCloudAccount(defaultAccount.getAccount());
         }
-        return defaultAccount.getCloudAccount() == null;
+        return defaultAccount.getAccount() == null;
     }
 
     /**
      * Pull the default account from the DB.
      */
     @NeededForTesting
-    public DefaultAccount pullDefaultAccount() {
-        DefaultAccount defaultAccount = getDefaultAccountFromDb();
+    public DefaultAccountAndState pullDefaultAccount() {
+        DefaultAccountAndState defaultAccount = getDefaultAccountFromDb();
 
         if (isValidDefaultAccount(defaultAccount)) {
             return defaultAccount;
         } else {
             Log.w(TAG, "Default account stored in the DB is no longer valid.");
-            directlySetDefaultAccountInDb(DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
-            return DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT;
+            directlySetDefaultAccountInDb(DefaultAccountAndState.ofNotSet());
+            return DefaultAccountAndState.ofNotSet();
         }
     }
 
-    private void directlySetDefaultAccountInDb(DefaultAccount defaultAccount) {
-        switch (defaultAccount.getAccountCategory()) {
-            case UNKNOWN: {
+    private void directlySetDefaultAccountInDb(DefaultAccountAndState defaultAccount) {
+        switch (defaultAccount.getState()) {
+            case DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_NOT_SET: {
                 mDbHelper.clearDefaultAccount();
                 break;
             }
-            case DEVICE: {
+            case DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_LOCAL: {
                 mDbHelper.setDefaultAccount(AccountWithDataSet.LOCAL.getAccountName(),
                         AccountWithDataSet.LOCAL.getAccountType());
                 break;
             }
-            case CLOUD:
-                mDbHelper.setDefaultAccount(defaultAccount.getCloudAccount().name,
-                        defaultAccount.getCloudAccount().type);
+            case DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD:
+                assert defaultAccount.getAccount() != null;
+                mDbHelper.setDefaultAccount(defaultAccount.getAccount().name,
+                        defaultAccount.getAccount().type);
                 break;
             default:
                 Log.e(TAG, "Incorrect default account category");
@@ -144,8 +144,8 @@ public class DefaultAccountManager {
         }
     }
 
-    private boolean isSystemCloudAccount(Account account) {
-        if (account == null || !getEligibleSystemAccountTypes(mContext).contains(account.type)) {
+    private boolean isCloudAccount(Account account) {
+        if (account == null) {
             return false;
         }
 
@@ -158,21 +158,21 @@ public class DefaultAccountManager {
         return false;
     }
 
-    private DefaultAccount getDefaultAccountFromDb() {
+    private DefaultAccountAndState getDefaultAccountFromDb() {
         Account[] defaultAccountFromDb = mDbHelper.getDefaultAccountIfAny();
         if (defaultAccountFromDb.length == 0) {
-            return DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT;
+            return DefaultAccountAndState.ofNotSet();
         }
 
         if (defaultAccountFromDb[0] == null) {
-            return DefaultAccount.DEVICE_DEFAULT_ACCOUNT;
+            return DefaultAccountAndState.ofLocal();
         }
 
         if (defaultAccountFromDb[0].name.equals(AccountWithDataSet.LOCAL.getAccountName())
                 && defaultAccountFromDb[0].type.equals(AccountWithDataSet.LOCAL.getAccountType())) {
-            return DefaultAccount.DEVICE_DEFAULT_ACCOUNT;
+            return DefaultAccountAndState.ofLocal();
         }
 
-        return DefaultAccount.ofCloud(defaultAccountFromDb[0]);
+        return DefaultAccountAndState.ofCloud(defaultAccountFromDb[0]);
     }
 }
