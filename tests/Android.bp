@@ -45,9 +45,8 @@ test_module_config {
         },
         {
             name: "feature-flags:flag-value",
-            value: "contacts/com.android.providers.contacts.flags.enable_new_default_account_rule_flag=true",
+            value: "contacts/android.provider.new_default_account_api_enabled=true",
         },
-
     ],
 }
 
@@ -65,7 +64,7 @@ test_module_config {
         },
         {
             name: "feature-flags:flag-value",
-            value: "contacts/com.android.providers.contacts.flags.enable_new_default_account_rule_flag=false",
+            value: "contacts/android.provider.new_default_account_api_enabled=false",
         },
     ],
 }
