@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import static android.content.pm.UserProperties.SHOW_IN_LAUNCHER_WITH_PARENT;
+
 import static com.android.providers.contacts.ContactsActor.MockUserManager.CLONE_PROFILE_USER;
 import static com.android.providers.contacts.ContactsActor.MockUserManager.PRIMARY_USER;
 
@@ -84,8 +85,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -145,6 +148,25 @@ public class ContactsActor {
         @Override
         public Account[] getAccounts() {
             return mAccounts;
+        }
+
+        @Override
+        public Account[] getAccountsByType(final String type) {
+            Map<String, List<Account>> accountTypeMap = new HashMap<>();
+            for (Account account : mAccounts) {
+                if (accountTypeMap.containsKey(account.type)) {
+                    accountTypeMap.get(account.type).add(account);
+                } else {
+                    List<Account> accountList = new ArrayList<>();
+                    accountList.add(account);
+                    accountTypeMap.put(account.type, accountList);
+                }
+            }
+            if (accountTypeMap.containsKey(type)) {
+                return accountTypeMap.get(type).toArray(new Account[0]);
+            } else {
+                return new Account[0];
+            }
         }
 
         @Override
@@ -292,11 +314,11 @@ public class ContactsActor {
         }
 
         @Override
-        public List<String> getPackagesWithCarrierPrivileges() {
+        public Set<String> getPackagesWithCarrierPrivileges() {
             if (!mHasCarrierPrivileges) {
-                return Collections.emptyList();
+                return Collections.emptySet();
             }
-            return Collections.singletonList(packageName);
+            return Collections.singleton(packageName);
         }
     }
 
@@ -386,7 +408,11 @@ public class ContactsActor {
             @Override
             public File getFilesDir() {
                 // TODO: Need to figure out something more graceful than this.
-                return new File("/data/data/com.android.providers.contacts.tests/files");
+                // The returned file path must take into account the user under
+                // which the test is running given that in HSUM the test doesn't
+                // run under the system user.
+                return new File("/data/user/" + UserHandle.myUserId()
+                        + "/com.android.providers.contacts.tests/files");
             }
 
             @Override

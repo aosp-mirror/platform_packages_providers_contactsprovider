@@ -16,9 +16,11 @@
 
 package com.android.providers.contacts.aggregation;
 
+import static com.android.providers.contacts.flags.Flags.cp2SyncSearchIndexFlag;
 import static com.android.providers.contacts.aggregation.util.RawContactMatcher.SCORE_THRESHOLD_PRIMARY;
 import static com.android.providers.contacts.aggregation.util.RawContactMatcher.SCORE_THRESHOLD_SECONDARY;
 import static com.android.providers.contacts.aggregation.util.RawContactMatcher.SCORE_THRESHOLD_SUGGEST;
+
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.AggregationExceptions;
@@ -33,6 +35,7 @@ import android.provider.ContactsContract.RawContacts;
 import android.text.TextUtils;
 import android.util.ArraySet;
 import android.util.Log;
+
 import com.android.providers.contacts.ContactsDatabaseHelper;
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.NameLookupColumns;
@@ -44,12 +47,12 @@ import com.android.providers.contacts.ContactsProvider2;
 import com.android.providers.contacts.NameSplitter;
 import com.android.providers.contacts.PhotoPriorityResolver;
 import com.android.providers.contacts.TransactionContext;
-import com.android.providers.contacts.aggregation.util.CommonNicknameCache;
 import com.android.providers.contacts.aggregation.util.ContactAggregatorHelper;
 import com.android.providers.contacts.aggregation.util.MatchScore;
 import com.android.providers.contacts.aggregation.util.RawContactMatcher;
 import com.android.providers.contacts.aggregation.util.RawContactMatchingCandidates;
 import com.android.providers.contacts.database.ContactsTableUtil;
+
 import com.google.android.collect.Sets;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
@@ -379,9 +382,16 @@ public class ContactAggregator2 extends AbstractContactAggregator {
 
                 if (currentRcCount == 0) {
                     // Delete a contact if it doesn't contain anything
+                    if (VERBOSE_LOGGING) {
+                        Log.v(TAG, "Deleting contact id: " + cid);
+                    }
                     ContactsTableUtil.deleteContact(db, cid);
                     mAggregatedPresenceDelete.bindLong(1, cid);
                     mAggregatedPresenceDelete.execute();
+                    if (cp2SyncSearchIndexFlag()) {
+                        // Make sure we remove the obsolete contact id from search index
+                        txContext.invalidateSearchIndexForContact(cid);
+                    }
                 } else {
                     updateAggregateData(txContext, cid);
                 }

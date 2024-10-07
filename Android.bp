@@ -20,6 +20,7 @@ android_app {
         "contactsprovider_flags_java_lib",
         "guava",
         "android.content.pm.flags-aconfig-java",
+        "android.provider.flags-aconfig-java",
     ],
 
     // The Jacoco tool analyzes code coverage when running unit tests on the
