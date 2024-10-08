@@ -41,6 +41,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * Unit tests for {@link ContactsProvider2} Default Account Handling.
  *
@@ -327,5 +331,70 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
                 DefaultAccount.QUERY_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null, null);
         assertResponseContainsDefaultAccount(DefaultAccountAndState.ofNotSet(), response);
         assertEquals(0, mCp.getDatabaseHelper().getDefaultAccountIfAny().length);
+    }
+
+
+    @Test
+    @RequiresFlagsDisabled(Flags.FLAG_ENABLE_NEW_DEFAULT_ACCOUNT_RULE_FLAG)
+    public void testGetEligibleCloudAccounts_flagOff() throws Exception {
+        mActor.setAccounts(new Account[0]);
+        assertNull(mResolver.call(ContactsContract.AUTHORITY_URI,
+                        DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD,
+                        null, null));
+
+        mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
+        assertNull(mResolver.call(ContactsContract.AUTHORITY_URI,
+                        DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD,
+                        null, null));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_NEW_DEFAULT_ACCOUNT_RULE_FLAG)
+    public void testGetEligibleCloudAccounts_flagOn_permissionDenied() throws Exception {
+        mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
+        assertThrows(SecurityException.class, () ->
+                mResolver.call(ContactsContract.AUTHORITY_URI,
+                        DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD,
+                        null, null));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_NEW_DEFAULT_ACCOUNT_RULE_FLAG)
+    public void testGetEligibleCloudAccounts_flagOn_normal() throws Exception {
+        mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
+        Bundle response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                DefaultAccount.QUERY_ELIGIBLE_DEFAULT_ACCOUNTS_METHOD, null, null);
+
+        // No account is present on the device,
+        List<Account> accounts = response.getParcelableArrayList(
+                DefaultAccount.KEY_ELIGIBLE_DEFAULT_ACCOUNTS, Account.class);
+        assertEquals(new ArrayList<>(), accounts);
+
+        // 1 system cloud account is present on the device.
+        mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
+        response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                DefaultAccount.QUERY_ELIGIBLE_DEFAULT_ACCOUNTS_METHOD, null, null);
+        accounts = response.getParcelableArrayList(
+                DefaultAccount.KEY_ELIGIBLE_DEFAULT_ACCOUNTS, Account.class);
+        assertEquals(Arrays.asList(new Account[]{SYSTEM_CLOUD_ACCOUNT_1}), accounts);
+
+        // 2 system cloud accounts are present on the device.
+        mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1, SYSTEM_CLOUD_ACCOUNT_2});
+        response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                DefaultAccount.QUERY_ELIGIBLE_DEFAULT_ACCOUNTS_METHOD, null, null);
+        accounts = response.getParcelableArrayList(
+                DefaultAccount.KEY_ELIGIBLE_DEFAULT_ACCOUNTS, Account.class);
+        assertEquals(Arrays.asList(new Account[]{SYSTEM_CLOUD_ACCOUNT_1, SYSTEM_CLOUD_ACCOUNT_2}),
+                accounts);
+
+        // 2 system cloud and 1 non-system cloud account are present on the device.
+        mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1, SYSTEM_CLOUD_ACCOUNT_2,
+                NON_SYSTEM_CLOUD_ACCOUNT_1});
+        response = mResolver.call(ContactsContract.AUTHORITY_URI,
+                DefaultAccount.QUERY_ELIGIBLE_DEFAULT_ACCOUNTS_METHOD, null, null);
+        accounts = response.getParcelableArrayList(
+                DefaultAccount.KEY_ELIGIBLE_DEFAULT_ACCOUNTS, Account.class);
+        assertEquals(Arrays.asList(new Account[]{SYSTEM_CLOUD_ACCOUNT_1, SYSTEM_CLOUD_ACCOUNT_2}),
+                accounts);
     }
 }
