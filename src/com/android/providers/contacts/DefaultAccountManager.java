@@ -25,8 +25,10 @@ import android.util.Log;
 import com.android.internal.R;
 import com.android.providers.contacts.util.NeededForTesting;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -102,9 +104,26 @@ public class DefaultAccountManager {
         if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
             return defaultAccount.getAccount() != null
                     && isCloudAccount(defaultAccount.getAccount());
+
         }
         return defaultAccount.getAccount() == null;
     }
+
+    /**
+     * Get a list of cloud accounts that is eligible to set as the default account.
+     * @return the list of cloud accounts.
+     */
+    public List<Account> getEligibleCloudAccounts() {
+        List<Account> eligibleAccounts = new ArrayList<>();
+        Account[] accounts = mAccountManager.getAccounts();
+        for (Account account : accounts) {
+            if (isEligibleSystemCloudAccount(account)) {
+                eligibleAccounts.add(account);
+            }
+        }
+        return eligibleAccounts;
+    }
+
 
     /**
      * Pull the default account from the DB.
@@ -156,6 +175,11 @@ public class DefaultAccountManager {
             }
         }
         return false;
+    }
+
+    private boolean isEligibleSystemCloudAccount(Account account) {
+        return account != null && getEligibleSystemAccountTypes(mContext).contains(account.type)
+                && !mSyncSettingsHelper.isSyncOff(account);
     }
 
     private DefaultAccountAndState getDefaultAccountFromDb() {
