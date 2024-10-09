@@ -2685,9 +2685,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
 
-        if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
-            response.putInt(DefaultAccount.KEY_DEFAULT_ACCOUNT_STATE,
-                    DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD);
+        if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD
+                || defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM) {
+            response.putInt(DefaultAccount.KEY_DEFAULT_ACCOUNT_STATE, defaultAccount.getState());
             assert defaultAccount.getAccount() != null;
 
             response.putString(Settings.ACCOUNT_NAME, defaultAccount.getAccount().name);
@@ -2789,11 +2789,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     "Cannot set default account with non-null data set.");
         }
 
-        if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD
+        if ((defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD
+                || defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM)
                 ^ !TextUtils.isEmpty(accountName)) {
             throw new IllegalArgumentException(
                     "Must provide non-null account name when Default Contacts Account "
-                            + "is set to cloud, and vice versa");
+                            + "is set to cloud or SIM, and vice versa");
         }
 
         DefaultAccountAndState defaultAccount;
@@ -2802,6 +2803,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             defaultAccount = DefaultAccountAndState.ofCloud(new Account(accountName, accountType));
         } else if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_LOCAL) {
             defaultAccount = DefaultAccountAndState.ofLocal();
+        } else if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM) {
+            assert accountType != null;
+            defaultAccount = DefaultAccountAndState.ofSim(new Account(accountName, accountType));
         } else if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_NOT_SET) {
             defaultAccount = DefaultAccountAndState.ofNotSet();
         } else {
