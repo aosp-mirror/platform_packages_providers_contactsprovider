@@ -16,10 +16,13 @@
 
 package com.android.providers.contacts;
 
+import static android.provider.ContactsContract.SimAccount.SDN_EF_TYPE;
+
 import static org.mockito.Mockito.argThat;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
+import android.database.sqlite.SQLiteDatabase;
 import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 
 import androidx.test.filters.SmallTest;
@@ -38,6 +41,9 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
             "com.google");
     private static final Account NON_SYSTEM_CLOUD_ACCOUNT_1 = new Account("user2@whatsapp.com",
             "com.whatsapp");
+
+    private static final Account SIM_ACCOUNT_1 = new Account("SIM_ACCOUNT_NAME",
+            "SIM_ACCOUNT_TYPE");
 
     private ContactsDatabaseHelper mDbHelper;
     private DefaultAccountManager mDefaultAccountManager;
@@ -213,6 +219,19 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
 
     }
 
+    public void testPushDca_dcaWasUnknown_tryPushSimAccount() {
+        createSimAccount(SIM_ACCOUNT_1);
+
+        assertEquals(DefaultAccountAndState.ofNotSet(),
+                mDefaultAccountManager.pullDefaultAccount());
+
+        assertTrue(mDefaultAccountManager.tryPushDefaultAccount(
+                DefaultAccountAndState.ofSim(SIM_ACCOUNT_1)));
+
+        assertEquals(DefaultAccountAndState.ofSim(SIM_ACCOUNT_1),
+                mDefaultAccountManager.pullDefaultAccount());
+    }
+
     public void testPushDca_dcaWasCloud() {
         setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
         mSyncSettingsHelper.turnOnSync(SYSTEM_CLOUD_ACCOUNT_1);
@@ -339,5 +358,18 @@ public class DefaultAccountManagerTest extends BaseContactsProvider2Test {
         // Cloud account eligible for default accounts doesn't change.
         assertEquals(List.of(SYSTEM_CLOUD_ACCOUNT_1),
                 mDefaultAccountManager.getEligibleCloudAccounts());
+    }
+
+    private void createSimAccount(Account account) {
+        AccountWithDataSet accountWithDataSet =
+                new AccountWithDataSet(account.name, account.type, null);
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            mDbHelper.createSimAccountIdInTransaction(accountWithDataSet, 1, SDN_EF_TYPE);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 }
