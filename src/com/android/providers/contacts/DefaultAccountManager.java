@@ -19,14 +19,17 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.content.Context;
 import android.content.res.Resources;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 import android.util.Log;
 
 import com.android.internal.R;
 import com.android.providers.contacts.util.NeededForTesting;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -102,9 +105,29 @@ public class DefaultAccountManager {
         if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
             return defaultAccount.getAccount() != null
                     && isCloudAccount(defaultAccount.getAccount());
+
+        }
+        if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM) {
+            return defaultAccount.getAccount() != null && isSimAccount(defaultAccount.getAccount());
         }
         return defaultAccount.getAccount() == null;
     }
+
+    /**
+     * Get a list of cloud accounts that is eligible to set as the default account.
+     * @return the list of cloud accounts.
+     */
+    public List<Account> getEligibleCloudAccounts() {
+        List<Account> eligibleAccounts = new ArrayList<>();
+        Account[] accounts = mAccountManager.getAccounts();
+        for (Account account : accounts) {
+            if (isEligibleSystemCloudAccount(account)) {
+                eligibleAccounts.add(account);
+            }
+        }
+        return eligibleAccounts;
+    }
+
 
     /**
      * Pull the default account from the DB.
@@ -112,7 +135,6 @@ public class DefaultAccountManager {
     @NeededForTesting
     public DefaultAccountAndState pullDefaultAccount() {
         DefaultAccountAndState defaultAccount = getDefaultAccountFromDb();
-
         if (isValidDefaultAccount(defaultAccount)) {
             return defaultAccount;
         } else {
@@ -134,6 +156,7 @@ public class DefaultAccountManager {
                 break;
             }
             case DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD:
+            case DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM:
                 assert defaultAccount.getAccount() != null;
                 mDbHelper.setDefaultAccount(defaultAccount.getAccount().name,
                         defaultAccount.getAccount().type);
@@ -142,6 +165,22 @@ public class DefaultAccountManager {
                 Log.e(TAG, "Incorrect default account category");
                 break;
         }
+    }
+
+    private boolean isSimAccount(Account account) {
+        if (account == null) {
+            return false;
+        }
+
+        final List<ContactsContract.SimAccount> simAccounts = mDbHelper.getAllSimAccounts();
+        AccountWithDataSet accountWithDataSet = new AccountWithDataSet(account.name, account.type,
+                null);
+        return accountWithDataSet.inSimAccounts(simAccounts);
+    }
+
+    private boolean isLocalAccount(Account account) {
+        return (account == null) || ((account.name.equals(AccountWithDataSet.LOCAL.getAccountName())
+                && account.type.equals(AccountWithDataSet.LOCAL.getAccountType())));
     }
 
     private boolean isCloudAccount(Account account) {
@@ -158,21 +197,27 @@ public class DefaultAccountManager {
         return false;
     }
 
+    private boolean isEligibleSystemCloudAccount(Account account) {
+        return account != null && getEligibleSystemAccountTypes(mContext).contains(account.type)
+                && !mSyncSettingsHelper.isSyncOff(account);
+    }
+
     private DefaultAccountAndState getDefaultAccountFromDb() {
         Account[] defaultAccountFromDb = mDbHelper.getDefaultAccountIfAny();
         if (defaultAccountFromDb.length == 0) {
             return DefaultAccountAndState.ofNotSet();
         }
 
-        if (defaultAccountFromDb[0] == null) {
+        Account account = defaultAccountFromDb[0];
+        if (isLocalAccount(account)) {
             return DefaultAccountAndState.ofLocal();
         }
 
-        if (defaultAccountFromDb[0].name.equals(AccountWithDataSet.LOCAL.getAccountName())
-                && defaultAccountFromDb[0].type.equals(AccountWithDataSet.LOCAL.getAccountType())) {
-            return DefaultAccountAndState.ofLocal();
+        if (isSimAccount(account)) {
+            return DefaultAccountAndState.ofSim(account);
         }
 
-        return DefaultAccountAndState.ofCloud(defaultAccountFromDb[0]);
+        // Assume it's cloud account.
+        return DefaultAccountAndState.ofCloud(account);
     }
 }

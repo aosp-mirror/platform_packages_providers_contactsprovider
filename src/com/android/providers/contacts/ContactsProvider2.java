@@ -21,6 +21,7 @@ import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.provider.Flags.newDefaultAccountApiEnabled;
 
+import static com.android.providers.contacts.flags.Flags.cp2AccountMoveFlag;
 import static com.android.providers.contacts.flags.Flags.cp2SyncSearchIndexFlag;
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
@@ -1504,6 +1505,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private DefaultAccountManager mDefaultAccountManager;
     private AccountResolver mAccountResolver;
+    private ContactMover mContactMover;
 
     private int mProviderStatus = STATUS_NORMAL;
     private boolean mProviderStatusUpdateNeeded;
@@ -1630,6 +1632,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         mGlobalSearchSupport = new GlobalSearchSupport(this);
         mDefaultAccountManager = new DefaultAccountManager(getContext(), mContactsHelper);
         mAccountResolver = new AccountResolver(mContactsHelper, mDefaultAccountManager);
+
+        mDefaultAccountManager = new DefaultAccountManager(getContext(), mContactsHelper);
+        mAccountResolver = new AccountResolver(mContactsHelper, mDefaultAccountManager);
+        mContactMover = new ContactMover(this, mContactsHelper, mDefaultAccountManager);
 
         if (mContactsHelper.getPhoneAccountHandleMigrationUtils()
                 .isPhoneAccountMigrationPending()) {
@@ -2600,6 +2606,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // Ignore the call if the flag is disabled.
                 Log.w(TAG, "Query default account for new contacts is not supported.");
             }
+        } else if (DefaultAccount.QUERY_ELIGIBLE_DEFAULT_ACCOUNTS_METHOD.equals(method)) {
+            if (newDefaultAccountApiEnabled()) {
+                return queryEligibleDefaultAccounts();
+            } else {
+                Log.w(TAG, "Query eligible account that can be set as cloud default account "
+                        + "is not supported.");
+            }
         } else if (Settings.SET_DEFAULT_ACCOUNT_METHOD.equals(method)) {
             return setDefaultAccountSetting(extras);
         } else if (DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD.equals(
@@ -2610,6 +2623,58 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // Ignore the call if the flag is disabled.
                 Log.w(TAG, "Set default account for new contacts is not supported.");
             }
+        } else if (RawContacts.DefaultAccount.MOVE_LOCAL_CONTACTS_TO_CLOUD_DEFAULT_ACCOUNT_METHOD
+                .equals(method)) {
+            if (!cp2AccountMoveFlag() || !newDefaultAccountApiEnabled()) {
+                return null;
+            }
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(), WRITE_PERMISSION);
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                    SET_DEFAULT_ACCOUNT_PERMISSION);
+            final Bundle response = new Bundle();
+            mContactMover.moveLocalToCloudDefaultAccount();
+            return response;
+
+        } else if (RawContacts.DefaultAccount.GET_NUMBER_OF_MOVABLE_LOCAL_CONTACTS_METHOD
+                .equals(method)) {
+            if (!cp2AccountMoveFlag() || !newDefaultAccountApiEnabled()) {
+                return null;
+            }
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                    SET_DEFAULT_ACCOUNT_PERMISSION);
+            final Bundle response = new Bundle();
+            int count = mContactMover.getNumberLocalContacts();
+            response.putInt(RawContacts.DefaultAccount.KEY_NUMBER_OF_MOVABLE_LOCAL_CONTACTS,
+                    count);
+            return response;
+
+        } else if (RawContacts.DefaultAccount.MOVE_SIM_CONTACTS_TO_CLOUD_DEFAULT_ACCOUNT_METHOD
+                .equals(method)) {
+            if (!cp2AccountMoveFlag() || !newDefaultAccountApiEnabled()) {
+                return null;
+            }
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(), WRITE_PERMISSION);
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                    SET_DEFAULT_ACCOUNT_PERMISSION);
+            final Bundle response = new Bundle();
+            mContactMover.moveSimToCloudDefaultAccount();
+            return response;
+
+        } else if (RawContacts.DefaultAccount.GET_NUMBER_OF_MOVABLE_SIM_CONTACTS_METHOD
+                .equals(method)) {
+            if (!cp2AccountMoveFlag() || !newDefaultAccountApiEnabled()) {
+                return null;
+            }
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
+            ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                    SET_DEFAULT_ACCOUNT_PERMISSION);
+            final Bundle response = new Bundle();
+            int count = mContactMover.getNumberSimContacts();
+            response.putInt(RawContacts.DefaultAccount.KEY_NUMBER_OF_MOVABLE_SIM_CONTACTS,
+                    count);
+            return response;
+
         }
         return null;
     }
@@ -2620,9 +2685,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
 
-        if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
-            response.putInt(DefaultAccount.KEY_DEFAULT_ACCOUNT_STATE,
-                    DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD);
+        if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD
+                || defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM) {
+            response.putInt(DefaultAccount.KEY_DEFAULT_ACCOUNT_STATE, defaultAccount.getState());
             assert defaultAccount.getAccount() != null;
 
             response.putString(Settings.ACCOUNT_NAME, defaultAccount.getAccount().name);
@@ -2639,6 +2704,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
             throw new IllegalStateException(
                     "queryDefaultAccountForNewContacts: Invalid default account state");
         }
+        return response;
+    }
+
+    private Bundle queryEligibleDefaultAccounts() {
+        ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
+                SET_DEFAULT_ACCOUNT_PERMISSION);
+        final Bundle response = new Bundle();
+        final List<Account> eligibleCloudAccounts =
+                mDefaultAccountManager.getEligibleCloudAccounts();
+        response.putParcelableList(DefaultAccount.KEY_ELIGIBLE_DEFAULT_ACCOUNTS,
+                eligibleCloudAccounts);
         return response;
     }
 
@@ -2713,11 +2789,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     "Cannot set default account with non-null data set.");
         }
 
-        if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD
+        if ((defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD
+                || defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM)
                 ^ !TextUtils.isEmpty(accountName)) {
             throw new IllegalArgumentException(
                     "Must provide non-null account name when Default Contacts Account "
-                            + "is set to cloud, and vice versa");
+                            + "is set to cloud or SIM, and vice versa");
         }
 
         DefaultAccountAndState defaultAccount;
@@ -2726,6 +2803,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             defaultAccount = DefaultAccountAndState.ofCloud(new Account(accountName, accountType));
         } else if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_LOCAL) {
             defaultAccount = DefaultAccountAndState.ofLocal();
+        } else if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM) {
+            assert accountType != null;
+            defaultAccount = DefaultAccountAndState.ofSim(new Account(accountName, accountType));
         } else if (defaultAccountState == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_NOT_SET) {
             defaultAccount = DefaultAccountAndState.ofNotSet();
         } else {
