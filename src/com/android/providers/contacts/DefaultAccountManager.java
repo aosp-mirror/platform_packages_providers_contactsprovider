@@ -19,6 +19,7 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.content.Context;
 import android.content.res.Resources;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 import android.util.Log;
 
@@ -106,6 +107,9 @@ public class DefaultAccountManager {
                     && isCloudAccount(defaultAccount.getAccount());
 
         }
+        if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM) {
+            return defaultAccount.getAccount() != null && isSimAccount(defaultAccount.getAccount());
+        }
         return defaultAccount.getAccount() == null;
     }
 
@@ -131,7 +135,6 @@ public class DefaultAccountManager {
     @NeededForTesting
     public DefaultAccountAndState pullDefaultAccount() {
         DefaultAccountAndState defaultAccount = getDefaultAccountFromDb();
-
         if (isValidDefaultAccount(defaultAccount)) {
             return defaultAccount;
         } else {
@@ -153,6 +156,7 @@ public class DefaultAccountManager {
                 break;
             }
             case DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD:
+            case DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_SIM:
                 assert defaultAccount.getAccount() != null;
                 mDbHelper.setDefaultAccount(defaultAccount.getAccount().name,
                         defaultAccount.getAccount().type);
@@ -161,6 +165,22 @@ public class DefaultAccountManager {
                 Log.e(TAG, "Incorrect default account category");
                 break;
         }
+    }
+
+    private boolean isSimAccount(Account account) {
+        if (account == null) {
+            return false;
+        }
+
+        final List<ContactsContract.SimAccount> simAccounts = mDbHelper.getAllSimAccounts();
+        AccountWithDataSet accountWithDataSet = new AccountWithDataSet(account.name, account.type,
+                null);
+        return accountWithDataSet.inSimAccounts(simAccounts);
+    }
+
+    private boolean isLocalAccount(Account account) {
+        return (account == null) || ((account.name.equals(AccountWithDataSet.LOCAL.getAccountName())
+                && account.type.equals(AccountWithDataSet.LOCAL.getAccountType())));
     }
 
     private boolean isCloudAccount(Account account) {
@@ -188,15 +208,16 @@ public class DefaultAccountManager {
             return DefaultAccountAndState.ofNotSet();
         }
 
-        if (defaultAccountFromDb[0] == null) {
+        Account account = defaultAccountFromDb[0];
+        if (isLocalAccount(account)) {
             return DefaultAccountAndState.ofLocal();
         }
 
-        if (defaultAccountFromDb[0].name.equals(AccountWithDataSet.LOCAL.getAccountName())
-                && defaultAccountFromDb[0].type.equals(AccountWithDataSet.LOCAL.getAccountType())) {
-            return DefaultAccountAndState.ofLocal();
+        if (isSimAccount(account)) {
+            return DefaultAccountAndState.ofSim(account);
         }
 
-        return DefaultAccountAndState.ofCloud(defaultAccountFromDb[0]);
+        // Assume it's cloud account.
+        return DefaultAccountAndState.ofCloud(account);
     }
 }
