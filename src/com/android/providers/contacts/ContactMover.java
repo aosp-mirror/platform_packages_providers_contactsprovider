@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.flags.Flags.cp2AccountMoveFlag;
 import static com.android.providers.contacts.flags.Flags.cp2AccountMoveSyncStubFlag;
+import static com.android.providers.contacts.flags.Flags.disableMoveToIneligibleDefaultAccountFlag;
 
 import android.accounts.Account;
 import android.content.ContentUris;
@@ -220,6 +221,23 @@ public class ContactMover {
                 .collect(Collectors.toSet());
     }
 
+    Account getCloudDefaultAccount() {
+        DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
+        if (defaultAccount.getState() != DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
+            Log.w(TAG, "No default cloud account set");
+            return null;
+        }
+        Account account = defaultAccount.getAccount();
+        assert account != null;
+        if (disableMoveToIneligibleDefaultAccountFlag()
+                && !mDefaultAccountManager.getEligibleCloudAccounts().contains(account)) {
+            Log.w(TAG, "Ineligible default cloud account set");
+            return null;
+        }
+
+        return account;
+    }
+
     /**
      * Moves {@link RawContacts} and {@link Groups} from the local account(s) to the Cloud Default
      * Account (if any).
@@ -235,13 +253,12 @@ public class ContactMover {
         // Check if there is a cloud default account set
         // - if not, then we don't need to do anything
         // - if there is, then that's our destAccount, get the AccountWithDataSet
-        DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
-        if (defaultAccount.getState() != DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
-            Log.w(TAG, "moveLocalToCloudDefaultAccount with no default cloud account set");
+        Account account = getCloudDefaultAccount();
+        if (account == null) {
+            Log.w(TAG,
+                    "moveLocalToCloudDefaultAccount with no eligible cloud default account set");
             return;
         }
-        Account account = defaultAccount.getAccount();
-        assert account != null;
 
         AccountWithDataSet destAccount = new AccountWithDataSet(
                 account.name, account.type, /* dataSet= */ null);
@@ -265,13 +282,11 @@ public class ContactMover {
         // Check if there is a cloud default account set
         // - if not, then we don't need to do anything
         // - if there is, then that's our destAccount, get the AccountWithDataSet
-        DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
-        if (defaultAccount.getState() != DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
-            Log.w(TAG, "moveSimToCloudDefaultAccount with no default cloud account set");
+        Account account = getCloudDefaultAccount();
+        if (account == null) {
+            Log.w(TAG, "moveSimToCloudDefaultAccount with no eligible cloud default account set");
             return;
         }
-        Account account = defaultAccount.getAccount();
-        assert account != null;
 
         AccountWithDataSet destAccount = new AccountWithDataSet(
                 account.name, account.type, /* dataSet= */ null);
@@ -298,9 +313,9 @@ public class ContactMover {
         // Check if there is a cloud default account set
         // - if not, then we don't need to do anything, count = 0
         // - if there is, then do the count
-        DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
-        if (defaultAccount.getState() != DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
-            Log.w(TAG, "getNumberLocalContacts with no default cloud account set");
+        Account account = getCloudDefaultAccount();
+        if (account == null) {
+            Log.w(TAG, "getNumberLocalContacts with no eligible cloud default account set");
             return 0;
         }
 
@@ -326,9 +341,9 @@ public class ContactMover {
         // Check if there is a cloud default account set
         // - if not, then we don't need to do anything, count = 0
         // - if there is, then do the count
-        DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
-        if (defaultAccount.getState() != DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
-            Log.w(TAG, "getNumberSimContacts with no default cloud account set");
+        Account account = getCloudDefaultAccount();
+        if (account == null) {
+            Log.w(TAG, "getNumberSimContacts with no eligible cloud default account set");
             return 0;
         }
 
