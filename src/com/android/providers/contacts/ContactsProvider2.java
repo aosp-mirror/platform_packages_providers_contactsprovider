@@ -2637,8 +2637,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         } else if (RawContacts.DefaultAccount.GET_NUMBER_OF_MOVABLE_LOCAL_CONTACTS_METHOD
                 .equals(method)) {
-            if (!cp2AccountMoveFlag() || !newDefaultAccountApiEnabled()) {
+            if (!newDefaultAccountApiEnabled()) {
                 return null;
+            }
+            if (!cp2AccountMoveFlag()) {
+                return new Bundle();
             }
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
@@ -2663,8 +2666,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         } else if (RawContacts.DefaultAccount.GET_NUMBER_OF_MOVABLE_SIM_CONTACTS_METHOD
                 .equals(method)) {
-            if (!cp2AccountMoveFlag() || !newDefaultAccountApiEnabled()) {
+            if (!newDefaultAccountApiEnabled()) {
                 return null;
+            }
+            if (!cp2AccountMoveFlag()) {
+                return new Bundle();
             }
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
