@@ -82,6 +82,7 @@ import android.os.ParcelFileDescriptor.AutoCloseInputStream;
 import android.os.RemoteException;
 import android.os.StrictMode;
 import android.os.SystemClock;
+import android.os.Trace;
 import android.os.UserHandle;
 import android.preference.PreferenceManager;
 import android.provider.BaseColumns;
@@ -2637,8 +2638,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         } else if (RawContacts.DefaultAccount.GET_NUMBER_OF_MOVABLE_LOCAL_CONTACTS_METHOD
                 .equals(method)) {
-            if (!cp2AccountMoveFlag() || !newDefaultAccountApiEnabled()) {
+            if (!newDefaultAccountApiEnabled()) {
                 return null;
+            }
+            if (!cp2AccountMoveFlag()) {
+                return new Bundle();
             }
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
@@ -2663,8 +2667,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         } else if (RawContacts.DefaultAccount.GET_NUMBER_OF_MOVABLE_SIM_CONTACTS_METHOD
                 .equals(method)) {
-            if (!cp2AccountMoveFlag() || !newDefaultAccountApiEnabled()) {
+            if (!newDefaultAccountApiEnabled()) {
                 return null;
+            }
+            if (!cp2AccountMoveFlag()) {
+                return new Bundle();
             }
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
@@ -2972,7 +2979,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
             invalidateFastScrollingIndexCache();
         }
 
-        updateSearchIndexInTransaction();
+        if (!forProfile) {
+            updateSearchIndexInTransaction(db);
+        }
 
         if (mProviderStatusUpdateNeeded) {
             updateProviderStatus();
@@ -2997,12 +3006,22 @@ public class ContactsProvider2 extends AbstractContactsProvider
         }
     }
 
-    private void updateSearchIndexInTransaction() {
-        Set<Long> staleContacts = mTransactionContext.get().getStaleSearchIndexContactIds();
-        Set<Long> staleRawContacts = mTransactionContext.get().getStaleSearchIndexRawContactIds();
-        if (!staleContacts.isEmpty() || !staleRawContacts.isEmpty()) {
-            mSearchIndexManager.updateIndexForRawContacts(staleContacts, staleRawContacts);
-            mTransactionContext.get().clearSearchIndexUpdates();
+    private void updateSearchIndexInTransaction(SQLiteDatabase db) {
+        if (cp2SyncSearchIndexFlag()) {
+            long staleContactsCount =
+                    mTransactionContext.get().getStaleSearchIndexContactIdsCount(db);
+            if (staleContactsCount > 0) {
+                mSearchIndexManager.updateIndexForRawContacts(staleContactsCount);
+                mTransactionContext.get().clearSearchIndexUpdates(db);
+            }
+        } else {
+            Set<Long> staleContacts = mTransactionContext.get().getStaleSearchIndexContactIds();
+            Set<Long> staleRawContacts =
+                    mTransactionContext.get().getStaleSearchIndexRawContactIds();
+            if (!staleContacts.isEmpty() || !staleRawContacts.isEmpty()) {
+                mSearchIndexManager.updateIndexForRawContacts(staleContacts, staleRawContacts);
+                mTransactionContext.get().clearSearchIndexUpdates(db);
+            }
         }
     }
 
@@ -4326,6 +4345,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
             return 0;
         }
 
+        for (Long rawContactId : rawContactIds) {
+            // Invalidate the raw contacts in the search index before deleting the raw contacts
+            // from the "raw_contacts" table. When invalidating a contact through a raw contact
+            // the database is queried to obtain the contact_id. If the raw contact is not in the
+            // "raw_contacts" table, then the contact won't be marked as stale and will remain in
+            // the search_index table, even after the raw contact is deleted.
+            mTransactionContext.get().invalidateSearchIndexForRawContact(db, rawContactId);
+        }
+
         // Build the where clause for the raw contacts to be deleted
         ArrayList<String> whereArgs = new ArrayList<>();
         StringBuilder whereClause = new StringBuilder(rawContactIds.size() * 2 - 1);
@@ -5529,60 +5557,68 @@ public class ContactsProvider2 extends AbstractContactsProvider
     }
 
     private boolean updateAccountsInBackground(Account[] systemAccounts) {
-        if (!haveAccountsChanged(systemAccounts)) {
-            return false;
-        }
-        if (ContactsProperties.keep_stale_account_data().orElse(false)) {
-            Log.w(TAG, "Accounts changed, but not removing stale data for debug.contacts.ksad");
-            return true;
-        }
-        Log.i(TAG, "Accounts changed");
-
-        invalidateFastScrollingIndexCache();
-
-        final ContactsDatabaseHelper dbHelper = mDbHelper.get();
-        final SQLiteDatabase db = dbHelper.getWritableDatabase();
-        db.beginTransaction();
-
-        // WARNING: This method can be run in either contacts mode or profile mode.  It is
-        // absolutely imperative that no calls be made inside the following try block that can
-        // interact with a specific contacts or profile DB.  Otherwise it is quite possible for a
-        // deadlock to occur.  i.e. always use the current database in mDbHelper and do not access
-        // mContactsHelper or mProfileHelper directly.
-        //
-        // The problem may be a bit more subtle if you also access something that stores the current
-        // db instance in its constructor.  updateSearchIndexInTransaction relies on the
-        // SearchIndexManager which upon construction, stores the current db. In this case,
-        // SearchIndexManager always contains the contact DB. This is why the
-        // updateSearchIndexInTransaction is protected with !isInProfileMode now.
+        Trace.beginSection("updateAccountsInBackground");
         try {
-            // First, remove stale rows from raw_contacts, groups, and related tables.
-
-            // All accounts that are used in raw_contacts and/or groups.
-            final Set<AccountWithDataSet> knownAccountsWithDataSets
-                    = dbHelper.getAllAccountsWithDataSets();
-            // All known SIM accounts
-            final List<SimAccount> simAccounts = getDatabaseHelper().getAllSimAccounts();
-            // Find the accounts that have been removed.
-            final List<AccountWithDataSet> accountsWithDataSetsToDelete = Lists.newArrayList();
-            for (AccountWithDataSet knownAccountWithDataSet : knownAccountsWithDataSets) {
-                if (knownAccountWithDataSet.isLocalAccount()
-                        || knownAccountWithDataSet.inSystemAccounts(systemAccounts)
-                        || knownAccountWithDataSet.inSimAccounts(simAccounts)) {
-                    continue;
-                }
-                accountsWithDataSetsToDelete.add(knownAccountWithDataSet);
+            if (!haveAccountsChanged(systemAccounts)) {
+                return false;
             }
+            if (ContactsProperties.keep_stale_account_data().orElse(false)) {
+                Log.w(TAG,
+                        "Accounts changed, but not removing stale data for debug.contacts.ksad");
+                return true;
+            }
+            Log.i(TAG, "Accounts changed");
 
-            removeDataOfAccount(systemAccounts, accountsWithDataSetsToDelete, dbHelper, db);
+            invalidateFastScrollingIndexCache();
+
+            final ContactsDatabaseHelper dbHelper = mDbHelper.get();
+            final SQLiteDatabase db = dbHelper.getWritableDatabase();
+            db.beginTransaction();
+
+            // WARNING: This method can be run in either contacts mode or profile mode.  It is
+            // absolutely imperative that no calls be made inside the following try block that can
+            // interact with a specific contacts or profile DB.  Otherwise it is quite possible for
+            // a deadlock to occur.  i.e. always use the current database in mDbHelper and do not
+            // access mContactsHelper or mProfileHelper directly.
+            //
+            // The problem may be a bit more subtle if you also access something that stores the
+            // current db instance in its constructor.  updateSearchIndexInTransaction relies on the
+            // SearchIndexManager which upon construction, stores the current db. In this case,
+            // SearchIndexManager always contains the contact DB. This is why the
+            // updateSearchIndexInTransaction is protected with !isInProfileMode now.
+            try {
+                Trace.beginSection("removeDataOfAccount");
+                // First, remove stale rows from raw_contacts, groups, and related tables.
+
+                // All accounts that are used in raw_contacts and/or groups.
+                final Set<AccountWithDataSet> knownAccountsWithDataSets =
+                        dbHelper.getAllAccountsWithDataSets();
+                // All known SIM accounts
+                final List<SimAccount> simAccounts = getDatabaseHelper().getAllSimAccounts();
+                // Find the accounts that have been removed.
+                final List<AccountWithDataSet> accountsWithDataSetsToDelete = Lists.newArrayList();
+                for (AccountWithDataSet knownAccountWithDataSet : knownAccountsWithDataSets) {
+                    if (knownAccountWithDataSet.isLocalAccount()
+                            || knownAccountWithDataSet.inSystemAccounts(systemAccounts)
+                            || knownAccountWithDataSet.inSimAccounts(simAccounts)) {
+                        continue;
+                    }
+                    accountsWithDataSetsToDelete.add(knownAccountWithDataSet);
+                }
+
+                removeDataOfAccount(systemAccounts, accountsWithDataSetsToDelete, dbHelper, db);
+            } finally {
+                db.endTransaction();
+                Trace.endSection();
+            }
+            mAccountWritability.clear();
+
+            updateContactsAccountCount(systemAccounts);
+            updateProviderStatus();
+            return true;
         } finally {
-            db.endTransaction();
+            Trace.endSection();
         }
-        mAccountWritability.clear();
-
-        updateContactsAccountCount(systemAccounts);
-        updateProviderStatus();
-        return true;
     }
 
     private void removeDataOfAccount(Account[] systemAccounts,
@@ -5657,7 +5693,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                 ContactsTableUtil.deleteContact(db, contactId);
                                 if (cp2SyncSearchIndexFlag()) {
                                     mTransactionContext.get()
-                                            .invalidateSearchIndexForContact(contactId);
+                                            .invalidateSearchIndexForContact(db, contactId);
                                 }
                             }
                         } finally {
@@ -5685,7 +5721,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                         db, contactId);
                                 if (cp2SyncSearchIndexFlag()) {
                                     mTransactionContext.get()
-                                            .invalidateSearchIndexForContact(contactId);
+                                            .invalidateSearchIndexForContact(db, contactId);
                                 }
                             }
                         } finally {
@@ -5737,7 +5773,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (!inProfileMode()) {
                 // Will remove the deleted contact ids of the account from the search index and
                 // will update the contacts in the search index which had a raw contact deleted.
-                updateSearchIndexInTransaction();
+                updateSearchIndexInTransaction(db);
             }
         }
 
@@ -10319,7 +10355,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 count = mContactAggregator.markAllVisibleForAggregation(db);
                 mContactAggregator.aggregateInTransaction(mTransactionContext.get(), db);
 
-                updateSearchIndexInTransaction();
+                updateSearchIndexInTransaction(db);
 
                 updateAggregationAlgorithmVersion();
 
@@ -10327,7 +10363,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                 success = true;
             } finally {
-                mTransactionContext.get().clearAll();
+                mTransactionContext.get().clearAll(db);
                 if (transactionStarted) {
                     db.endTransaction();
                 }
