@@ -9,6 +9,9 @@ android_test {
     static_libs: [
         "ContactsProviderTestUtils",
         "androidx.test.rules",
+        "androidx.test.core",
+        "androidx.test.ext.junit",
+        "androidx.test.uiautomator_uiautomator",
         "mockito-target-minus-junit4",
         "flag-junit",
         "android.content.pm.flags-aconfig-java",
@@ -29,4 +32,42 @@ android_test {
     optimize: {
         enabled: false,
     },
+}
+
+// Tests with all launch-able flags enabled by default.
+// All flags' value will be true unless overridden in the individual tests.
+test_module_config {
+    name: "ContactsProviderTestsWithAllFlagEnabled",
+    base: "ContactsProviderTests",
+    test_suites: ["device-tests"],
+
+    options: [
+        {
+            name: "feature-flags:flag-value",
+            value: "contacts/com.android.providers.contacts.flags.cp2_account_move_flag=true",
+        },
+        {
+            name: "feature-flags:flag-value",
+            value: "contacts/android.provider.new_default_account_api_enabled=true",
+        },
+    ],
+}
+
+// Tests with all launch-able flags disabled by default.
+// All flags' value will be false unless overridden in the individual tests.
+test_module_config {
+    name: "ContactsProviderTestsWithAllFlagDisabled",
+    base: "ContactsProviderTests",
+    test_suites: ["device-tests"],
+
+    options: [
+        {
+            name: "feature-flags:flag-value",
+            value: "contacts/com.android.providers.contacts.flags.cp2_account_move_flag=false",
+        },
+        {
+            name: "feature-flags:flag-value",
+            value: "contacts/android.provider.new_default_account_api_enabled=false",
+        },
+    ],
 }
