@@ -47,7 +47,20 @@
          Note that the trailing space is important, and that to achieve it we have to wrap the
          string in double quotes. -->
     <string name="voicemail_from_column">"Voicemail from "</string>
-
+    <!-- The title for move contacts to default account dialog. [CHAR LIMIT=NONE] -->
+    <string name="move_contacts_to_default_account_dialog_title">Sync existing contacts?</string>
+    <!-- The message text for move contacts to default account dialog. [CHAR LIMIT=NONE] -->
+    <string name="move_contacts_to_default_account_dialog_message">You can sync %1$s to ensure they\'re backed up to %2$s (%3$s)</string>
+    <!-- The message text for total movable contacts count. [CHAR LIMIT=NONE] -->
+    <string name="movable_contacts_count"> {contacts_count, plural,
+        =1    {# existing contact}
+        other {# existing contacts}
+        }
+    </string>
+    <!-- The text for move contacts to default account dialog confirm button. [CHAR LIMIT=NONE] -->
+    <string name="move_contacts_to_default_account_dialog_sync_button_text">Sync</string>
+    <!-- The text for move contacts to default account dialog  cancel button. [CHAR LIMIT=NONE] -->
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text">Don\'t sync</string>
     <!-- Debug tool - title of the dialog which copies the contact database into the external storage. [CHAR LIMIT=NONE] -->
     <string name="debug_dump_title">Copy contacts database</string>
 
