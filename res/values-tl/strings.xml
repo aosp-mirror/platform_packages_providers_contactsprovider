@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Mga Contact"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Iba pa"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Voicemail mula sa/kay "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"I-sync ang mga kasalukuyang contact?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Puwede mong i-sync si %1$s para matiyak na naba-back up siya sa %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# kasalukuyang contact}one{# kasalukuyang contact}other{# na kasalukuyang contact}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"I-sync"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Huwag i-sync"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopyahin ang database ng mga contact"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Ikaw ay 1) gagawa na ng kopya ng iyong database na kinapapalooban ng lahat ng impormasyong nauugnay sa mga contact at ng lahat ng log ng tawag sa panloob na storage, at 2) ipapadala mo na ito sa email. Alalahaning tanggalin ang kopya sa sandaling matagumpay mo na itong nakopya mula sa device o sa sandaling natanggap na ang email."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Tanggalin ngayon"</string>
