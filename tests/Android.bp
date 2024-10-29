@@ -9,6 +9,9 @@ android_test {
     static_libs: [
         "ContactsProviderTestUtils",
         "androidx.test.rules",
+        "androidx.test.core",
+        "androidx.test.ext.junit",
+        "androidx.test.uiautomator_uiautomator",
         "mockito-target-minus-junit4",
         "flag-junit",
         "android.content.pm.flags-aconfig-java",

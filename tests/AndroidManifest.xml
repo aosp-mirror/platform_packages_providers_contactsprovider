@@ -20,8 +20,12 @@
 
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+    <uses-permission android:name="android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS" />
 
-    <application>
+    <application
+        android:process="android.process.acore"
+        android:label="app_label">
         <uses-library android:name="android.test.runner" />
 
         <!-- Mock contacts sync adapter -->
@@ -34,6 +38,12 @@
             <meta-data android:name="android.provider.CONTACTS_STRUCTURE"
                 android:resource="@xml/contacts" />
         </service>
+
+        <activity
+            android:name="com.android.providers.contacts.MoveContactsToDefaultAccountActivityTest$TestMoveContactsToDefaultAccountActivity"
+            android:enabled="true"
+            android:exported="true">
+        </activity>
     </application>
 
     <instrumentation
