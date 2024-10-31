@@ -27,6 +27,9 @@
     <!-- Permissions required for reading and logging compat changes -->
     <uses-permission android:name="android.permission.READ_COMPAT_CHANGE_CONFIG" />
     <uses-permission android:name="android.permission.LOG_COMPAT_CHANGE" />
+    <!-- Permissions required for setting default account  -->
+    <uses-permission android:name="android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS" />
+
 
     <permission
             android:name="android.permission.SEND_CALL_LOG_CHANGE"
@@ -131,10 +134,21 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".MoveContactsToDefaultAccountActivity"
+                  android:excludeFromRecents="true"
+                  android:exported="true"
+                  android:filterTouchesWhenObscured="true"
+                  android:theme="@android:style/Theme.Material.Dialog"
+                  android:windowActionBar="false">
+            <intent-filter>
+                <action android:name="android.provider.action.MOVE_CONTACTS_TO_DEFAULT_ACCOUNT"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
+
         <provider android:name=".debug.DumpFileProvider"
-            android:authorities="com.android.contacts.dumpfile"
-            android:exported="true">
-        </provider>
+                  android:authorities="com.android.contacts.dumpfile"
+                  android:exported="true"/>
 
     </application>
 </manifest>

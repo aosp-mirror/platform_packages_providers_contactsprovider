@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"通讯录"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"其他"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"语音信息发送人 "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"要同步现有联系人吗？"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"您可以同步处理 %1$s，以确保系统将其备份到%2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# 位现有联系人}other{# 位现有联系人}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"同步"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"不同步"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"复制通讯录数据库"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"您将要执行以下操作：1) 在内部存储设备中，创建包括通讯录相关信息和所有通话记录的数据库的副本；2) 通过电子邮件发送该副本。从设备中成功复制该副本或在电子邮件送达之后，请务必及时删除该副本。"</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"立即删除"</string>
