@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"კონტაქტები"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"სხვა"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ხმოვანი ფოსტა "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"გსურთ არსებული კონტაქტების სინქრონიზაცია?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"თქვენ შეგიძლიათ, დაასინქრონოთ %1$s, რათა დარწმუნდეთ, რომ მათი სარეზერვო ასლები შექმნილია %2$s-ში (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# არსებული კონტაქტი}other{# არსებული კონტაქტი}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"სინქრონიზაცია"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"არ დასინქრონდეს"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"კონტაქტების მონაცემთა ბაზის კოპირება"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"თქვენ აპირებთ 1) შიდა მეხსიერებაში მონაცემთა ბაზის კოპირებას, რომელიც შეიცავს ყველა კონტაქტთან დაკავშირებულ ინფორმაციას და ზარების ჟურნალს და 2) მის გაგზავნას ელფოსტის საშუალებით. გახსოვდეთ, რომ კოპირების წარმატებით დასრულებისთანავე ან ელფოსტის მიღებისთანავე უნდა წაშალოთ მოწყობილობიდან ასლი."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"წაიშალოს ახლა"</string>
