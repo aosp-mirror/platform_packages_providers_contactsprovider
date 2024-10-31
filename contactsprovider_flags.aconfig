@@ -19,3 +19,15 @@ flag {
     description: "Enable new default account for contacts"
     bug: "337979000"
 }
+flag {
+    name: "cp2_sync_search_index_flag"
+    namespace: "contacts"
+    description: "Refactor to update search index during account removal and contact aggregation"
+    bug: "363260703"
+}
+flag {
+    name: "disable_move_to_ineligible_default_account_flag"
+    namespace: "contacts"
+    description: "Disable move api to ineligible cloud default accounts"
+    bug: "372270980"
+}

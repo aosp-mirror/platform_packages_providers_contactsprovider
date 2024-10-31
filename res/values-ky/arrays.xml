@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<resources xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-  <string-array name="eligible_system_cloud_account_types">
-    <item msgid="7130475166467776698">"com.google"</item>
-  </string-array>
-</resources>
