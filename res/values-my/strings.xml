@@ -25,6 +25,16 @@
     <string name="default_directory" msgid="93961630309570294">"အဆက်အသွယ်များ"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"တစ်ခြား"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"မှ အသံစာ "</string>
+    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
+    <skip />
+    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
+    <skip />
     <string name="debug_dump_title" msgid="4916885724165570279">"လိပ်စာဒေတာဘေ့စ်ကို ကူးရန်"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"သင်သည် ၁) အဆက်အသွယ်အားလုံးနှင့်ဆိုင်သော အချက်အလက်များ၊ ဖုန်းခေါ်မှု မှတ်တမ်းများ ပါဝင်သည့် ဒေတာဘေ့စ်ကို စက်တွင်းသိုလှောင်ခန်းသို့ မိတ္တူကူးပြီး ၂) အီးမေးလ်ပို့ပါတော့မည်။ စက်တွင်းမှ မိတ္တူကူးယူပြီးသည်နှင့်၊ သို့မဟုတ် အီးမေးလ်ရောက်ရှိသည်နှင့် ဤမိတ္တူကို ဖျက်ရန် မမေ့ပါနှင့်။"</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"အခုဖျက်ပါ"</string>
