@@ -15,6 +15,8 @@
  */
 package com.android.providers.contacts;
 
+import static com.android.providers.contacts.flags.Flags.cp2SyncSearchIndexFlag;
+
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -52,6 +54,7 @@ public class SearchIndexManager {
 
     private static final boolean VERBOSE_LOGGING = Log.isLoggable(TAG, Log.VERBOSE);
 
+    public static final int MAX_UPDATE_FILTER_CONTACTS = 5000;
     private static final int MAX_STRING_BUILDER_SIZE = 1024 * 10;
 
     public static final String PROPERTY_SEARCH_INDEX_VERSION = "search_index";
@@ -246,6 +249,7 @@ public class SearchIndexManager {
     private IndexBuilder mIndexBuilder = new IndexBuilder();
     private ContentValues mValues = new ContentValues();
     private String[] mSelectionArgs1 = new String[1];
+    private int mMaxUpdateFilterContacts = MAX_UPDATE_FILTER_CONTACTS;
 
     public SearchIndexManager(ContactsProvider2 contactsProvider) {
         this.mContactsProvider = contactsProvider;
@@ -291,7 +295,59 @@ public class SearchIndexManager {
         }
     }
 
+    /**
+     * Updates the stale contact ids in the search index.
+     *
+     * <p>
+     * The stale contact ids used by this method are cached in the
+     * stale_search_index_contacts temp table. If the count of stale contacts
+     * is greater than the maximum amount of stale contacts, the search index
+     * is rebuilt completely. If not then only the stale contacts are updated.
+     *
+     * Stale contacts are contacts which have been either added, updated or deleted.
+     * Meaning the information in the search index for those contacts needs to be
+     * updated.
+     * </p>
+     *
+     * @param staleContactsCount The amount of cached stale contacts ids. Passing a
+     *          negative value or a value greater than the max amount of allowed stale
+     *          contacts will rebuild the entire search index.
+     */
+    public void updateIndexForRawContacts(long staleContactsCount) {
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "Updating search index for " + staleContactsCount + " contacts");
+        }
+
+        final SQLiteDatabase db = mDbHelper.getWritableDatabase();
+
+        String contactIdsSelection = null;
+        String whereClause = null;
+
+        // If the amount of contacts which need to be re-synced in the search index
+        // surpasses the limit, then simply clear the entire search index table and
+        // and rebuild it.
+        if (staleContactsCount > 0 && staleContactsCount <= mMaxUpdateFilterContacts) {
+            // Selects all raw_contacts which contain a stale contact id in search index
+            contactIdsSelection =
+                    "raw_contacts.contact_id IN (SELECT id FROM stale_search_index_contacts)";
+            // Only remove the provided contacts
+            whereClause = "rowid IN (SELECT id FROM stale_search_index_contacts)";
+        }
+        db.delete(Tables.SEARCH_INDEX, whereClause, null);
+
+        // Rebuild search index. The selection is used to select raw_contacts. If the selection
+        // string is null the entire search index table will be rebuilt.
+        final int count = buildAndInsertIndex(db, contactIdsSelection);
+
+        if (VERBOSE_LOGGING) {
+            Log.v(TAG, "Updated search index for " + count + " contacts");
+        }
+    }
+
     public void updateIndexForRawContacts(Set<Long> contactIds, Set<Long> rawContactIds) {
+        if (cp2SyncSearchIndexFlag()) {
+            throw new UnsupportedOperationException();
+        }
         if (VERBOSE_LOGGING) {
             Log.v(TAG, "Updating search index for " + contactIds.size() +
                     " contacts / " + rawContactIds.size() + " raw contacts");
@@ -313,9 +369,9 @@ public class SearchIndexManager {
             // the index for, we need to rebuild the search index for all raw contacts belonging
             // to the same contact, because we can only update the search index on a per-contact
             // basis.
-            sb.append(RawContacts.CONTACT_ID + " IN " +
-                    "(SELECT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS +
-                    " WHERE " + RawContactsColumns.CONCRETE_ID + " IN (");
+            sb.append(RawContacts.CONTACT_ID + " IN "
+                    + "(SELECT " + RawContacts.CONTACT_ID + " FROM " + Tables.RAW_CONTACTS
+                    + " WHERE " + RawContactsColumns.CONCRETE_ID + " IN (");
             sb.append(TextUtils.join(",", rawContactIds));
             sb.append("))");
         }
@@ -328,12 +384,12 @@ public class SearchIndexManager {
         // Remove affected search_index rows.
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         final int deleted = db.delete(Tables.SEARCH_INDEX,
-                ROW_ID_KEY + " IN (SELECT " +
-                    RawContacts.CONTACT_ID +
-                    " FROM " + Tables.RAW_CONTACTS +
-                    " WHERE " + rawContactsSelection +
-                    ")"
-                , null);
+                ROW_ID_KEY + " IN (SELECT "
+                    + RawContacts.CONTACT_ID
+                    + " FROM " + Tables.RAW_CONTACTS
+                    + " WHERE " + rawContactsSelection
+                    + ")",
+                null);
 
         // Then rebuild index for them.
         final int count = buildAndInsertIndex(db, rawContactsSelection);
@@ -404,12 +460,18 @@ public class SearchIndexManager {
         mValues.put(ROW_ID_KEY, contactId);
         db.insert(Tables.SEARCH_INDEX, null, mValues);
     }
+
     private int getSearchIndexVersion() {
         return Integer.parseInt(mDbHelper.getProperty(PROPERTY_SEARCH_INDEX_VERSION, "0"));
     }
 
     private void setSearchIndexVersion(int version) {
         mDbHelper.setProperty(PROPERTY_SEARCH_INDEX_VERSION, String.valueOf(version));
+    }
+
+    @VisibleForTesting
+    void setMaxUpdateFilterContacts(int maxUpdateFilterContacts) {
+        mMaxUpdateFilterContacts = maxUpdateFilterContacts;
     }
 
     /**
