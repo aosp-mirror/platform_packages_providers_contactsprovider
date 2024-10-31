@@ -25,6 +25,16 @@
     <string name="default_directory" msgid="93961630309570294">"通訊錄"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"其他"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"留言來自 "</string>
+    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
+    <skip />
+    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
+    <skip />
     <string name="debug_dump_title" msgid="4916885724165570279">"複製通訊錄資料庫"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"您即將要 1) 把您的資料庫 (包括所有聯絡人相關資料及所有通話記錄) 複製到內部儲存空間，然後 2) 以電郵寄出。當您成功從裝置複製這個資料庫的副本或收到電子郵件後，別忘記立即刪除這個副本。"</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"立即刪除"</string>

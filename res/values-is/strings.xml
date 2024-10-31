@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Tengiliðir"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Annað"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Talhólfsskilaboð frá "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Samstilla núverandi tengiliði?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Þú getur samstillt %1$s til að tryggja að þeir séu afritaðir í %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# núverandi tengiliður}one{# núverandi tengiliður}other{# núverandi tengiliðir}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Samstilla"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Ekki samstilla"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Afrita tengiliðagagnagrunn"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Þú ert um það bil að fara að 1) taka afrit af gagnagrunninum þínum, sem inniheldur allar upplýsingar um tengiliði og símtalaferilinn í heild sinni, inn á innbyggða geymslu og 2) senda þessi gögn með tölvupósti. Mundu að eyða afritinu um leið og þú hefur afritað það af tækinu eða þegar tölvupósturinn hefur komist til skila."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Eyða núna"</string>

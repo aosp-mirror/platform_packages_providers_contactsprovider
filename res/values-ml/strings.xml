@@ -25,6 +25,16 @@
     <string name="default_directory" msgid="93961630309570294">"കോണ്‍‌ടാക്റ്റുകള്‍"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"മറ്റുള്ളവ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ഈ നമ്പറിൽ നിന്നുള്ള വോയ്‌സ്‌മെയിൽ "</string>
+    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
+    <skip />
+    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
+    <skip />
     <string name="debug_dump_title" msgid="4916885724165570279">"കോൺടാക്റ്റുകളുടെ ഡാറ്റാബേസ് പകർത്തുക"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"നിങ്ങൾ 1) എല്ലാ കോൺടാക്റ്റുകളുമായും ബന്ധപ്പെട്ട വിവരങ്ങളും എല്ലാ കോൾ ലോഗും ഉൾപ്പെടുന്ന നിങ്ങളുടെ ഡാറ്റാബേസിന്റെ ഒരു പകർപ്പ് ആന്തരിക സംഭരണത്തിൽ സൃഷ്‌ടിക്കാനും 2) അത് ഇമെയിൽ ചെയ്യാനും പോകുന്നു. ഉപകരണത്തിൽ നിന്ന് പകർപ്പ് നിങ്ങൾ പകർത്തിക്കഴിഞ്ഞാലോ ഇമെയിൽ ലഭിച്ചുകഴിഞ്ഞാലോ ഉടൻ തന്നെ അത് ഇല്ലാതാക്കാൻ ശ്രദ്ധിക്കുക."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"ഇപ്പോൾ ഇല്ലാതാക്കുക"</string>

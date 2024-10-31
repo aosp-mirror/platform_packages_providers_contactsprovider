@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Anwani"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Nyingineyo"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Barua ya sauti kutoka "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Ungependa kusawazisha anwani zilizopo?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Unaweza kusawazisha %1$s ili uhakikishe kuwa nakala zimehifadhiwa kwenye %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{Anwani # iliyopo}other{Anwani # zilizopo}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sawazisha"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Usisawazishe"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Nakili hifadhidata ya anwani"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Unaelekea 1) kuunda nakala ya hifadhidata yako ambayo inajumuisha maelezo yote yanayohusiana na anwani na kumbukumbu zote za simu katika hifadhi ya ndani, na 2) uitume kwa barua pepe. Kumbuka kufuta nakala pindi tu utakapomaliza kuinakili kutoka kwenye kifaa au barua pepe itakapopokewa."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Futa sasa"</string>

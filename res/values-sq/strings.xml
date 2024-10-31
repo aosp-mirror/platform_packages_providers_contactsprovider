@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontaktet"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Tjetër"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Postë zanore nga "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Të sinkronizohen kontaktet ekzistuese?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Mund të sinkronizosh %1$s për t\'u siguruar që është rezervuar në %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# kontakt ekzistues}other{# kontakte ekzistuese}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sinkronizo"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Mos sinkronizo"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopjo bazën e të dhënave me kontaktet"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Je gati që 1) të bësh një kopje të bazës tënde të të dhënave që përfshin të gjitha informacionet në lidhje me kontaktet dhe evidencat e telefonatave në hapësirën ruajtëse të brendshme dhe 2) ta dërgosh atë me mail. Mos harro që ta fshish kopjen sapo ta kesh kopjuar me sukses nga pajisja ose të kesh marrë mail-in."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Fshi tani"</string>

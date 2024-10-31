@@ -25,6 +25,16 @@
     <string name="default_directory" msgid="93961630309570294">"Contatti"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Altro"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Messaggio vocale da "</string>
+    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
+    <skip />
+    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
+    <skip />
+    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
+    <skip />
     <string name="debug_dump_title" msgid="4916885724165570279">"Copia database di contatti"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Stai per 1) creare una copia del tuo database che include tutte le informazioni di contatto e tutti i registri chiamate nella memoria interna e 2) inviarla tramite email. Ricorda di eliminare la copia non appena è stata correttamente copiata dal dispositivo o non appena ricevi l\'email."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Elimina adesso"</string>

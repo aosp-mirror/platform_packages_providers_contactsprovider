@@ -54,15 +54,20 @@ public class AccountResolver {
      * Resolves the account and builds an {@link AccountWithDataSet} based on the data set specified
      * in the URI or values (if any).
      *
-     * @param uri                 Current {@link Uri} being operated on.
-     * @param values              {@link ContentValues} to read and possibly update.
-     * @param applyDefaultAccount Whether to look up default account during account resolution.
+     * @param uri                                     Current {@link Uri} being operated on.
+     * @param values                                  {@link ContentValues} to read and possibly
+     *                                                update.
+     * @param applyDefaultAccount                     Whether to look up default account during
+     *                                                account resolution.
+     * @param shouldValidateAccountForContactAddition Whether to validate the account accepts new
+     *                                                contacts.
      */
     public AccountWithDataSet resolveAccountWithDataSet(Uri uri, ContentValues values,
-            boolean applyDefaultAccount) {
+            boolean applyDefaultAccount, boolean shouldValidateAccountForContactAddition) {
         final Account[] accounts = resolveAccount(uri, values);
         final Account account = applyDefaultAccount
-                ? getAccountWithDefaultAccountApplied(uri, accounts)
+                ? getAccountWithDefaultAccountApplied(accounts,
+                shouldValidateAccountForContactAddition)
                 : getFirstAccountOrNull(accounts);
 
         AccountWithDataSet accountWithDataSet = null;
@@ -84,12 +89,12 @@ public class AccountResolver {
      *
      * @param accounts 1-size array which contains specified account, or empty array if account is
      *                 not specified.
-     * @param uri      The URI used for resolving accounts.
      * @return The resolved account, or null if it's the default device (aka "NULL") account.
      * @throws IllegalArgumentException If there's an issue with the account resolution due to
      *                                  default account incompatible account types.
      */
-    private Account getAccountWithDefaultAccountApplied(Uri uri, Account[] accounts)
+    private Account getAccountWithDefaultAccountApplied(Account[] accounts,
+            boolean shouldValidateAccountForContactAddition)
             throws IllegalArgumentException {
         if (accounts.length == 0) {
             DefaultAccountAndState defaultAccountAndState =
@@ -103,17 +108,19 @@ public class AccountResolver {
                 return defaultAccountAndState.getAccount();
             }
         } else {
-            checkAccountIsWritableInternal(accounts[0]);
+            if (shouldValidateAccountForContactAddition) {
+                validateAccountForContactAdditionInternal(accounts[0]);
+            }
             return accounts[0];
         }
     }
 
     /**
-     * Checks if the specified account is writable.
+     * Checks if new contacts in specified account is accepted.
      *
-     * <p>This method verifies if contacts can be written to the given account based on the
+     * <p>This method checks if contacts can be written to the given account based on the
      * current default account settings. It throws an {@link IllegalArgumentException} if
-     * the account is not writable.</p>
+     * the contacts cannot be created in the given account .</p>
      *
      * @param accountName The name of the account to check.
      * @param accountType The type of the account to check.
@@ -127,25 +134,25 @@ public class AccountResolver {
      *                                          (device or SIM) account.</li>
      *                                  </ul>
      */
-    public void checkAccountIsWritable(String accountName, String accountType) {
+    public void validateAccountForContactAddition(String accountName, String accountType) {
         if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
             throw new IllegalArgumentException(
                     "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE");
         }
         if (TextUtils.isEmpty(accountName)) {
-            checkAccountIsWritableInternal(/*account=*/null);
+            validateAccountForContactAdditionInternal(/*account=*/null);
         } else {
-            checkAccountIsWritableInternal(new Account(accountName, accountType));
+            validateAccountForContactAdditionInternal(new Account(accountName, accountType));
         }
     }
 
-    private void checkAccountIsWritableInternal(Account account)
+    private void validateAccountForContactAdditionInternal(Account account)
             throws IllegalArgumentException {
         DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
 
         if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
             if (isDeviceOrSimAccount(account)) {
-                throw new IllegalArgumentException("Cannot write contacts to local accounts "
+                throw new IllegalArgumentException("Cannot add contacts to local or SIM accounts "
                         + "when default account is set to cloud");
             }
         }

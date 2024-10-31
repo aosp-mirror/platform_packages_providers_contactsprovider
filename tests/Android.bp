@@ -16,6 +16,7 @@ android_test {
         "flag-junit",
         "android.content.pm.flags-aconfig-java",
         "contactsprovider_flags_java_lib",
+        "platform-compat-test-rules",
     ],
     libs: [
         "android.test.runner.stubs.system",

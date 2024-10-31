@@ -30,11 +30,15 @@ import android.accounts.AccountManager;
 import android.accounts.OnAccountsUpdateListener;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.RequiresPermission;
 import android.annotation.SuppressLint;
 import android.annotation.WorkerThread;
 import android.app.AppOpsManager;
 import android.app.BroadcastOptions;
 import android.app.SearchManager;
+import android.app.compat.CompatChanges;
+import android.compat.annotation.ChangeId;
+import android.compat.annotation.EnabledSince;
 import android.content.BroadcastReceiver;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -461,6 +465,17 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public static final int DELETED_CONTACTS_ID = 23001;
 
     public static final int DIRECTORY_FILE_ENTERPRISE = 24000;
+
+    /**
+     * Restricted the contacts creation in specific accounts.
+     *
+     * When enabled, contacts cannot be created under local or SIM accounts when default account
+     * is set to an account associated with a cloud provider.
+     */
+    @ChangeId
+    @EnabledSince(targetSdkVersion = Build.VERSION_CODES.BAKLAVA)
+    static final long RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS = 352312780L;
+
 
     // Inserts into URIs in this map will direct to the profile database if the parent record's
     // value (looked up from the ContentValues object with the key specified by the value in this
@@ -3709,7 +3724,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private Uri insertSettings(Uri uri, ContentValues values) {
         final AccountWithDataSet account = mAccountResolver.resolveAccountWithDataSet(uri, values,
-                /*applyDefaultAccount=*/false);
+                /*applyDefaultAccount=*/false, /*shouldValidateAccountForContactAddition=*/ false);
 
         // Note that the following check means the local account settings cannot be created with
         // an insert because resolveAccountWithDataSet returns null for it. However, the settings
@@ -4846,6 +4861,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
         int DATA_SET = 3;
     }
 
+
+    @RequiresPermission(
+            allOf = {
+                    android.Manifest.permission.READ_COMPAT_CHANGE_CONFIG,
+                    android.Manifest.permission.LOG_COMPAT_CHANGE
+            })
     private int updateGroups(ContentValues originalValues, String selectionWithId,
             String[] selectionArgs, boolean callerIsSyncAdapter) {
         mGroupIdCache.clear();
@@ -4899,8 +4920,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         ? updatedDataSet : c.getString(GroupAccountQuery.DATA_SET);
 
                 if (isAccountChanging) {
-                    if (newDefaultAccountApiEnabled()) {
-                        mAccountResolver.checkAccountIsWritable(updatedAccountName,
+                    if (newDefaultAccountApiEnabled() && CompatChanges.isChangeEnabled(
+                            RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
+                            Binder.getCallingUid())) {
+                        mAccountResolver.validateAccountForContactAddition(updatedAccountName,
                                 updatedAccountType);
                     }
 
@@ -5012,6 +5035,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return ret;
     }
 
+    @RequiresPermission(
+            allOf = {
+                    android.Manifest.permission.READ_COMPAT_CHANGE_CONFIG,
+                    android.Manifest.permission.LOG_COMPAT_CHANGE
+            })
     private int updateRawContact(SQLiteDatabase db, long rawContactId, ContentValues values,
             boolean callerIsSyncAdapter, boolean applyDefaultAccount) {
         final String selection = RawContactsColumns.CONCRETE_ID + " = ?";
@@ -5070,9 +5098,9 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             ? values.getAsString(RawContacts.DATA_SET) : oldDataSet
                         );
 
-                // The checkAccountIsWritable has to be done at the level of attempting to update
-                // each raw contacts, rather than at the beginning of attempting all selected raw
-                // contacts:
+                // The validateAccountForContactAddition has to be done at the level of attempting
+                // to update each raw contacts, rather than at the beginning of attempting all
+                // selected raw contacts:
                 // since not all of account field (name, type, data_set) are provided in the
                 // ContentValues @param, the destination account of each raw contact can be
                 // partially derived from the their existing account info, and thus can be
@@ -5081,8 +5109,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // a single transaction, failing checkAccountIsWritable will fail the entire update
                 // operation, which is clean such that no partial updated will be committed to the
                 // DB.
-                if (applyDefaultAccount) {
-                    mAccountResolver.checkAccountIsWritable(newAccountWithDataSet.getAccountName(),
+                if (applyDefaultAccount && CompatChanges.isChangeEnabled(
+                        RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
+                        Binder.getCallingUid())) {
+                    mAccountResolver.validateAccountForContactAddition(
+                            newAccountWithDataSet.getAccountName(),
                             newAccountWithDataSet.getAccountType());
                 }
 
@@ -10508,10 +10539,20 @@ public class ContactsProvider2 extends AbstractContactsProvider
      * @param values The {@link ContentValues} object to operate on.
      * @return The corresponding account ID.
      */
+    @RequiresPermission(
+            allOf = {
+                    android.Manifest.permission.READ_COMPAT_CHANGE_CONFIG,
+                    android.Manifest.permission.LOG_COMPAT_CHANGE
+            })
     private long replaceAccountInfoByAccountId(Uri uri, ContentValues values,
             boolean applyDefaultAccount) {
+        boolean shouldValidateAccountForContactAddition =
+                applyDefaultAccount && CompatChanges.isChangeEnabled(
+                        RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
+                        Binder.getCallingUid());
+
         final AccountWithDataSet account = mAccountResolver.resolveAccountWithDataSet(uri, values,
-                applyDefaultAccount);
+                applyDefaultAccount, shouldValidateAccountForContactAddition);
         final long id = mDbHelper.get().getOrCreateAccountIdInTransaction(account);
         values.put(RawContactsColumns.ACCOUNT_ID, id);
 
