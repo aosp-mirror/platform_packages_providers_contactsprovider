@@ -25,16 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"ଯୋଗାଯୋଗ"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"ଅନ୍ଯ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ଏହାଙ୍କଠାରୁ ଭଏସମେଲ୍‌ "</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ପୂର୍ବରୁ ଥିବା କଣ୍ଟାକ୍ଟଗୁଡ଼ିକୁ ସିଙ୍କ କରିବେ?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"%2$s (%3$s)ରେ %1$sର ବେକଅପ ନିଆଯାଇଥିବା ସୁନିଶ୍ଚିତ କରିବାକୁ ଆପଣ ସେଗୁଡ଼ିକୁ ସିଙ୍କ କରିପାରିବେ"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# ପୂର୍ବରୁ ଥିବା କଣ୍ଟାକ୍ଟ}other{# ପୂର୍ବରୁ ଥିବା କଣ୍ଟାକ୍ଟ}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"ସିଙ୍କ କରନ୍ତୁ"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"ସିଙ୍କ କରନ୍ତୁ ନାହିଁ"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"କଣ୍ଟାକ୍ଟ ଡାଟାବେସକୁ କପି କରନ୍ତୁ"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"ଆପଣ 1) ଇଣ୍ଟର୍ନଲ ଷ୍ଟୋରେଜରେ ନିଜ ଡାଟାବେସର ଏକ କପି ବନାନ୍ତୁ, ଯେଉଁଥିରେ କଣ୍ଟାକ୍ଟ ସମ୍ବନ୍ଧିତ ସମସ୍ତ ତଥ୍ୟ ଏବଂ କଲ ଲଗ ରହିବ, ଏବଂ 2) ଏହାକୁ ଇମେଲ କରନ୍ତୁ। ମନେରଖନ୍ତୁ, ଡିଭାଇସରୁ ସଫଳତାର ସହ ଏହାକୁ କପି କରିସାରିବା ପରେ କିମ୍ୱା ଇମେଲ ମିଳିବା ପରେ, ଏହି କପିକୁ ଡିଲିଟ କରିଦେବେ।"</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"ବର୍ତ୍ତମାନ ଡିଲିଟ୍ କରନ୍ତୁ"</string>
