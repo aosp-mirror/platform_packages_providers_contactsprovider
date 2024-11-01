@@ -25,16 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontakte"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Ander"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Stemboodskap van "</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Sinkroniseer bestaande kontakte?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Jy kan %1$s sinkroniseer om te verseker dat hulle na %2$s (%3$s) gerugsteun is"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# bestaande kontak}other{# bestaande kontakte}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sinkroniseer"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Moenie sinkroniseer nie"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopieer kontaktedatabasis"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Jy is op die punt om 1) \'n afskrif van jou databasis te maak wat alle inligting insluit wat verband hou met kontakte en alle oproeploglêers na die interne berging, en 2) dit te e-pos. Onthou om die kopie uit te vee sodra jy dit suksesvol van die toestel af gekopieer het, of sodra die e-pos ontvang is."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Vee nou uit"</string>
