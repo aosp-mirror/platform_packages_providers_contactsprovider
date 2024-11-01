@@ -25,16 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"ລາຍຊື່ຜູ້ຕິດຕໍ່"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"ອື່ນໆ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ຂໍ້ຄວາມສຽງຈາກ "</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ຊິ້ງລາຍຊື່ຜູ້ຕິດຕໍ່ທີ່ມີຢູ່ບໍ?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"ທ່ານສາມາດຊິ້ງ %1$s ເພື່ອໃຫ້ແນ່ໃຈວ່າມີການສຳຮອງຂໍ້ມູນດັ່ງກ່າວໄວ້ໃນ %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{ລາຍຊື່ຜູ້ຕິດຕໍ່ທີ່ມີຢູ່ # ລາຍການ}other{ລາຍຊື່ຜູ້ຕິດຕໍ່ທີ່ມີຢູ່ # ລາຍການ}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"ຊິ້ງ"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"ບໍ່ຕ້ອງຊິ້ງ"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"ສຳເນົາຖານຂໍ້ມູນລາຍຊື່ຜູ່ຕິດຕໍ່"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"ທ່ານກຳລັງຈະ 1) ສ້າງສຳເນົາຂອງຖານຂໍ້ມູນເຊິ່ງຈະມີ ຂໍ້ມູນທີ່ກ່ຽວຂ້ອງກັບລາຍຊື່ຜູ່ຕິດຕໍ່ ແລະບັນທຶກການໂທທັງໝົດ ເພື່ອຈັດເກັບໃນບ່ອນຈັດເກັບຂໍ້ມູນພາຍໃນ ແລະ 2) ສົ່ງມັນໄປທາງອີເມວ. ຫຼັງຈາກທ່ານສຳເນົາຂໍ້ມູນທີ່ສ້າງອອກຈາກອຸປະກອນນີ້ ຫຼືສົ່ງມັນຜ່ານທາງອີເມວສຳເລັດແລ້ວ ຢ່າລືມລຶບມັນອອກໂດຍທັນທີ."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"ລຶບອອກດຽວນີ້"</string>
