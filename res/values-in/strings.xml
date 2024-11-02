@@ -25,16 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontak"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Lainnya"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Kotak pesan dari "</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Sinkronkan kontak yang ada?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Anda dapat menyinkronkan %1$s untuk memastikan data tersebut dicadangkan ke %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# kontak yang ada}other{# kontak yang ada}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sinkronkan"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Jangan sinkronkan"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Salin basis data kontak"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Anda akan 1) membuat salinan basis data yang mencakup semua informasi terkait kontak dan semua log panggilan ke penyimpanan internal, dan 2) mengirimkannya sebagai email. Ingat untuk menghapus salinan secepatnya setelah Anda selesai menyalinnya dari perangkat atau saat email telah diterima."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Hapus sekarang"</string>
