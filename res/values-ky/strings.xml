@@ -25,16 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Байланыштар"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Башка"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Келген үнкат "</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Учурдагы байланыштар шайкештирилсинби?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Камдык көчүрмөсүн %2$s (%3$s) аккаунтуна сактоо үчүн %1$s шайкештире аласыз"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# учурдагы байланыш}other{# учурдагы байланыш}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Шайкештирүү"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Шайкештирилбесин"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Байланыштар корун көчүрүү"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Сиз буларды кылайын деп жатасыз: 1) Ичинде бардык байланыштарга тийиштүү маалыматтар жана чалуу тизмелери бар берилиштер корун тышкы сактагычка  көчүрмөлөө, 2) жана аны эмейлге жөнөтүү. Көчүрмөнү, түзмөктөн ийгиликтүү көчүрүп же эмейлден алаарыңыз менен, жок кылууну унутпаңыз."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Өчүрүү"</string>
