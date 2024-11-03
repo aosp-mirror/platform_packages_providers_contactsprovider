@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Контакти"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Друг"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Говорна пошта од "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Да се синхронизираат постојните контакти?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"%1$s може да се синхронизира за да се направи бекап во %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# постоен контакт}one{# постоен контакт}other{# постојни контакти}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Синхронизирај"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Не синхронизирај"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Копирај база на податоци со контакти"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Вие 1) ќе направите копија на вашата база на податоци која ги опфаќа сите информации поврзани со контакти и сета евиденција на повици во внатрешната меморија и 2) ќе ја испратите по е-пошта. Не заборавајте да ја избришете копијата откако успешно сте ја ископирале од уредот или електронската порака е примена."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Избриши сега"</string>

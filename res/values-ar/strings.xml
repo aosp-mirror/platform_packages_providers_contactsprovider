@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"جهات الاتصال"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"غير ذلك"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"بريد صوتي من "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"هل تريد مزامنة جهات الاتصال الحالية؟"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"‏يمكنك مزامنة %1$s لضمان الاحتفاظ بنسخة احتياطية منها في %2$s‏ (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{جهة اتصال واحدة حالية}zero{‫# جهة اتصال حالية}two{جهتا اتصال حاليتان}few{‫# جهات اتصال حالية}many{‫# جهة اتصال حالية}other{‫# جهة اتصال حالية}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"مزامنة"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"عدم المزامنة"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"نسخ قاعدة بيانات جهات الاتصال"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"أنت على وشك 1) إنشاء نسخة من قاعدة بياناتك التي تتضمن جميع المعلومات المرتبطة بجهات الاتصال وجميع سجلات المكالمات إلى وحدة التخزين الداخلية و2) إرسالها بالبريد الإلكتروني. تذكر حذف النسخة بمجرد إتمام نسخها من الجهاز أو تلقي الرسالة الإلكترونية."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"الحذف الآن"</string>
