@@ -22,6 +22,9 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertThrows;
 
 import android.accounts.Account;
+import android.compat.testing.PlatformCompatChangeRule;
+import android.content.ContentUris;
+import android.content.ContentValues;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.platform.test.annotations.RequiresFlagsDisabled;
@@ -34,18 +37,24 @@ import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccou
 import android.provider.ContactsContract.Settings;
 import android.provider.Flags;
 
+import androidx.annotation.NonNull;
 import androidx.test.filters.MediumTest;
+
+import libcore.junit.util.compat.CoreCompatChangeRule.DisableCompatChanges;
+import libcore.junit.util.compat.CoreCompatChangeRule.EnableCompatChanges;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Unit tests for {@link ContactsProvider2} Default Account Handling.
@@ -70,6 +79,10 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
     static final String RES_PACKAGE = "testpackage";
     @Rule
     public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
+
+    @Rule
+    public TestRule compatChangeRule = new PlatformCompatChangeRule();
+
     ContactsProvider2 mCp;
 
     @Override
@@ -430,5 +443,143 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
                 DefaultAccount.KEY_ELIGIBLE_DEFAULT_ACCOUNTS, Account.class);
         assertEquals(Arrays.asList(new Account[]{SYSTEM_CLOUD_ACCOUNT_1, SYSTEM_CLOUD_ACCOUNT_2}),
                 accounts);
+    }
+
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
+    @DisableCompatChanges({ContactsProvider2.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS})
+    public void testRawContactInsert_whenDefaultAccountSetToCloud_contactCreationNotRestricted() {
+        mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
+        mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
+
+        // Set the default account (for new contacts) to a cloud account.
+        mResolver.call(ContactsContract.AUTHORITY_URI,
+                DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
+                bundleToSetDefaultAccountForNewContacts(
+                        DefaultAccountAndState.ofCloud(SYSTEM_CLOUD_ACCOUNT_1)));
+
+        // Okay to insert raw contact in cloud account.
+        long rawContactId1 = insertRawContact(SYSTEM_CLOUD_ACCOUNT_1);
+
+        // Okay to insert raw contact in NULL account.
+        long rawContactId2 = insertRawContact((Account) null);
+
+        // Okay to update raw contact to a different cloud account.
+        assertEquals(1, updateRawContactAccount(rawContactId1, SYSTEM_CLOUD_ACCOUNT_2));
+        assertEquals(1, updateRawContactAccount(rawContactId2, SYSTEM_CLOUD_ACCOUNT_2));
+
+        // Okay to update raw contact to NULL account.
+        assertEquals(1, updateRawContactAccount(rawContactId2, null));
+
+        // Okay to insert group in cloud account.
+        long groupId1 = insertGroup(SYSTEM_CLOUD_ACCOUNT_1);
+
+        // Okay to insert group in NULL account.
+        long groupId2 = insertGroup((Account) null);
+
+        // Okay to update raw contact to a different cloud account.
+        assertEquals(1, updateGroupAccount(groupId1, SYSTEM_CLOUD_ACCOUNT_2));
+        assertEquals(1, updateGroupAccount(groupId2, SYSTEM_CLOUD_ACCOUNT_2));
+
+        // Okay to update raw contact to NULL account.
+        assertEquals(1, updateGroupAccount(groupId1, null));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
+    @EnableCompatChanges({ContactsProvider2.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS})
+    public void testRawContactInsert_whenDefaultAccountSetToCloud_contactCreationRestricted() {
+        mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
+        mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1, SYSTEM_CLOUD_ACCOUNT_2});
+
+        // Set the default account (for new contacts) to a cloud account.
+        mResolver.call(ContactsContract.AUTHORITY_URI,
+                DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
+                bundleToSetDefaultAccountForNewContacts(
+                        DefaultAccountAndState.ofCloud(SYSTEM_CLOUD_ACCOUNT_1)));
+
+        // Okay to insert raw contact in cloud account.
+        long rawContactId1 = insertRawContact(SYSTEM_CLOUD_ACCOUNT_1);
+
+        // Exception expected when inserting raw contact in NULL account.
+        assertThrows(IllegalArgumentException.class, () ->
+                insertRawContact((Account) null));
+
+        // Okay to update the raw contact to a different cloud account
+        assertEquals(1, updateRawContactAccount(rawContactId1, SYSTEM_CLOUD_ACCOUNT_2));
+
+        // Exception expected when updating raw contact to NULL account.
+        assertThrows(IllegalArgumentException.class,
+                () -> updateRawContactAccount(rawContactId1, null));
+
+        // Okay to insert group in cloud account.
+        long groupId1 = insertGroup(SYSTEM_CLOUD_ACCOUNT_1);
+
+        // Exception expected when inserting group in NULL account.
+        assertThrows(IllegalArgumentException.class, () ->
+                insertGroup((Account) null));
+
+        // Okay to update the group to a different cloud account
+        assertEquals(1, updateGroupAccount(groupId1, SYSTEM_CLOUD_ACCOUNT_2));
+
+        // Exception expected when updating group to NULL account.
+        assertThrows(IllegalArgumentException.class, () -> updateGroupAccount(groupId1, null));
+
+    }
+
+    private long insertRawContact(Account account) {
+        ContentValues values = getRawContactContactValuesFromAccount(account);
+        return ContentUris.parseId(
+                Objects.requireNonNull(
+                        mResolver.insert(ContactsContract.RawContacts.CONTENT_URI, values)));
+    }
+
+    private long insertGroup(Account account) {
+        ContentValues values = getGroupContentValuesFromAccount(account);
+        return ContentUris.parseId(
+                Objects.requireNonNull(
+                        mResolver.insert(ContactsContract.Groups.CONTENT_URI, values)));
+    }
+
+    private long updateRawContactAccount(long rawContactId, Account destinationAccount) {
+        ContentValues values = getRawContactContactValuesFromAccount(destinationAccount);
+        return mResolver.update(
+                ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, rawContactId),
+                values, null, null);
+    }
+
+    private long updateGroupAccount(long groupId, Account destinationAccount) {
+        ContentValues values = getGroupContentValuesFromAccount(destinationAccount);
+        return mResolver.update(
+                ContentUris.withAppendedId(ContactsContract.Groups.CONTENT_URI, groupId), values,
+                null, null);
+    }
+
+    @NonNull
+    private static ContentValues getRawContactContactValuesFromAccount(Account account) {
+        ContentValues values = new ContentValues();
+        if (account == null) {
+            values.put(ContactsContract.RawContacts.ACCOUNT_NAME, (String) null);
+            values.put(ContactsContract.RawContacts.ACCOUNT_TYPE, (String) null);
+        } else {
+            values.put(ContactsContract.RawContacts.ACCOUNT_NAME, account.name);
+            values.put(ContactsContract.RawContacts.ACCOUNT_TYPE, account.type);
+        }
+        return values;
+    }
+
+
+    @NonNull
+    private static ContentValues getGroupContentValuesFromAccount(Account account) {
+        ContentValues values = new ContentValues();
+        if (account == null) {
+            values.put(ContactsContract.RawContacts.ACCOUNT_NAME, (String) null);
+            values.put(ContactsContract.RawContacts.ACCOUNT_TYPE, (String) null);
+        } else {
+            values.put(ContactsContract.RawContacts.ACCOUNT_NAME, account.name);
+            values.put(ContactsContract.RawContacts.ACCOUNT_TYPE, account.type);
+        }
+        return values;
     }
 }
