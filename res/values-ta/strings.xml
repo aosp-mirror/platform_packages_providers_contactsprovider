@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"தொடர்புகள்"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"மற்றவை"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"இவரிடமிருந்து குரலஞ்சல் "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ஏற்கெனவே உள்ள தொடர்புகளை ஒத்திசைக்க வேண்டுமா?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"%2$s (%3$s) இல் காப்புப் பிரதி எடுக்கப்பட்டிருப்பதை உறுதிசெய்ய %1$s ஐ ஒத்திசைக்கலாம்"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{ஏற்கெனவே உள்ள தொடர்பு: #}other{ஏற்கெனவே உள்ள தொடர்புகள்: #}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"ஒத்திசை"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"ஒத்திசைக்காதே"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"தொடர்புகளின் தரவுத்தளத்தை நகலெடு"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"நீங்கள் செய்யக்கூடியவை 1) தொடர்புகள் தொடர்பான எல்லா தகவலும், அழைப்பின் எல்லா பதிவையும் உள்ளடக்கும் உங்கள் தரவுத்தளத்தை அகச் சேமிப்பிடத்தில் நகலெடுக்கலாம், பின்னர் 2) அதை மின்னஞ்சல் செய்யலாம். அதைச் சாதனத்திலிருந்து வெற்றிகரமாக நகலெடுத்தவுடன் அல்லது மின்னஞ்சலைப் பெற்றவுடன் அதன் நகலை மறக்காமல் நீக்கிவிடவும் செய்யலாம்."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"இப்போதே நீக்கு"</string>

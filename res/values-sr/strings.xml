@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Контакти"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Другo"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Говорна пошта од "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Желите да синхронизујете постојеће контакте?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Можете да синхронизујете %1$s да бисте се уверили да се резервне копије праве на %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# постојећи контакт}one{# постојећи контакти}few{# постојећа контакта}other{# постојећих контаката}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Синхронизуј"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Немој да синхронизујеш"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Копирање базе података са контактима"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Управо ћете 1) направити копију базе података која садржи све информације у вези са контактима и целокупну евиденцију позива у интерној меморији и 2) послати је имејлом. Не заборавите да избришете копију чим је будете копирали са уређаја или чим будете примили имејл."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Избриши одмах"</string>
