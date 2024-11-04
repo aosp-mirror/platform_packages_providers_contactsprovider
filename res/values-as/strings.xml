@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"সম্পর্কসূচী"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"অন্যান্য"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ইয়াৰ পৰা অহা ভইচমেল "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ইতিমধ্যে থকা সম্পৰ্কসমূহ ছিংক কৰিবনে?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"আপুনি %1$sক ছিংক কৰিব পাৰে যাতে সেইসমূহ %2$s (%3$s)ত বেক আপ কৰা বুলি নিশ্চিত কৰিব পাৰি"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# টা ইতিমধ্যে থকা সম্পৰ্ক}one{# টা ইতিমধ্যে থকা সম্পৰ্ক}other{# টা ইতিমধ্যে থকা সম্পৰ্ক}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"ছিংক কৰক"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"ছিংক নকৰিব"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"সম্পৰ্কসূচীৰ ডেটাবেছ প্ৰতিলিপি কৰক"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"আপুনি এই কাৰ্যবোৰ কৰিবলৈ লৈছে ১) আটাইবোৰ সম্পৰ্ক সম্বন্ধীয় তথ্য আৰু কল লগ সন্নিবিষ্ট থকা আপোনাৰ ডেটাবেছক আভ্য়ন্তৰীণ ষ্ট’ৰেজলৈ প্ৰতিলিপি কৰা আৰু ২) ইয়াক ইমেইল কৰা। ডিভাইচৰ পৰা সফলতাৰে প্ৰতিলিপি কৰাৰ বা ইমেইল পোৱাৰ পাছত উক্ত প্ৰতিলিপি মচিবলৈ নাপাহৰিব।"</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"এতিয়াই মচক"</string>
