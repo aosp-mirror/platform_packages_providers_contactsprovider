@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontakter"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Annet"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Talemelding fra "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Vil du synkronisere eksisterende kontakter?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Du kan synkronisere %1$s for å sikre at de blir sikkerhetskopiert til %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# eksisterende kontakt}other{# eksisterende kontakter}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Synkroniser"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Ikke synkroniser"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopiér kontaktdatabasen"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Du er i ferd med å 1) lage en kopi av databasen som omfatter all kontaktrelatert informasjon og alle anropslogger til den interne lagringsplassen, og 2) sende kopien med e-post. Husk å slette kopien så snart du har kopiert den fra enheten eller når e-posten er mottatt."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Slett nå"</string>

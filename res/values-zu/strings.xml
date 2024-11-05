@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Othintana nabo"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Okunye"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Imeyili yezwi kusuka "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Vumelanisa oxhumana nabo abakhona?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Ungakwazi ukuvumelanisa okuthi %1$s ukuze uqinisekise ukuthi kwenzelwe isipele ku-%2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{Oxhumana naye okhona ongu-#}one{Oxhumana nabo abakhona abangu-#}other{Oxhumana nabo abakhona abangu-#}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Vumelanisa"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Ungavumelanisi"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopisha imininingo egciniwe yoxhumana nabo"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Useduze nokuthi 1) wenze ikhophi yemininingwane yakho egciniwe ebandakanya yonke imininingwane ehlobene noxhumana nabo kanye nohlu lokushaya ucingo kokokulondoloza kwangaphakathi, kanti futhi 2) uzoyYou are about to 1) make a copy of youithumela nge-imeyili. Khumbula ukuthi ususe ikhophi ngokushesha emumva kokuba uphumelele ukuyikopisha isuka edivayisini noma emumva kokuba kutholakale i-imeyili."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Susa manje"</string>

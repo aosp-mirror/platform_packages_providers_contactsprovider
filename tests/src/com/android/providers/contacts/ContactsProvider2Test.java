@@ -7077,6 +7077,50 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     @Test
+    @RequiresFlagsEnabled(Flags.FLAG_CP2_SYNC_SEARCH_INDEX_FLAG)
+    public void testSearchIndexUpdatedOnRawContactOperations() {
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        SQLiteDatabase db = cp.getDatabaseHelper().getReadableDatabase();
+
+        assertEquals(0, DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "John", "Wick");
+        Uri emailUri = insertEmail(rawContactId, "john@movie.com");
+
+        // Assert contact is in the search index
+        assertStoredValue(buildFilterUri("wick", false), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildFilterUri("movie", false), SearchSnippets.SNIPPET,
+                "john@[movie].com");
+        assertEquals(1, DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+        assertEquals(0, DatabaseUtils.longForQuery(db,
+                    "SELECT COUNT(*) FROM stale_search_index_contacts", null));
+
+        // Update raw contact with email
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Email.DATA, "john@continental.com");
+        mResolver.update(emailUri, values, null);
+
+        // Assert contact is updated in the search index
+        assertStoredValue(buildFilterUri("wick", false), SearchSnippets.SNIPPET, null);
+        assertRowCount(0, buildFilterUri("movie", false), null, null);
+        assertStoredValue(buildFilterUri("continental", false), SearchSnippets.SNIPPET,
+                "john@[continental].com");
+        assertEquals(1, DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+        assertEquals(0, DatabaseUtils.longForQuery(db,
+                    "SELECT COUNT(*) FROM stale_search_index_contacts", null));
+
+        // Delete the raw contact
+        RawContactUtil.delete(mResolver, rawContactId, true);
+
+        // Assert the contact is no longer searchable
+        assertRowCount(0, buildFilterUri("wick", false), null, null);
+        assertEquals(0, DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+        assertEquals(0, DatabaseUtils.longForQuery(db,
+                    "SELECT COUNT(*) FROM stale_search_index_contacts", null));
+    }
+
+    @Test
     public void testStreamItemsCleanedUpOnAccountRemoval() {
         Account doomedAccount = new Account("doom", "doom");
         Account safeAccount = mAccount;
