@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Харилцагчид"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Бусад"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Дуут шуудан илгээгч "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Одоо байгаа харилцагчдыг синк хийх үү?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Та тэдгээр харилцагчийг %2$s-д (%3$s) нөөцөлсөн эсэхийг нягтлахын тулд %1$s-г синк хийх боломжтой"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{Одоо байгаа # харилцагч}other{Одоо байгаа # харилцагч}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Синк хийх"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Бүү синк хий"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Харилцагчдын мэдээллийн санг хуулах"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Та 1) бүх харилцагчидтай холбоотой мэдээллүүд болон ярианы жагсаалтыг агуулсан өөрийн өгөгдлийн сангийн хуулбарыг дотоод санд хадгалах, мөн 2) имэйлдэх гэж байна. Та үүнийг төхөөрөмжөөсөө амжилттай хуулж дуусах буюу имэйлээр хүлээж авсны дараа устгах хэрэгтэйг санаарай."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Одоо устгах"</string>

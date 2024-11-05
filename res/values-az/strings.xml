@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontaktlar"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Digər"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Səsli mesaj göndərən: "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Mövcud kontaktlar sinxronlaşdırılsın?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"%1$s sinxronlaşdıraraq %2$s (%3$s) hesabına yedəkləndiyinə əmin olun"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# mövcud kontakt}other{# mövcud kontakt}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sinxronlaşdırın"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Sinxronlaşdırmayın"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontakt data bazasını kopyalayın"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Siz 1) informasiyaya və daxili yaddaş ehtiyatındakı zəng jurnalına bağlı data bazanızın nüsxəsini hazırlamaq 2) və onu e-poçt ilə göndərmək üzrəsiniz. Onu cihazdan kənarda və ya alınmış e-məktubda uğurla kopyalayandan sonra nüsxəsini silməyi unutmayın."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"İndi silin"</string>

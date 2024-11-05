@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.flags.Flags.cp2AccountMoveFlag;
 import static com.android.providers.contacts.flags.Flags.cp2AccountMoveSyncStubFlag;
+import static com.android.providers.contacts.flags.Flags.disableMoveToIneligibleDefaultAccountFlag;
 
 import android.accounts.Account;
 import android.content.ContentUris;
@@ -28,6 +29,7 @@ import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Data;
 import android.provider.ContactsContract.Groups;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.Pair;
@@ -78,7 +80,7 @@ public class ContactMover {
                 RawContacts.CONTENT_URI,
                 values,
                 RawContacts._ID + " IN (" + TextUtils.join(",", rawContactIds) + ")",
-                new String[] {});
+                new String[]{});
     }
 
     private void updateGroupAccount(
@@ -101,12 +103,12 @@ public class ContactMover {
                 Groups.CONTENT_URI,
                 values,
                 Groups._ID + " IN (" + TextUtils.join(",", groupIds) + ")",
-                new String[] {});
+                new String[]{});
     }
 
     private void updateGroupDataRows(Map<Long, Long> groupIdMap) {
         // for each group in the groupIdMap, update all Group Membership data rows from key to value
-        for (Map.Entry<Long, Long> groupIds: groupIdMap.entrySet()) {
+        for (Map.Entry<Long, Long> groupIds : groupIdMap.entrySet()) {
             mDbHelper.updateGroupMemberships(groupIds.getKey(), groupIds.getValue());
         }
 
@@ -141,7 +143,7 @@ public class ContactMover {
         // 1. update contact data rows (to point do the group in dest)
         // 2. Set deleted = 1 for dupe groups in source
         updateGroupDataRows(nonSystemDuplicateGroupMap);
-        for (Map.Entry<Long, Long> groupIds: nonSystemDuplicateGroupMap.entrySet()) {
+        for (Map.Entry<Long, Long> groupIds : nonSystemDuplicateGroupMap.entrySet()) {
             mCp2.deleteGroup(Groups.CONTENT_URI, groupIds.getKey(), false);
         }
 
@@ -172,7 +174,7 @@ public class ContactMover {
         Map<Long, ContentValues> oldIdToNewValues = mDbHelper
                 .getGroupContentValuesForMoveCopy(destAccount, systemUniqueGroups);
         Map<Long, Long> systemGroupIdMap = new HashMap<>();
-        for (Map.Entry<Long, ContentValues> idToValues: oldIdToNewValues.entrySet()) {
+        for (Map.Entry<Long, ContentValues> idToValues : oldIdToNewValues.entrySet()) {
             Uri newGroupUri = mCp2.insert(Groups.CONTENT_URI, idToValues.getValue());
             if (newGroupUri != null) {
                 Long newGroupId = ContentUris.parseId(newGroupUri);
@@ -190,7 +192,7 @@ public class ContactMover {
                 CommonDataKinds.GroupMembership.GROUP_ROW_ID
                         + " IN (" + TextUtils.join(",", systemUniqueGroups) + ")"
                         + " AND " + Data.MIMETYPE + " = ?",
-                new String[] {CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE}
+                new String[]{CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE}
         );
     }
 
@@ -219,6 +221,23 @@ public class ContactMover {
                 .collect(Collectors.toSet());
     }
 
+    Account getCloudDefaultAccount() {
+        DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
+        if (defaultAccount.getState() != DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
+            Log.w(TAG, "No default cloud account set");
+            return null;
+        }
+        Account account = defaultAccount.getAccount();
+        assert account != null;
+        if (disableMoveToIneligibleDefaultAccountFlag()
+                && !mDefaultAccountManager.getEligibleCloudAccounts().contains(account)) {
+            Log.w(TAG, "Ineligible default cloud account set");
+            return null;
+        }
+
+        return account;
+    }
+
     /**
      * Moves {@link RawContacts} and {@link Groups} from the local account(s) to the Cloud Default
      * Account (if any).
@@ -234,11 +253,13 @@ public class ContactMover {
         // Check if there is a cloud default account set
         // - if not, then we don't need to do anything
         // - if there is, then that's our destAccount, get the AccountWithDataSet
-        Account account = mDefaultAccountManager.pullDefaultAccount().getCloudAccount();
+        Account account = getCloudDefaultAccount();
         if (account == null) {
-            Log.w(TAG, "moveToDefaultCloudAccount with no default cloud account set");
+            Log.w(TAG,
+                    "moveLocalToCloudDefaultAccount with no eligible cloud default account set");
             return;
         }
+
         AccountWithDataSet destAccount = new AccountWithDataSet(
                 account.name, account.type, /* dataSet= */ null);
 
@@ -254,18 +275,19 @@ public class ContactMover {
     @NeededForTesting
     void moveSimToCloudDefaultAccount() {
         if (!cp2AccountMoveFlag()) {
-            Log.w(TAG, "moveLocalToCloudDefaultAccount: flag disabled");
+            Log.w(TAG, "moveSimToCloudDefaultAccount: flag disabled");
             return;
         }
 
         // Check if there is a cloud default account set
         // - if not, then we don't need to do anything
         // - if there is, then that's our destAccount, get the AccountWithDataSet
-        Account account = mDefaultAccountManager.pullDefaultAccount().getCloudAccount();
+        Account account = getCloudDefaultAccount();
         if (account == null) {
-            Log.w(TAG, "moveToDefaultCloudAccount with no default cloud account set");
+            Log.w(TAG, "moveSimToCloudDefaultAccount with no eligible cloud default account set");
             return;
         }
+
         AccountWithDataSet destAccount = new AccountWithDataSet(
                 account.name, account.type, /* dataSet= */ null);
 
@@ -274,10 +296,68 @@ public class ContactMover {
     }
 
     /**
+     * Gets the number of {@link RawContacts} in the local account(s) which may be moved using
+     * {@link ContactMover#moveLocalToCloudDefaultAccount} (if any).
+     *
+     * @return the number of {@link RawContacts} in the local account(s), or 0 if there is no Cloud
+     * Default Account.
+     */
+    // Keep it in proguard for testing: once it's used in production code, remove this annotation.
+    @NeededForTesting
+    int getNumberLocalContacts() {
+        if (!cp2AccountMoveFlag()) {
+            Log.w(TAG, "getNumberLocalContacts: flag disabled");
+            return 0;
+        }
+
+        // Check if there is a cloud default account set
+        // - if not, then we don't need to do anything, count = 0
+        // - if there is, then do the count
+        Account account = getCloudDefaultAccount();
+        if (account == null) {
+            Log.w(TAG, "getNumberLocalContacts with no eligible cloud default account set");
+            return 0;
+        }
+
+        // Count any contacts in the local account(s)
+        return countRawContactsForAccounts(getLocalAccounts());
+    }
+
+    /**
+     * Gets the number of {@link RawContacts} in the SIM account(s) which may be moved using
+     * {@link ContactMover#moveSimToCloudDefaultAccount} (if any).
+     *
+     * @return the number of {@link RawContacts} in the SIM account(s), or 0 if there is no Cloud
+     * Default Account.
+     */
+    // Keep it in proguard for testing: once it's used in production code, remove this annotation.
+    @NeededForTesting
+    int getNumberSimContacts() {
+        if (!cp2AccountMoveFlag()) {
+            Log.w(TAG, "getNumberSimContacts: flag disabled");
+            return 0;
+        }
+
+        // Check if there is a cloud default account set
+        // - if not, then we don't need to do anything, count = 0
+        // - if there is, then do the count
+        Account account = getCloudDefaultAccount();
+        if (account == null) {
+            Log.w(TAG, "getNumberSimContacts with no eligible cloud default account set");
+            return 0;
+        }
+
+        // Count any contacts in the sim accounts.
+        return countRawContactsForAccounts(getSimAccounts());
+    }
+
+    /**
      * Moves {@link RawContacts} and {@link Groups} from one account to another.
+     *
      * @param sourceAccounts the source {@link AccountWithDataSet}s to move contacts and groups
      *                       from.
-     * @param destAccount the destination {@link AccountWithDataSet} to move contacts and groups to.
+     * @param destAccount    the destination {@link AccountWithDataSet} to move contacts and groups
+     *                       to.
      */
     // Keep it in proguard for testing: once it's used in production code, remove this annotation.
     @NeededForTesting
@@ -294,9 +374,11 @@ public class ContactMover {
      * Moves {@link RawContacts} and {@link Groups} from one account to another, while writing sync
      * stubs in the source account to notify relevant sync adapters in the source account of the
      * move.
+     *
      * @param sourceAccounts the source {@link AccountWithDataSet}s to move contacts and groups
      *                       from.
-     * @param destAccount the destination {@link AccountWithDataSet} to move contacts and groups to.
+     * @param destAccount    the destination {@link AccountWithDataSet} to move contacts and groups
+     *                       to.
      */
     // Keep it in proguard for testing: once it's used in production code, remove this annotation.
     @NeededForTesting
@@ -309,6 +391,10 @@ public class ContactMover {
         moveRawContactsForAccounts(sourceAccounts, destAccount, /* insertSyncStubs= */ true);
     }
 
+    private int countRawContactsForAccounts(Set<AccountWithDataSet> sourceAccounts) {
+        return mDbHelper.countRawContactsQuery(sourceAccounts);
+    }
+
     private void moveRawContactsForAccounts(Set<AccountWithDataSet> sourceAccounts,
             AccountWithDataSet destAccount, boolean insertSyncStubs) {
         if (sourceAccounts.contains(destAccount)) {
@@ -318,7 +404,7 @@ public class ContactMover {
         final SQLiteDatabase db = mDbHelper.getWritableDatabase();
         db.beginTransaction();
         try {
-            for (AccountWithDataSet source: sourceAccounts) {
+            for (AccountWithDataSet source : sourceAccounts) {
                 moveRawContactsInternal(source, destAccount, insertSyncStubs);
             }
 
@@ -362,7 +448,7 @@ public class ContactMover {
 
         // Last, clear the duplicates.
         // Since these are duplicates, we don't need to do anything else with them
-        for (long rawContactId: duplicates) {
+        for (long rawContactId : duplicates) {
             mCp2.deleteRawContact(
                     rawContactId,
                     mDbHelper.getContactId(rawContactId),

@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"కాంటాక్ట్‌లు"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"ఇతరం"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"దీని నుండి వాయిస్ మెయిల్ "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ఇప్పటికే ఉన్న కాంటాక్ట్‌లను సింక్ చేయాలా?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"మీరు %1$s‌ను సింక్ చేసి, అవి %2$s (%3$s)లో బ్యాకప్ అయ్యేలా చూసుకోవచ్చు"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{ఇప్పటికే ఉన్న # కాంటాక్ట్}other{ఇప్పటికే ఉన్న # కాంటాక్ట్‌లు}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"సింక్ చేయండి"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"సింక్ చేయవద్దు"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"కాంటాక్ట్‌ల డేటాబేస్‌ను కాపీ చేయండి"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"మీరు 1) అన్ని కాంటాక్ట్‌లకు సంబంధించిన సమాచారాన్ని మరియు మొత్తం కాల్ లాగ్‌ను కలిగి ఉండే మీ డేటాబేస్ యొక్క కాపీని అంతర్గత స్టోరేజ్‌లో రూపొందించి 2) దాన్ని ఈమెయిల్‌ చేయబోతున్నారు. మీరు దాన్ని పరికరం నుండి విజయవంతంగా కాపీ చేసిన తర్వాత లేదా ఈమెయిల్‌ను స్వీకరించిన తర్వాత కాపీని తొలగించడం మర్చిపోవద్దు."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"ఇప్పుడే తొలగించండి"</string>
