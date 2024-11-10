@@ -124,7 +124,7 @@ public class MoveContactsToDefaultAccountActivityTest {
     @EnableFlags(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testMoveLocalContactsDialog_eligibleAccount_clickConfirm() throws Exception {
         MockContentProvider mockContentProvider = setupMockContentProvider(
-                DefaultAccountAndState.ofCloud(TEST_ACCOUNT), 1);
+                DefaultAccountAndState.ofCloud(TEST_ACCOUNT), 1, 1);
         mContentResolver.addProvider(ContactsContract.AUTHORITY_URI.getAuthority(),
                 mockContentProvider);
         TestMoveContactsToDefaultAccountActivity.setupForTesting(mContentResolver);
@@ -160,7 +160,7 @@ public class MoveContactsToDefaultAccountActivityTest {
     @EnableFlags(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testMoveLocalContactsDialog_eligibleAccount_clickCancel() {
         MockContentProvider mockContentProvider = setupMockContentProvider(
-                DefaultAccountAndState.ofCloud(TEST_ACCOUNT), 1);
+                DefaultAccountAndState.ofCloud(TEST_ACCOUNT), 1, 0);
         mContentResolver.addProvider(ContactsContract.AUTHORITY_URI.getAuthority(),
                 mockContentProvider);
         TestMoveContactsToDefaultAccountActivity.setupForTesting(mContentResolver);
@@ -177,7 +177,7 @@ public class MoveContactsToDefaultAccountActivityTest {
         assertTrue(mDevice.hasObject(getCaseInsensitiveSelector(mActivity.getSyncButtonText())));
         assertTrue(mDevice.hasObject(getCaseInsensitiveSelector(mActivity.getCancelButtonText())));
         assertTrue(mDevice.hasObject(
-                By.text(mActivity.getMessageText(2, "Google", "test@gmail.com"))));
+                By.text(mActivity.getMessageText(1, "Google", "test@gmail.com"))));
 
         mDevice.findObject(getCaseInsensitiveSelector(mActivity.getCancelButtonText())).click();
 
@@ -194,7 +194,7 @@ public class MoveContactsToDefaultAccountActivityTest {
     @EnableFlags(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testMoveLocalContactsDialog_noDefaultAccount_dontShowDialog() {
         MockContentProvider mockContentProvider = setupMockContentProvider(
-                DefaultAccountAndState.ofNotSet(), 1);
+                DefaultAccountAndState.ofNotSet(), 1, 1);
         mContentResolver.addProvider(ContactsContract.AUTHORITY_URI.getAuthority(),
                 mockContentProvider);
         TestMoveContactsToDefaultAccountActivity.setupForTesting(mContentResolver);
@@ -219,7 +219,7 @@ public class MoveContactsToDefaultAccountActivityTest {
     @EnableFlags(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testMoveLocalContactsDialog_noCloudAccount_dontShowDialog() {
         MockContentProvider mockContentProvider = setupMockContentProvider(
-                DefaultAccountAndState.ofLocal(), 1);
+                DefaultAccountAndState.ofLocal(), 1, 1);
         mContentResolver.addProvider(ContactsContract.AUTHORITY_URI.getAuthority(),
                 mockContentProvider);
         TestMoveContactsToDefaultAccountActivity.setupForTesting(mContentResolver);
@@ -243,7 +243,7 @@ public class MoveContactsToDefaultAccountActivityTest {
     @RequiresFlagsDisabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testMoveLocalContactsDialog_flagOff_dontShowDialog() {
         MockContentProvider mockContentProvider = setupMockContentProvider(
-                DefaultAccountAndState.ofCloud(TEST_ACCOUNT), 1);
+                DefaultAccountAndState.ofCloud(TEST_ACCOUNT), 1, 1);
         mContentResolver.addProvider(ContactsContract.AUTHORITY_URI.getAuthority(),
                 mockContentProvider);
         TestMoveContactsToDefaultAccountActivity.setupForTesting(mContentResolver);
@@ -262,12 +262,37 @@ public class MoveContactsToDefaultAccountActivityTest {
         verify(mActivity).setResult(eq(RESULT_CANCELED));
     }
 
+    @Test
+    @EnableFlags(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
+    public void testMoveLocalContactsDialog_noMovableContacts_dontShowDialog() {
+        MockContentProvider mockContentProvider = setupMockContentProvider(
+                DefaultAccountAndState.ofCloud(TEST_ACCOUNT), 0, 0);
+        mContentResolver.addProvider(ContactsContract.AUTHORITY_URI.getAuthority(),
+                mockContentProvider);
+        TestMoveContactsToDefaultAccountActivity.setupForTesting(mContentResolver);
+
+        Intent intent = new Intent(InstrumentationRegistry.getContext(),
+                TestMoveContactsToDefaultAccountActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        mActivity = spy(
+                (TestMoveContactsToDefaultAccountActivity) mInstrumentation.startActivitySync(
+                        intent));
+        mDevice.waitForIdle();
+
+        assertFalse(mDevice.hasObject(By.text(mActivity.getTitleText())));
+        assertFalse(mDevice.hasObject(getCaseInsensitiveSelector(mActivity.getSyncButtonText())));
+        assertFalse(mDevice.hasObject(getCaseInsensitiveSelector(mActivity.getCancelButtonText())));
+
+        verify(mActivity).setResult(eq(RESULT_CANCELED));
+    }
+
     private BySelector getCaseInsensitiveSelector(String text) {
         return By.text(Pattern.compile(text, CASE_INSENSITIVE));
     }
 
     private MockContentProvider setupMockContentProvider(
-            DefaultAccountAndState defaultAccountAndState, int movableContactsCount) {
+            DefaultAccountAndState defaultAccountAndState, int localContactsCount,
+            int simContactsCount) {
         MockContentProvider mockContentProvider = new MockContentProvider() {
             final Bundle moveLocalContactsBundle = new Bundle();
 
@@ -295,12 +320,12 @@ public class MoveContactsToDefaultAccountActivityTest {
                 } else if (DefaultAccount.GET_NUMBER_OF_MOVABLE_LOCAL_CONTACTS_METHOD.equals(
                         method)) {
                     bundle.putInt(DefaultAccount.KEY_NUMBER_OF_MOVABLE_LOCAL_CONTACTS,
-                            movableContactsCount);
+                            localContactsCount);
                     return bundle;
                 } else if (DefaultAccount.GET_NUMBER_OF_MOVABLE_SIM_CONTACTS_METHOD.equals(
                         method)) {
                     bundle.putInt(DefaultAccount.KEY_NUMBER_OF_MOVABLE_SIM_CONTACTS,
-                            movableContactsCount);
+                            simContactsCount);
                     return bundle;
                 } else if (TEST_MOVE_LOCAL_CONTACTS_METHOD.equals(method)) {
                     // Created this action to verify the move local contacts call.

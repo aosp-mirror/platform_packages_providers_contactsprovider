@@ -76,7 +76,7 @@ public class MoveContactsToDefaultAccountActivity extends Activity {
                         getContentResolver());
                 movableSimContactsCount = DefaultAccount.getNumberOfMovableSimContacts(
                         getContentResolver());
-                if (movableLocalContactsCount <= 0 || movableSimContactsCount <= 0) {
+                if (movableLocalContactsCount + movableSimContactsCount <= 0) {
                     Log.i(TAG, "There's no movable contacts.");
                     setResultAndFinish(RESULT_CANCELED);
                     return;
