@@ -31,3 +31,9 @@ flag {
     description: "Disable move api to ineligible cloud default accounts"
     bug: "372270980"
 }
+flag {
+    name: "cp2_account_move_delete_non_common_data_rows_flag"
+    namespace: "contacts"
+    description: "Delete data rows not included in CommonDataKinds when moving between account types"
+    bug: "330324156"
+}
