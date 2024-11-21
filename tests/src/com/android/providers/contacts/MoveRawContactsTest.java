@@ -600,8 +600,9 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
      * will be deleted as a duplicate.
      */
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
-    public void testMoveUniqueRawContactWithNonPortableDataRows() {
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG,
+            Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
+    public void testMoveUniqueRawContactWithNonPortableDataRowsFlagEnabled() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
                 SOURCE_ACCOUNT);
@@ -633,6 +634,91 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     /**
+     * Move a contact between source and dest where both account have different account types, but
+     * the delete non-common data rows flag is disabled.
+     * The contact is unique because of a custom data row. Because the account types match,
+     * the non-portable data row will be considered while matching the contacts and the contact will
+     * be treated as unique.
+     */
+    @Test
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @DisableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
+    public void testMoveUniqueRawContactWithNonPortableDataRowsFlagDisabled() {
+        // create a duplicate pair of contacts
+        long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
+                SOURCE_ACCOUNT);
+        long destRawContactId = RawContactUtil.createRawContactWithName(mResolver, DEST_ACCOUNT);
+        // create a combination of data rows
+        DataUtil.insertStructuredName(mResolver, sourceRawContactId, "firstA", "lastA");
+        insertNonPortableData(mResolver, sourceRawContactId, "foo");
+        DataUtil.insertStructuredName(mResolver, destRawContactId, "firstA", "lastA");
+
+        // trigger the move
+        mMover.moveRawContactsWithSyncStubs(Set.of(mSource), mDest);
+
+        // Verify no stub was written since no source ID existed
+        assertMoveStubDoesNotExist(sourceRawContactId, mSource);
+
+        // verify the unique raw contact has been moved from the old -> new account
+        assertMovedRawContact(sourceRawContactId, mDest, false);
+        // all data rows should have moved with the source
+        assertDataExists(sourceRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        assertDataExists(sourceRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
+
+        // verify the original near duplicate contact remains unchanged
+        assertMovedRawContact(destRawContactId, mDest, false);
+        // the non portable data should still not exist on the destination account
+        assertDataDoesNotExist(destRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        // the existing data row in the destination account should be unaffected
+        assertDataExists(destRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
+    }
+
+    /**
+     * Moves a contact between source and dest where both accounts have the same account type.
+     * The contact is unique because of a non-portable data row. Because the account types match,
+     * the non-portable data row will be considered while matching the contacts and the contact will
+     * be treated as unique.
+     */
+    @Test
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG,
+            Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
+    public void testMoveUniqueRawContactsWithNonPortableDataRowsAccountTypesMatch() {
+        mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT_WITH_SOURCE_TYPE});
+        AccountWithDataSet dest =
+                AccountWithDataSet.get(DEST_ACCOUNT_WITH_SOURCE_TYPE.name,
+                        DEST_ACCOUNT_WITH_SOURCE_TYPE.type, null);
+
+        // create a duplicate pair of contacts
+        long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
+                SOURCE_ACCOUNT);
+        long destRawContactId = RawContactUtil.createRawContactWithName(mResolver,
+                DEST_ACCOUNT_WITH_SOURCE_TYPE);
+        // create a combination of data rows
+        DataUtil.insertStructuredName(mResolver, sourceRawContactId, "firstA", "lastA");
+        insertNonPortableData(mResolver, sourceRawContactId, "foo");
+        DataUtil.insertStructuredName(mResolver, destRawContactId, "firstA", "lastA");
+
+        // trigger the move
+        mMover.moveRawContactsWithSyncStubs(Set.of(mSource), dest);
+
+        // Verify no stub was written since no source ID existed
+        assertMoveStubDoesNotExist(sourceRawContactId, mSource);
+
+        // verify the unique raw contact has been moved from the old -> new account
+        assertMovedRawContact(sourceRawContactId, dest, false);
+        // all data rows should have moved with the source
+        assertDataExists(sourceRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        assertDataExists(sourceRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
+
+        // verify the original near duplicate contact remains unchanged
+        assertMovedRawContact(destRawContactId, dest, false);
+        // the non portable data should still not exist on the destination account
+        assertDataDoesNotExist(destRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        // the existing data row in the destination account should be unaffected
+        assertDataExists(destRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
+    }
+
+    /**
      * Moves a contact between source and dest where both accounts have the same account type.
      * The contact is unique because of a non-portable data row. Because the account types match,
      * the non-portable data row will be considered while matching the contacts and the contact will
@@ -640,7 +726,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
      */
     @Test
     @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
-    public void testMoveUniqueRawContactsWithNonPortableDataRowsAccountTypesMatch() {
+    @DisableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
+    public void testMoveUniqueRawContactsWithNonPortableDataRowsAccountTypesMatchFlagDisabled() {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT_WITH_SOURCE_TYPE});
         AccountWithDataSet dest =
                 AccountWithDataSet.get(DEST_ACCOUNT_WITH_SOURCE_TYPE.name,
@@ -683,8 +770,50 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
      * be treated as a duplicate.
      */
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG,
+            Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
     public void testMoveDuplicateRawContactsWithNonPortableDataRowsAccountTypesMatch() {
+        mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT_WITH_SOURCE_TYPE});
+        AccountWithDataSet dest =
+                AccountWithDataSet.get(DEST_ACCOUNT_WITH_SOURCE_TYPE.name,
+                        DEST_ACCOUNT_WITH_SOURCE_TYPE.type, null);
+
+        // create a duplicate pair of contacts
+        long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
+                SOURCE_ACCOUNT);
+        long destRawContactId = RawContactUtil.createRawContactWithName(mResolver,
+                DEST_ACCOUNT_WITH_SOURCE_TYPE);
+        // create a combination of data rows
+        DataUtil.insertStructuredName(mResolver, sourceRawContactId, "firstA", "lastA");
+        insertNonPortableData(mResolver, sourceRawContactId, "foo");
+        DataUtil.insertStructuredName(mResolver, destRawContactId, "firstA", "lastA");
+        insertNonPortableData(mResolver, destRawContactId, "foo");
+
+        // trigger the move
+        mMover.moveRawContacts(Set.of(mSource), dest);
+
+        // verify the duplicate contact has been deleted
+        assertMovedContactIsDeleted(sourceRawContactId, mSource);
+        assertDataDoesNotExist(sourceRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        assertDataDoesNotExist(
+                sourceRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
+
+        // verify the original near duplicate contact remains unchanged
+        assertMovedRawContact(destRawContactId, dest, false);
+        assertDataExists(destRawContactId, NON_PORTABLE_MIMETYPE, "foo");
+        assertDataExists(destRawContactId, StructuredName.CONTENT_ITEM_TYPE, "firstA lastA");
+    }
+
+    /**
+     * Moves a contact between source and dest where both accounts have the same account type.
+     * The contact is unique because of a non-portable data row. Because the account types match,
+     * the non-portable data row will be considered while matching the contacts and the contact will
+     * be treated as a duplicate.
+     */
+    @Test
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
+    public void testMoveDuplicateRawContactsWithNonPortableDataRowsAccountTypesMatchFlagDisabled() {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT_WITH_SOURCE_TYPE});
         AccountWithDataSet dest =
                 AccountWithDataSet.get(DEST_ACCOUNT_WITH_SOURCE_TYPE.name,
