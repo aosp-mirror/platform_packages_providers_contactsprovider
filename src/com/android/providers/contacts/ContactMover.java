@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.flags.Flags.cp2AccountMoveFlag;
 import static com.android.providers.contacts.flags.Flags.cp2AccountMoveSyncStubFlag;
+import static com.android.providers.contacts.flags.Flags.cp2AccountMoveDeleteNonCommonDataRowsFlag;
 import static com.android.providers.contacts.flags.Flags.disableMoveToIneligibleDefaultAccountFlag;
 
 import android.accounts.Account;
@@ -418,8 +419,9 @@ public class ContactMover {
             AccountWithDataSet destAccount, boolean insertSyncStubs) {
         // If we are moving between account types or data sets, delete non-portable data rows
         // from the source
-        if (!isAccountTypeMatch(sourceAccount, destAccount)
-                || !isDataSetMatch(sourceAccount, destAccount)) {
+        if (cp2AccountMoveDeleteNonCommonDataRowsFlag()
+                && (!isAccountTypeMatch(sourceAccount, destAccount)
+                || !isDataSetMatch(sourceAccount, destAccount))) {
             mDbHelper.deleteNonCommonDataRows(sourceAccount);
         }
 
