@@ -27,6 +27,8 @@ import androidx.test.filters.MediumTest;
 import com.android.providers.contacts.ContactLookupKey.LookupKeySegment;
 import com.android.providers.contacts.testutil.RawContactUtil;
 
+import com.google.common.collect.ImmutableMap;
+
 import java.util.ArrayList;
 
 /**
@@ -108,13 +110,13 @@ public class ContactLookupKeyTest extends BaseContactsProvider2Test {
 
     public void testLookupKeySameSourceIdDifferentAccounts() {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "Dear", "Doe");
-        storeValue(RawContacts.CONTENT_URI, rawContactId1, RawContacts.ACCOUNT_TYPE, "foo");
-        storeValue(RawContacts.CONTENT_URI, rawContactId1, RawContacts.ACCOUNT_NAME, "FOO");
+        storeValues(RawContacts.CONTENT_URI, rawContactId1,
+                ImmutableMap.of(RawContacts.ACCOUNT_TYPE, "foo", RawContacts.ACCOUNT_NAME, "FOO"));
         storeValue(RawContacts.CONTENT_URI, rawContactId1, RawContacts.SOURCE_ID, "1");
 
         long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "Deer", "Dough");
-        storeValue(RawContacts.CONTENT_URI, rawContactId2, RawContacts.ACCOUNT_TYPE, "bar");
-        storeValue(RawContacts.CONTENT_URI, rawContactId2, RawContacts.ACCOUNT_NAME, "BAR");
+        storeValues(RawContacts.CONTENT_URI, rawContactId2,
+                ImmutableMap.of(RawContacts.ACCOUNT_TYPE, "bar", RawContacts.ACCOUNT_NAME, "BAR"));
         storeValue(RawContacts.CONTENT_URI, rawContactId2, RawContacts.SOURCE_ID, "1");
 
         assertNotAggregated(rawContactId1, rawContactId2);
