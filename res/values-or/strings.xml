@@ -27,7 +27,7 @@
     <string name="voicemail_from_column" msgid="435732568832121444">"ଏହାଙ୍କଠାରୁ ଭଏସମେଲ୍‌ "</string>
     <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ପୂର୍ବରୁ ଥିବା କଣ୍ଟାକ୍ଟଗୁଡ଼ିକୁ ସିଙ୍କ କରିବେ?"</string>
     <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"%2$s (%3$s)ରେ %1$sର ବେକଅପ ନିଆଯାଇଥିବା ସୁନିଶ୍ଚିତ କରିବାକୁ ଆପଣ ସେଗୁଡ଼ିକୁ ସିଙ୍କ କରିପାରିବେ"</string>
-    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# ପୂର୍ବରୁ ଥିବା କଣ୍ଟାକ୍ଟ}other{# ପୂର୍ବରୁ ଥିବା କଣ୍ଟାକ୍ଟ}}"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{ପୂର୍ବରୁ ଥିବା # କଣ୍ଟାକ୍ଟ}other{ପୂର୍ବରୁ ଥିବା # କଣ୍ଟାକ୍ଟ}}"</string>
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"ସିଙ୍କ କରନ୍ତୁ"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"ସିଙ୍କ କରନ୍ତୁ ନାହିଁ"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"କଣ୍ଟାକ୍ଟ ଡାଟାବେସକୁ କପି କରନ୍ତୁ"</string>
