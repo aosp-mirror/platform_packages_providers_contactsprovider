@@ -18,6 +18,7 @@ package com.android.providers.contacts;
 import android.accounts.Account;
 import android.content.ContentValues;
 import android.net.Uri;
+import android.provider.ContactsContract.LocalSimContactsWriteException;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 import android.provider.ContactsContract.SimAccount;
@@ -146,14 +147,14 @@ public class AccountResolver {
         }
     }
 
-    private void validateAccountForContactAdditionInternal(Account account)
-            throws IllegalArgumentException {
+    private void validateAccountForContactAdditionInternal(Account account) {
         DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
 
         if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
             if (isDeviceOrSimAccount(account)) {
-                throw new IllegalArgumentException("Cannot add contacts to local or SIM accounts "
-                        + "when default account is set to cloud");
+                throw new LocalSimContactsWriteException(
+                        "Cannot add contacts to local or SIM accounts "
+                                + "when default account is set to cloud");
             }
         }
     }
