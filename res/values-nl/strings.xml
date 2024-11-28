@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Contacten"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Overig"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Voicemail van "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Bestaande contacten synchroniseren?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"U kunt %1$s synchroniseren om ervoor te zorgen dat er een back-up van wordt gemaakt in %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# bestaand contact}other{# bestaande contacten}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Synchroniseren"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Niet synchroniseren"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Contactendatabase kopiëren"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Je staat op het punt 1) een kopie van je database met alle contactgegevens en oproeplogboeken te maken in de interne opslag, en 2) deze te e-mailen. Verwijder de kopie zodra je deze van het apparaat hebt gekopieerd of de e-mail is ontvangen."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Nu verwijderen"</string>

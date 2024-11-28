@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontaktai"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Kita"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Balso pašto pranešimas nuo "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Sinchronizuoti esamus kontaktus?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Galite sinchronizuoti %1$s, kad užtikrintumėte atsarginių kopijų kūrimą %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# esamas kontaktas}one{# esamas kontaktas}few{# esami kontaktai}many{# esamo kontakto}other{# esamų kontaktų}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sinchronizuoti"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Nesinchronizuoti"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopijuoti kontaktų duomenis"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Ketinate 1. sukurti duomenų, į kuriuos įtraukta visa su kontaktais susijusi informacija ir visi skambučių žurnalai, kopiją vidinėje atmintyje ir 2. išsiųsti ją el. paštu. Nepamirškite ištrinti kopijos, kai ją sėkmingai nukopijuosite iš įrenginio ar gausite el. laišką."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Ištrinti dabar"</string>
