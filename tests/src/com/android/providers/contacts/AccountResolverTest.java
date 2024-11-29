@@ -27,7 +27,6 @@ import android.accounts.Account;
 import android.content.ContentValues;
 import android.net.Uri;
 import android.provider.ContactsContract;
-import android.provider.ContactsContract.LocalSimContactsWriteException;
 import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 
@@ -571,11 +570,10 @@ public class AccountResolverTest {
                 DefaultAccountAndState.ofCloud(
                         new Account("test_user2", "com.google")));
 
-        IllegalArgumentException exception = assertThrows(LocalSimContactsWriteException.class,
-                () -> {
-                    mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
-                            true, /*shouldValidateAccountForContactAddition=*/true);
-                });
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
+        });
         assertEquals(
                 "Cannot add contacts to local or SIM accounts when default account is set to cloud",
                 exception.getMessage());
@@ -613,11 +611,10 @@ public class AccountResolverTest {
                 DefaultAccountAndState.ofCloud(
                         new Account("test_user2", "com.google")));
 
-        IllegalArgumentException exception = assertThrows(
-                LocalSimContactsWriteException.class, () -> {
-                    mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
-                            true, /*shouldValidateAccountForContactAddition=*/true);
-                });
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
+        });
         assertEquals(
                 "Cannot add contacts to local or SIM accounts when default account is set to cloud",
                 exception.getMessage());
@@ -693,11 +690,10 @@ public class AccountResolverTest {
                 DefaultAccountAndState.ofCloud(
                         new Account("test_user2", "com.google")));
 
-        IllegalArgumentException exception = assertThrows(LocalSimContactsWriteException.class,
-                () -> {
-                    mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
-                            true, /*shouldValidateAccountForContactAddition=*/true);
-                });
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
+        });
         assertEquals(
                 "Cannot add contacts to local or SIM accounts when default account is set to cloud",
                 exception.getMessage());
@@ -785,11 +781,10 @@ public class AccountResolverTest {
                 DefaultAccountAndState.ofCloud(
                         new Account("test_user2", "com.google")));
 
-        IllegalArgumentException exception = assertThrows(LocalSimContactsWriteException.class,
-                () -> {
-                    mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
-                            true, /*shouldValidateAccountForContactAddition=*/true);
-                });
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
+        });
         assertEquals(
                 "Cannot add contacts to local or SIM accounts when default account is set to cloud",
                 exception.getMessage());
@@ -818,7 +813,7 @@ public class AccountResolverTest {
                         new Account("test_user2", "com.google")));
 
         result = mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
-                true, /*shouldValidateAccountForContactAddition=*/false);
+                    true, /*shouldValidateAccountForContactAddition=*/false);
 
         assertNull(result);
     }
