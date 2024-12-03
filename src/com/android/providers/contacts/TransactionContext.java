@@ -47,8 +47,6 @@ public class TransactionContext  {
     private ArraySet<Long> mStaleSearchIndexContacts;
     private ArrayMap<Long, Object> mUpdatedSyncStates;
 
-    private boolean mIsStaleSearchIndexTableCreated = false;
-
     public TransactionContext(boolean forProfile) {
         mForProfile = forProfile;
     }
@@ -203,11 +201,8 @@ public class TransactionContext  {
     }
 
     private void createStaleSearchIndexTableIfNotExists(SQLiteDatabase db) {
-        if (!mIsStaleSearchIndexTableCreated) {
-            db.execSQL("""
-                    CREATE TEMP TABLE IF NOT EXISTS
-                     stale_search_index_contacts (id INTEGER PRIMARY KEY)""");
-            mIsStaleSearchIndexTableCreated = true;
-        }
+        db.execSQL("""
+                CREATE TEMP TABLE IF NOT EXISTS
+                 stale_search_index_contacts (id INTEGER PRIMARY KEY)""");
     }
 }
