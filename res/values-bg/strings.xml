@@ -25,16 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Контакти"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Други"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Гласова поща от "</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Да се синхронизират ли съществуващите контакти?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Можете да синхронизирате %1$s, за да бъдат създадени съответните резервни копия в %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# съществуващ контакт}other{# съществуващи контакта}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Синхронизиране"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Без синхронизиране"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Копиране на базата от данни на контактите"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"На път сте 1) да направите копие във вътрешното хранилище на базата си от данни, което включва цялата свързана с контактите информация и всички списъци с обаждания, и 2) да го изпратите по имейл. Не забравяйте да го изтриете веднага след като го копирате успешно от устройството или когато имейлът е получен."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Изтриване сега"</string>

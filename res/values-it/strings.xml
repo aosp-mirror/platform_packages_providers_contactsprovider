@@ -25,16 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Contatti"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Altro"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Messaggio vocale da "</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Sincronizzare i contatti esistenti?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Puoi sincronizzare %1$s per assicurarti che il backup sia stato eseguito su %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# contatto esistente}other{# contatti esistenti}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sincronizza"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Non sincronizzare"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copia database di contatti"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Stai per 1) creare una copia del tuo database che include tutte le informazioni di contatto e tutti i registri chiamate nella memoria interna e 2) inviarla tramite email. Ricorda di eliminare la copia non appena è stata correttamente copiata dal dispositivo o non appena ricevi l\'email."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Elimina adesso"</string>
