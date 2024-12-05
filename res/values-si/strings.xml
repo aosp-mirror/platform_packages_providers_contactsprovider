@@ -25,16 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"සම්බන්ධතා"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"වෙනත්"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"හඬ තැපෑල ලැබෙන්නේ "</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_title (1691634911830971868) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (2005758519299826267) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (7367420913436438253) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_sync_button_text (6214724007562800237) -->
-    <skip />
-    <!-- no translation found for move_contacts_to_default_account_dialog_cancel_button_text (1022518096709643659) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"පවතින සම්බන්ධතා සමමුහුර්ත කරන්න ද?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"ඔබට ඒවා %2$s (%3$s) දක්වා උපස්ථ කර ඇති බව සහතික කිරීමට %1$s සමමුහුර්ත කළ හැක"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# පවතින සම්බන්ධතාවක්}one{පවතින සම්බන්ධතා #ක්}other{පවතින සම්බන්ධතා #ක්}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"සමමුහුර්ත කරන්න"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"සමමුහූර්ත නොකරන්න"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"සම්බන්ධතා දත්ත සමුදාය පිටපත් කරන්න"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"ඔබ සදන්නේ 1) සම්බන්ධතා ආශ්‍රිත තොරතුරු සහ සියලු ඇමතුම් ලොගයේ තිබෙන ඔබගේ දත්ත සමුදායේ පිටපතක් අභ්‍යන්තර ආචයනයට ගැනීමට, සහ 2) එය ඊ-තැපැල් කිරීමටයි. ඔබ සාර්ථකව උපාංගයෙන් පිටපත් කර විට හෝ ඊ-තැපෑල ලැබුණු විට පිටපත මකා දැමීමට මතක තබාගන්න."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"දැන් මකන්න"</string>
