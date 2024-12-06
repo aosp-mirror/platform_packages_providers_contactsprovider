@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontakte"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Sonstige"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Mailboxnachricht von "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Vorhandene Kontakte synchronisieren?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"#%1$s können synchronisiert werden, um sicherzustellen, dass sie in %2$s (%3$s) gesichert werden"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# vorhandener Kontakt}other{# vorhandene Kontakte}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Synchronisieren"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Nicht synchronisieren"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontaktdatenbank kopieren"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Du 1) erstellst eine Kopie deiner Datenbank, die alle Kontaktinformationen und Anruflisteneinträge auf dem internen Speicher enthält, und 2) sendest diese Kopie per E-Mail. Denke daran, die Kopie so schnell wie möglich zu löschen, nachdem du sie vom Gerät kopiert hast oder die E-Mail empfangen wurde."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Jetzt löschen"</string>

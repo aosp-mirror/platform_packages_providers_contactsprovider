@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontaktid"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Muu"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Kõnepost kontaktilt "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Kas sünkroonida olemasolevad kontaktid?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Saate sünkroonida %1$s, et tagada nende varundamine asukohas %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# olemasolev kontakt}other{# olemasolevat kontakti}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sünkrooni"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Ära sünkrooni"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontaktide andmebaasi kopeerimine"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Soovite teha 1) sisemisse salvestusruumi koopia andmebaasist, mis sisaldab kogu kontaktidega seotud teavet ja kõikide kõnede logi ning 2) saata koopia meiliga. Kustutage koopia niipea, kui olete selle seadmest kopeerinud või meil on kohale jõudnud."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Kustuta kohe"</string>

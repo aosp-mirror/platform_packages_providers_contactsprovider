@@ -41,6 +41,9 @@ import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.provider.ContactsContract;
 import android.provider.ContactsContract.AggregationExceptions;
 import android.provider.ContactsContract.CommonDataKinds.Callable;
@@ -83,7 +86,8 @@ import android.test.MoreAsserts;
 import android.text.TextUtils;
 import android.util.ArraySet;
 
-import androidx.test.filters.LargeTest;
+import androidx.test.annotation.UiThreadTest;
+import androidx.test.runner.AndroidJUnit4;
 
 import com.android.internal.util.ArrayUtils;
 import com.android.providers.contacts.ContactsActor.AlteringUserContext;
@@ -96,6 +100,7 @@ import com.android.providers.contacts.ContactsDatabaseHelper.DbProperties;
 import com.android.providers.contacts.ContactsDatabaseHelper.PresenceColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.RawContactsColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.Tables;
+import com.android.providers.contacts.flags.Flags;
 import com.android.providers.contacts.tests.R;
 import com.android.providers.contacts.testutil.CommonDatabaseUtils;
 import com.android.providers.contacts.testutil.ContactUtil;
@@ -110,6 +115,12 @@ import com.android.providers.contacts.util.UserUtils;
 
 import com.google.android.collect.Lists;
 import com.google.android.collect.Sets;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -131,7 +142,8 @@ import java.util.Set;
            com.android.providers.contacts.tests/android.test.InstrumentationTestRunner
  * </code>
  */
-@LargeTest
+@RunWith(AndroidJUnit4.class)
+@UiThreadTest
 public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     private static final String TAG = ContactsProvider2Test.class.getSimpleName();
@@ -147,6 +159,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     static final String TEST_PHONE_ACCOUNT_HANDLE_ICC_ID2 = "T5E5S5T5I5C5C5I5D";
     static final String TEST_COMPONENT_NAME = "foo/bar";
 
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
+
     private int mOldMinMatch1;
     private int mOldMinMatch2;
 
@@ -155,8 +170,9 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     private ContactsDatabaseHelper mDbHelper;
     private BroadcastReceiver mBroadcastReceiver;
 
+    @Before
     @Override
-    protected void setUp() throws Exception {
+    public void setUp() throws Exception {
         super.setUp();
         mContactsProvider2 = (ContactsProvider2) getProvider();
         mDbHelper = mContactsProvider2.getThreadActiveDatabaseHelperForTest();
@@ -165,10 +181,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mOldMinMatch2 = mDbHelper.getMinMatchForTest();
         PhoneNumberUtils.setMinMatchForTest(MIN_MATCH);
         mDbHelper.setMinMatchForTest(MIN_MATCH);
+        assertNotNull(mDbHelper);
     }
 
+    @After
     @Override
-    protected void tearDown() throws Exception {
+    public void tearDown() throws Exception {
         final ContactsProvider2 cp = (ContactsProvider2) getProvider();
         //final ContactsDatabaseHelper dbHelper = cp.getThreadActiveDatabaseHelperForTest();
         PhoneNumberUtils.setMinMatchForTest(mOldMinMatch1);
@@ -243,6 +261,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         return contactsDatabaseHelper;
     }
 
+    @Test
     public void testPhoneAccountHandleMigrationSimEvent() throws IOException {
         ContactsDatabaseHelper originalContactsDatabaseHelper
                 = mContactsProvider2.getContactsDatabaseHelperForTest();
@@ -302,6 +321,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mContactsProvider2.setContactsDatabaseHelperForTest(originalContactsDatabaseHelper);
     }
 
+    @Test
     public void testPhoneAccountHandleMigrationInitiation() throws IOException {
         ContactsDatabaseHelper originalContactsDatabaseHelper
                 = mContactsProvider2.getContactsDatabaseHelperForTest();
@@ -357,6 +377,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mContactsProvider2.setContactsDatabaseHelperForTest(originalContactsDatabaseHelper);
     }
 
+    @Test
     public void testPhoneAccountHandleMigrationPendingStatus() {
         // Mock ContactsDatabaseHelper
         ContactsDatabaseHelper contactsDatabaseHelper = getMockContactsDatabaseHelper(
@@ -374,6 +395,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertTrue(phoneAccountHandleMigrationUtils.isPhoneAccountMigrationPending());
     }
 
+    @Test
     public void testConvertEnterpriseUriWithEnterpriseDirectoryToLocalUri() {
         String phoneNumber = "886";
         String directory = String.valueOf(Directory.ENTERPRISE_DEFAULT);
@@ -391,6 +413,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertUriEquals(expectedUri, localUri);
     }
 
+    @Test
     public void testConvertEnterpriseUriWithPersonalDirectoryToLocalUri() {
         String phoneNumber = "886";
         String directory = String.valueOf(Directory.DEFAULT);
@@ -408,6 +431,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertUriEquals(expectedUri, localUri);
     }
 
+    @Test
     public void testConvertEnterpriseUriWithoutDirectoryToLocalUri() {
         String phoneNumber = "886";
         boolean isSip = true;
@@ -421,6 +445,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertUriEquals(expectedUri, localUri);
     }
 
+    @Test
     public void testContactsProjection() {
         assertProjection(Contacts.CONTENT_URI, new String[]{
                 Contacts._ID,
@@ -462,6 +487,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testContactsStrequentProjection() {
         assertProjection(Contacts.CONTENT_STREQUENT_URI, new String[]{
                 Contacts._ID,
@@ -505,6 +531,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testContactsStrequentPhoneOnlyProjection() {
         assertProjection(Contacts.CONTENT_STREQUENT_URI.buildUpon()
                     .appendQueryParameter(ContactsContract.STREQUENT_PHONE_ONLY, "true").build(),
@@ -555,6 +582,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testContactsWithSnippetProjection() {
         assertProjection(Contacts.CONTENT_FILTER_URI.buildUpon().appendPath("nothing").build(),
             new String[]{
@@ -598,6 +626,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testRawContactsProjection() {
         assertProjection(RawContacts.CONTENT_URI, new String[]{
                 RawContacts._ID,
@@ -638,6 +667,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testDataProjection() {
         assertProjection(Data.CONTENT_URI, new String[]{
                 Data._ID,
@@ -728,6 +758,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testDistinctDataProjection() {
         assertProjection(Phone.CONTENT_FILTER_URI.buildUpon().appendPath("123").build(),
             new String[]{
@@ -809,6 +840,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testEntityProjection() {
         assertProjection(
             Uri.withAppendedPath(ContentUris.withAppendedId(Contacts.CONTENT_URI, 0),
@@ -907,6 +939,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testRawEntityProjection() {
         assertProjection(RawContactsEntity.CONTENT_URI, new String[]{
                 RawContacts.Entity.DATA_ID,
@@ -958,6 +991,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testPhoneLookupProjection() {
         assertProjection(PhoneLookup.CONTENT_FILTER_URI.buildUpon().appendPath("123").build(),
             new String[]{
@@ -993,6 +1027,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testPhoneLookupEnterpriseProjection() {
         assertProjection(PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI
                         .buildUpon().appendPath("123").build(),
@@ -1029,6 +1064,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 });
     }
 
+    @Test
     public void testSipPhoneLookupProjection() {
         assertContainProjection(PhoneLookup.CONTENT_FILTER_URI.buildUpon().appendPath("123")
                         .appendQueryParameter(PhoneLookup.QUERY_PARAMETER_SIP_ADDRESS, "1")
@@ -1058,6 +1094,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 });
     }
 
+    @Test
     public void testSipPhoneLookupEnterpriseProjection() {
         assertContainProjection(PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI
                         .buildUpon()
@@ -1089,6 +1126,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 });
     }
 
+    @Test
     public void testGroupsProjection() {
         assertProjection(Groups.CONTENT_URI, new String[]{
                 Groups._ID,
@@ -1117,6 +1155,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testGroupsSummaryProjection() {
         assertProjection(Groups.CONTENT_SUMMARY_URI, new String[]{
                 Groups._ID,
@@ -1148,6 +1187,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testAggregateExceptionProjection() {
         assertProjection(AggregationExceptions.CONTENT_URI, new String[]{
                 AggregationExceptionColumns._ID,
@@ -1157,6 +1197,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testSettingsProjection() {
         assertProjection(Settings.CONTENT_URI, new String[]{
                 Settings.ACCOUNT_NAME,
@@ -1170,6 +1211,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testStatusUpdatesProjection() {
         assertProjection(StatusUpdates.CONTENT_URI, new String[]{
                 PresenceColumns.RAW_CONTACT_ID,
@@ -1188,6 +1230,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testDirectoryProjection() {
         assertProjection(Directory.CONTENT_URI, new String[]{
                 Directory._ID,
@@ -1203,6 +1246,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testProviderStatusProjection() {
         assertProjection(ProviderStatus.CONTENT_URI, new String[]{
                 ProviderStatus.STATUS,
@@ -1210,6 +1254,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         });
     }
 
+    @Test
     public void testRawContactsInsert() {
         ContentValues values = new ContentValues();
 
@@ -1241,6 +1286,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
     }
 
+    @Test
     public void testDataDirectoryWithLookupUri() {
         ContentValues values = new ContentValues();
 
@@ -1286,6 +1332,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testContactEntitiesWithIdBasedUri() {
         ContentValues values = new ContentValues();
         Account account1 = new Account("act1", "actype1");
@@ -1308,6 +1355,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEntityRows(entityUri, contactId, rawContactId1, rawContactId2);
     }
 
+    @Test
     public void testContactEntitiesWithLookupUri() {
         ContentValues values = new ContentValues();
         Account account1 = new Account("act1", "actype1");
@@ -1404,6 +1452,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testDataInsert() {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe");
 
@@ -1432,6 +1481,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
     }
 
+    @Test
     public void testDataInsertAndUpdateHashId() {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe");
 
@@ -1489,6 +1539,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(dataUri, Data.HASH_ID, null);
     }
 
+    @Test
     public void testDataInsertAndUpdateHashId_Photo() {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe");
 
@@ -1513,6 +1564,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(dataUri, Data.HASH_ID, hashId);
     }
 
+    @Test
     public void testDataInsertPhoneNumberTooLongIsTrimmed() {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe");
 
@@ -1539,6 +1591,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSelection(dataUri, expected, Data._ID, dataId);
     }
 
+    @Test
     public void testRawContactDataQuery() {
         Account account1 = new Account("a", "b");
         Account account2 = new Account("c", "d");
@@ -1553,6 +1606,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(uri2, Data._ID, ContentUris.parseId(dataUri2)) ;
     }
 
+    @Test
     public void testPhonesQuery() {
 
         ContentValues values = new ContentValues();
@@ -1589,6 +1643,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(ContentUris.withAppendedId(Phone.CONTENT_URI, phoneId), values);
     }
 
+    @Test
     public void testPhonesWithMergedContacts() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         insertPhoneNumber(rawContactId1, "123456789", true);
@@ -1628,6 +1683,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(dedupeUri, values1);
     }
 
+    @Test
     public void testPhonesNormalizedNumber() {
         final long rawContactId = RawContactUtil.createRawContact(mResolver);
 
@@ -1730,6 +1786,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 );
     }
 
+    @Test
     public void testPhonesFilterQuery() {
         testPhonesFilterQueryInter(Phone.CONTENT_FILTER_URI);
     }
@@ -1839,6 +1896,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(filterUri6, new ContentValues[] {values1, values2, values3} );
     }
 
+    @Test
     public void testPhonesFilterSearchParams() {
         final long rid1 = RawContactUtil.createRawContactWithName(mResolver, "Dad", null);
         insertPhoneNumber(rid1, "123-456-7890");
@@ -1874,6 +1932,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         );
     }
 
+    @Test
     public void testPhoneLookup() {
         ContentValues values = new ContentValues();
         values.put(RawContacts.CUSTOM_RINGTONE, "d");
@@ -1913,6 +1972,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(lookupUri2, null, null));
     }
 
+    @Test
     public void testSipPhoneLookup() {
         ContentValues values = new ContentValues();
 
@@ -1942,6 +2002,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(lookupUri2, null, null));
     }
 
+    @Test
     public void testPhoneLookupStarUseCases() {
         // Create two raw contacts with numbers "*123" and "12 3". This is a real life example
         // from b/13195334.
@@ -1975,6 +2036,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(lookupUri, null, null, new ContentValues[] {values});
     }
 
+    @Test
     public void testPhoneLookupReturnsNothingRatherThanStar() {
         // Create Emergency raw contact with "*123456789" number.
         final ContentValues values = new ContentValues();
@@ -1989,6 +2051,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(lookupUri, null, null));
     }
 
+    @Test
     public void testPhoneLookupReturnsNothingRatherThanMissStar() {
         // Create Voice Mail raw contact with "123456789" number.
         final ContentValues values = new ContentValues();
@@ -2003,6 +2066,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(lookupUri, null, null));
     }
 
+    @Test
     public void testPhoneLookupStarNoFallbackMatch() {
         final ContentValues values = new ContentValues();
         final Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
@@ -2018,6 +2082,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(lookupUri, null, null));
     }
 
+    @Test
     public void testPhoneLookupStarNotBreakFallbackMatching() {
         // Create a raw contact with a phone number starting with "011"
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, new ContentValues());
@@ -2043,6 +2108,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(lookupUri1, null, null, new ContentValues[]{values});
     }
 
+    @Test
     public void testPhoneLookupExplicitProjection() {
         final ContentValues values = new ContentValues();
         final Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
@@ -2067,6 +2133,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         mResolver.query(lookupUri, projection, null, null, null);
     }
 
+    @Test
     public void testPhoneLookupUseCases() {
         ContentValues values = new ContentValues();
         Uri rawContactUri;
@@ -2146,6 +2213,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(lookupUri2, null, null));
     }
 
+    @Test
     public void testIntlPhoneLookupUseCases() {
         // Checks the logic that relies on phone_number_compare_loose(Gingerbread) as a fallback
         //for phone number lookups.
@@ -2183,6 +2251,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 PhoneLookup.CONTENT_FILTER_URI, "049102395"), null, null));
     }
 
+    @Test
     public void testPhoneLookupB5252190() {
         // Test cases from b/5252190
         String storedNumber = "796010101";
@@ -2210,6 +2279,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 PhoneLookup.CONTENT_FILTER_URI, "4 879 601 0101"), null, null));
     }
 
+    @Test
     public void testPhoneLookupUseStrictPhoneNumberCompare() {
         // Test lookup cases when mUseStrictPhoneNumberComparison is true
         final ContactsProvider2 cp = (ContactsProvider2) getProvider();
@@ -2270,6 +2340,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     /**
      * Test for enterprise caller-id, but with no corp profile.
      */
+    @Test
     public void testPhoneLookupEnterprise_noCorpProfile() throws Exception {
 
         Uri uri1 = Uri.withAppendedPath(PhoneLookup.ENTERPRISE_CONTENT_FILTER_URI, "408-111-1111");
@@ -2298,6 +2369,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     /**
      * Test for enterprise caller-id.  Corp profile exists, but it returns a null cursor.
      */
+    @Test
     public void testPhoneLookupEnterprise_withCorpProfile_nullResult() throws Exception {
         setUpNullCorpProvider();
 
@@ -2362,6 +2434,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * Note: in this test, we add one more provider instance for the authority
      * "10@com.android.contacts" and use it as the corp cp2.
      */
+    @Test
     public void testQueryMergedDataPhones() throws Exception {
         mActor.addPermissions("android.permission.INTERACT_ACROSS_USERS");
 
@@ -2442,6 +2515,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * Note: in this test, we add one more provider instance for the authority
      * "10@com.android.contacts" and use it as the corp cp2.
      */
+    @Test
     public void testQueryMergedDataPhones_nullCorp() throws Exception {
         mActor.addPermissions("android.permission.INTERACT_ACROSS_USERS");
 
@@ -2479,6 +2553,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * Note: in this test, we add one more provider instance for the authority
      * "10@com.android.contacts" and use it as the corp cp2.
      */
+    @Test
     public void testPhoneLookupEnterprise_withCorpProfile() throws Exception {
         final SynchronousContactsProvider2 corpCp2 = setUpCorpProvider();
 
@@ -2569,6 +2644,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testQueryRawContactEntitiesCorp_noCorpProfile() {
         mActor.addPermissions("android.permission.INTERACT_ACROSS_USERS");
 
@@ -2582,6 +2658,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(RawContactsEntity.CORP_CONTENT_URI));
     }
 
+    @Test
     public void testQueryRawContactEntitiesCorp_withCorpProfile() throws Exception {
         mActor.addPermissions("android.permission.INTERACT_ACROSS_USERS");
 
@@ -2625,6 +2702,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
+    @Test
     public void testRewriteCorpDirectories() {
         // 6 columns
         final MatrixCursor c = new MatrixCursor(new String[] {
@@ -2665,6 +2743,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals("aname", rewritten.getString(column++));
     }
 
+    @Test
     public void testPhoneUpdate() {
         ContentValues values = new ContentValues();
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
@@ -2703,6 +2782,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     /** Tests if {@link Callable#CONTENT_URI} returns both phones and sip addresses. */
+    @Test
     public void testCallablesQuery() {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "Meghan", "Knox");
         long phoneId1 = ContentUris.parseId(insertPhoneNumber(rawContactId1, "18004664411"));
@@ -2735,10 +2815,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(Callable.CONTENT_URI, new ContentValues[] { values1, values2 });
     }
 
+    @Test
     public void testCallablesFilterQuery() {
         testPhonesFilterQueryInter(Callable.CONTENT_FILTER_URI);
     }
 
+    @Test
     public void testEmailsQuery() {
         ContentValues values = new ContentValues();
         values.put(RawContacts.CUSTOM_RINGTONE, "d");
@@ -2797,6 +2879,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(dedupeUri, values);
     }
 
+    @Test
     public void testEmailsLookupQuery() {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot", "Tamale");
         insertEmail(rawContactId, "tamale@acme.com");
@@ -2817,6 +2900,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(filterUri3, null, null));
     }
 
+    @Test
     public void testEmailsFilterQuery() {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "Hot", "Tamale",
                 TestUtil.ACCOUNT_1);
@@ -2852,6 +2936,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     /**
      * Tests if ContactsProvider2 returns addresses according to registration order.
      */
+    @Test
     public void testEmailFilterDefaultSortOrder() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         insertEmail(rawContactId1, "address1@email.com");
@@ -2871,6 +2956,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     /**
      * Tests if ContactsProvider2 returns primary addresses before the other addresses.
      */
+    @Test
     public void testEmailFilterPrimaryAddress() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         insertEmail(rawContactId1, "address1@email.com");
@@ -2888,6 +2974,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * Tests if ContactsProvider2 has email address associated with a primary account before the
      * other address.
      */
+    @Test
     public void testEmailFilterPrimaryAccount() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, TestUtil.ACCOUNT_1);
         insertEmail(rawContactId1, "account1@email.com");
@@ -2925,6 +3012,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     /**
      * Test emails with the same domain as primary account are ordered first.
      */
+    @Test
     public void testEmailFilterSameDomainAccountOrder() {
         final Account account = new Account("tester@email.com", "not_used");
         final long rawContactId = RawContactUtil.createRawContact(mResolver, account);
@@ -2944,6 +3032,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     /**
      * Test "default" emails are sorted above emails used last.
      */
+    @Test
     public void testEmailFilterSuperPrimaryOverUsageSort() {
         final long rawContactId = RawContactUtil.createRawContact(mResolver, TestUtil.ACCOUNT_1);
         final Uri emailUri1 = insertEmail(rawContactId, "account1@testemail.com");
@@ -2964,6 +3053,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesOrderly(filterUri, v3, v1, v2);
     }
 
+    @Test
     public void testEmailFilterUsageOverPrimarySort() {
         final long rawContactId = RawContactUtil.createRawContact(mResolver, TestUtil.ACCOUNT_1);
         final Uri emailUri1 = insertEmail(rawContactId, "account1@testemail.com");
@@ -2985,6 +3075,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     /** Tests {@link DataUsageFeedback} correctly promotes a data row instead of a raw contact. */
+    @Test
     public void testEmailFilterSortOrderWithFeedback() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         String address1 = "address1@email.com";
@@ -3037,6 +3128,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesOrderly(filterUri3, new ContentValues[] { v1, v2, v3 });
     }
 
+    @Test
     public void testAddQueryParametersFromUri() {
         final ContactsProvider2 provider = (ContactsProvider2) getProvider();
         final Uri originalUri = Phone.CONTENT_FILTER_URI.buildUpon()
@@ -3059,6 +3151,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .appendQueryParameter(ContactsContract.DIRECTORY_PARAM_KEY, directory).build();
     }
 
+    @Test
     public void testTestInvalidDirectory() throws Exception {
         final ContactsProvider2 provider = (ContactsProvider2) getProvider();
         assertTrue(provider.isDirectoryParamValid(Contacts.CONTENT_FILTER_URI));
@@ -3068,6 +3161,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertFalse(provider.isDirectoryParamValid(buildContactsFilterUriWithDirectory("abc")));
     }
 
+    @Test
     public void testQueryCorpContactsProvider() throws Exception {
         final ContactsProvider2 provider = (ContactsProvider2) getProvider();
         final MockUserManager um = mActor.mockUserManager;
@@ -3113,6 +3207,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testPostalsQuery() {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Alice", "Nextore");
         Uri dataUri = insertPostalAddress(rawContactId, "1600 Amphiteatre Ave, Mountain View");
@@ -3158,6 +3253,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(dedupeUri, values);
     }
 
+    @Test
     public void testDataContentUriInvisibleQuery() {
         final ContentValues values = new ContentValues();
         final long contactId = createContact(values, "John", "Doe",
@@ -3173,6 +3269,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(uri, null, null));
     }
 
+    @Test
     public void testInDefaultDirectoryData() {
         final ContentValues values = new ContentValues();
         final long contactId = createContact(values, "John", "Doe",
@@ -3195,6 +3292,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 getCount(Email.CONTENT_URI, query.toString(), new String[]{"goog411@acme.com"}));
     }
 
+    @Test
     public void testContactablesQuery() {
         final long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot",
                 "Tamale");
@@ -3242,6 +3340,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(filterUri7, cv1, cv2);
     }
 
+    @Test
     public void testContactablesMultipleQuery() {
 
         final long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Hot",
@@ -3336,6 +3435,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
 
+    @Test
     public void testQueryContactData() {
         ContentValues values = new ContentValues();
         long contactId = createContact(values, "John", "Doe",
@@ -3347,6 +3447,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(contactUri, values);
     }
 
+    @Test
     public void testQueryContactWithStatusUpdate() {
         ContentValues values = new ContentValues();
         long contactId = createContact(values, "John", "Doe",
@@ -3361,6 +3462,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesWithProjection(contactUri, values);
     }
 
+    @Test
     public void testQueryContactFilterByName() {
         ContentValues values = new ContentValues();
         long rawContactId = createRawContact(values, "18004664411",
@@ -3401,6 +3503,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContactFilterNoResult("goolish");
     }
 
+    @Test
     public void testQueryContactFilterByEmailAddress() {
         ContentValues values = new ContentValues();
         long rawContactId = createRawContact(values, "18004664411",
@@ -3428,6 +3531,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContactFilterNoResult("goolish");
     }
 
+    @Test
     public void testQueryContactFilterByPhoneNumber() {
         ContentValues values = new ContentValues();
         long rawContactId = createRawContact(values, "18004664411",
@@ -3458,6 +3562,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * Checks ContactsProvider2 works well with strequent Uris. The provider should return starred
      * contacts.
      */
+    @Test
     public void testQueryContactStrequent() {
         ContentValues values1 = new ContentValues();
         final String email1 = "a@acme.com";
@@ -3513,6 +3618,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesOrderly(phoneOnlyStrequentUri, new ContentValues[] { });
     }
 
+    @Test
     public void testQueryContactStrequentFrequentOrder() {
         // Prepare test data
         final long rid1 = RawContactUtil.createRawContact(mResolver);
@@ -3622,6 +3728,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * Checks ContactsProvider2 works well with frequent Uri. The provider should return frequently
      * contacted person ordered by number of times contacted.
      */
+    @Test
     public void testQueryContactFrequent() {
         ContentValues values1 = new ContentValues();
         final String email1 = "a@acme.com";
@@ -3681,6 +3788,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 );
     }
 
+    @Test
     public void testQueryContactFrequentExcludingInvisible() {
         ContentValues values1 = new ContentValues();
         final String email1 = "a@acme.com";
@@ -3705,6 +3813,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     }
 
+    @Test
     public void testQueryDataUsageStat() {
         // Now all data usage stats are zero as of Q.
 
@@ -3762,6 +3871,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertDataUsageZero(dataUriWithUsageTypeCall, "a@acme.com");
     }
 
+    @Test
     public void testQueryContactGroup() {
         long groupId = createGroup(null, "testGroup", "Test Group");
 
@@ -3824,6 +3934,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testQueryProfileWithoutPermission() {
         createBasicProfileContact(new ContentValues());
 
@@ -3845,6 +3956,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                         .appendPath("entities").build(), null, null, null, Contacts._ID);
     }
 
+    @Test
     public void testQueryProfileByContactIdWithoutReadPermission() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
         long profileContactId = queryContactId(profileRawContactId);
@@ -3856,6 +3968,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 null, null, null, Contacts._ID);
     }
 
+    @Test
     public void testQueryProfileByRawContactIdWithoutReadPermission() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
 
@@ -3865,6 +3978,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                         profileRawContactId), null, null, null, RawContacts._ID);
     }
 
+    @Test
     public void testQueryProfileRawContactWithoutReadPermission() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
 
@@ -3888,6 +4002,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                         .appendPath("entity").build(), null, null, null, null);
     }
 
+    @Test
     public void testQueryProfileDataByDataIdWithoutReadPermission() {
         createBasicProfileContact(new ContentValues());
         Cursor c = mResolver.query(Profile.CONTENT_URI.buildUpon().appendPath("data").build(),
@@ -3903,6 +4018,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 null, null, null, null);
     }
 
+    @Test
     public void testQueryProfileDataWithoutReadPermission() {
         createBasicProfileContact(new ContentValues());
 
@@ -3912,6 +4028,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 null, null, null, null);
     }
 
+    @Test
     public void testInsertProfileWithoutWritePermission() {
         // Creating a non-profile contact should be fine.
         createBasicNonProfileContact(new ContentValues());
@@ -3923,6 +4040,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testInsertProfileDataWithoutWritePermission() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
 
@@ -3933,6 +4051,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testUpdateDataDoesNotRequireProfilePermission() {
         // Create a non-profile contact.
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "Domo", "Arigato");
@@ -3952,6 +4071,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(ContentUris.withAppendedId(Data.CONTENT_URI, dataId), values);
     }
 
+    @Test
     public void testQueryContactThenProfile() {
         ContentValues profileValues = new ContentValues();
         long profileRawContactId = createBasicProfileContact(profileValues);
@@ -3969,6 +4089,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(Profile.CONTENT_URI, profileValues);
     }
 
+    @Test
     public void testQueryContactExcludeProfile() {
         // Create a profile contact (it should not be returned by the general contact URI).
         createBasicProfileContact(new ContentValues());
@@ -3980,6 +4101,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(Contacts.CONTENT_URI, new ContentValues[] {nonProfileValues});
     }
 
+    @Test
     public void testQueryProfile() {
         ContentValues profileValues = new ContentValues();
         createBasicProfileContact(profileValues);
@@ -4013,6 +4135,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         return new ContentValues[]{photoRow, phoneRow, emailRow, nameRow};
     }
 
+    @Test
     public void testQueryProfileData() {
         createBasicProfileContact(new ContentValues());
 
@@ -4020,6 +4143,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 getExpectedProfileDataValues());
     }
 
+    @Test
     public void testQueryProfileEntities() {
         createBasicProfileContact(new ContentValues());
 
@@ -4027,6 +4151,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 getExpectedProfileDataValues());
     }
 
+    @Test
     public void testQueryRawProfile() {
         ContentValues profileValues = new ContentValues();
         createBasicProfileContact(profileValues);
@@ -4037,6 +4162,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(Profile.CONTENT_RAW_CONTACTS_URI, profileValues);
     }
 
+    @Test
     public void testQueryRawProfileById() {
         ContentValues profileValues = new ContentValues();
         long profileRawContactId = createBasicProfileContact(profileValues);
@@ -4048,6 +4174,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Profile.CONTENT_RAW_CONTACTS_URI, profileRawContactId), profileValues);
     }
 
+    @Test
     public void testQueryRawProfileData() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
 
@@ -4056,6 +4183,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .appendPath("data").build(), getExpectedProfileDataValues());
     }
 
+    @Test
     public void testQueryRawProfileEntity() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
 
@@ -4064,6 +4192,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 .appendPath("entity").build(), getExpectedProfileDataValues());
     }
 
+    @Test
     public void testQueryDataForProfile() {
         createBasicProfileContact(new ContentValues());
 
@@ -4071,6 +4200,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 getExpectedProfileDataValues());
     }
 
+    @Test
     public void testUpdateProfileRawContact() {
         createBasicProfileContact(new ContentValues());
         ContentValues updatedValues = new ContentValues();
@@ -4082,6 +4212,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(Profile.CONTENT_RAW_CONTACTS_URI, updatedValues);
     }
 
+    @Test
     public void testInsertProfileWithDataSetTriggersAccountCreation() {
         // Check that we have no profile raw contacts.
         assertStoredValues(Profile.CONTENT_RAW_CONTACTS_URI, new ContentValues[]{});
@@ -4100,6 +4231,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(Profile.CONTENT_RAW_CONTACTS_URI, values);
     }
 
+    @Test
     public void testLoadProfilePhoto() throws IOException {
         long rawContactId = createBasicProfileContact(new ContentValues());
         insertPhoto(rawContactId, R.drawable.earth_normal);
@@ -4108,6 +4240,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.openContactPhotoInputStream(mResolver, Profile.CONTENT_URI, false));
     }
 
+    @Test
     public void testLoadProfileDisplayPhoto() throws IOException {
         long rawContactId = createBasicProfileContact(new ContentValues());
         insertPhoto(rawContactId, R.drawable.earth_normal);
@@ -4116,6 +4249,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.openContactPhotoInputStream(mResolver, Profile.CONTENT_URI, true));
     }
 
+    @Test
     public void testPhonesWithStatusUpdate() {
 
         ContentValues values = new ContentValues();
@@ -4168,6 +4302,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
+    @Test
     public void testGroupQuery() {
         Account account1 = new Account("a", "b");
         Account account2 = new Account("c", "d");
@@ -4181,6 +4316,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(uri2, Groups._ID + "=" + groupId2, null, Groups._ID, groupId2) ;
     }
 
+    @Test
     public void testGroupInsert() {
         ContentValues values = new ContentValues();
 
@@ -4207,6 +4343,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(rowUri, values);
     }
 
+    @Test
     public void testGroupCreationAfterMembershipInsert() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri groupMembershipUri = insertGroupMembership(rawContactId1, "gsid1");
@@ -4216,6 +4353,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 rawContactId1, groupId, "gsid1");
     }
 
+    @Test
     public void testGroupReuseAfterMembershipInsert() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, mAccount);
         long groupId1 = createGroup(mAccount, "gsid1", "title1");
@@ -4226,6 +4364,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 rawContactId1, groupId1, "gsid1");
     }
 
+    @Test
     public void testGroupInsertFailureOnGroupIdConflict() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, mAccount);
         long groupId1 = createGroup(mAccount, "gsid1", "title1");
@@ -4243,6 +4382,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testGroupDelete_byAccountSelection() {
         final Account account1 = new Account("accountName1", "accountType1");
         final Account account2 = new Account("accountName2", "accountType2");
@@ -4271,6 +4411,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(Groups.CONTENT_URI, new ContentValues[] { v1, v2, v3 });
     }
 
+    @Test
     public void testGroupDelete_byAccountParam() {
         final Account account1 = new Account("accountName1", "accountType1");
         final Account account2 = new Account("accountName2", "accountType2");
@@ -4302,6 +4443,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(Groups.CONTENT_URI, new ContentValues[] { v1, v2, v3 });
     }
 
+    @Test
     public void testGroupSummaryQuery() {
         final Account account1 = new Account("accountName1", "accountType1");
         final Account account2 = new Account("accountName2", "accountType2");
@@ -4424,6 +4566,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesWithProjection(uri, new ContentValues[] { v1, v2, v3, v4 });
     }
 
+    @Test
     public void testSettingsQuery() {
         Account account1 = new Account("a", "b");
         Account account2 = new Account("c", "d");
@@ -4449,6 +4592,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(uri3, Settings.UNGROUPED_VISIBLE, "0");
     }
 
+    @Test
     public void testSettingsInsertionPreventsDuplicates() {
         Account account1 = new Account("a", "b");
         AccountWithDataSet account2 = new AccountWithDataSet("c", "d", "plus");
@@ -4468,6 +4612,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 new String[] {"c", "d", "plus"}, Settings.SHOULD_SYNC, "0");
     }
 
+    @Test
     public void testSettingsDeletion() {
         Account account = new Account("a", "b");
         Uri settingUri = createSettings(account, "0", "1");
@@ -4490,6 +4635,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertRowCount(0, Settings.CONTENT_URI, null, null);
     }
 
+    @Test
     public void testSettingsUpdate() {
         Account account1 = new Account("a", "b");
         Account account2 = new Account("c", "d");
@@ -4561,6 +4707,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 ));
     }
 
+    @Test
     public void testSettingsLocalAccount() {
         AccountWithDataSet localAccount = AccountWithDataSet.LOCAL;
 
@@ -4598,6 +4745,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertRowCount(1, Settings.CONTENT_URI, null, null);
     }
 
+    @Test
     public void testDisplayNameParsingWhenPartsUnspecified() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = new ContentValues();
@@ -4607,6 +4755,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStructuredName(rawContactId, "Mr.", "John", "Kevin", "von Smith", "Jr.");
     }
 
+    @Test
     public void testDisplayNameParsingWhenPartsAreNull() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = new ContentValues();
@@ -4617,6 +4766,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStructuredName(rawContactId, "Mr.", "John", "Kevin", "von Smith", "Jr.");
     }
 
+    @Test
     public void testDisplayNameParsingWhenPartsSpecified() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = new ContentValues();
@@ -4627,6 +4777,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStructuredName(rawContactId, null, null, null, "Johnson", null);
     }
 
+    @Test
     public void testContactWithoutPhoneticName() {
         ContactLocaleUtils.setLocaleForTest(Locale.ENGLISH);
         final long rawContactId = RawContactUtil.createRawContact(mResolver, null);
@@ -4672,6 +4823,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(dataUri, values);
     }
 
+    @Test
     public void testContactWithChineseName() {
         if (!hasChineseCollator()) {
             return;
@@ -4718,6 +4870,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(dataUri, values);
     }
 
+    @Test
     public void testJapaneseNameContactInEnglishLocale() {
         // Need Japanese locale data for transliteration
         if (!hasJapaneseCollator()) {
@@ -4739,6 +4892,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContactFilterNoResult("kong");
     }
 
+    @Test
     public void testContactWithJapaneseName() {
         if (!hasJapaneseCollator()) {
             return;
@@ -4790,6 +4944,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContactFilterNoResult("kong");
     }
 
+    @Test
     public void testDisplayNameUpdate() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         insertEmail(rawContactId1, "potato@acme.com", true);
@@ -4808,6 +4963,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
     }
 
+    @Test
     public void testDisplayNameFromData() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -4844,6 +5000,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(uri, Contacts.DISPLAY_NAME, "James P. Sullivan");
     }
 
+    @Test
     public void testDisplayNameFromOrganizationWithoutPhoneticName() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -4873,6 +5030,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(uri, values);
     }
 
+    @Test
     public void testDisplayNameFromOrganizationWithJapanesePhoneticName() {
         if (!hasJapaneseCollator()) {
             return;
@@ -4901,6 +5059,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(uri, values);
     }
 
+    @Test
     public void testDisplayNameFromOrganizationWithChineseName() {
         if (!hasChineseCollator()) {
             return;
@@ -4929,6 +5088,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(uri, values);
     }
 
+    @Test
     public void testLookupByOrganization() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -4982,6 +5142,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, getCount(filterUri, null, null));
     }
 
+    @Test
     public void testSearchSnippetOrganization() throws Exception {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5014,6 +5175,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContainsValues(filterUri, values);
     }
 
+    @Test
     public void testSearchSnippetEmail() throws Exception {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5030,6 +5192,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(filterUri, values);
     }
 
+    @Test
     public void testCountPhoneNumberDigits() {
         assertEquals(10, ContactsProvider2.countPhoneNumberDigits("86 (0) 5-55-12-34"));
         assertEquals(10, ContactsProvider2.countPhoneNumberDigits("860 555-1234"));
@@ -5043,6 +5206,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, ContactsProvider2.countPhoneNumberDigits("+441234098foo"));
     }
 
+    @Test
     public void testSearchSnippetPhone() throws Exception {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5088,6 +5252,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         return values;
     }
 
+    @Test
     public void testSearchSnippetNickname() throws Exception {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5103,6 +5268,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(filterUri, values);
     }
 
+    @Test
     public void testSearchSnippetEmptyForNameInDisplayName() throws Exception {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5115,6 +5281,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContainsValues(buildFilterUri("john", true), snippet);
     }
 
+    @Test
     public void testSearchSnippetEmptyForNicknameInDisplayName() throws Exception {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5126,6 +5293,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContainsValues(buildFilterUri("cave", true), snippet);
     }
 
+    @Test
     public void testSearchSnippetEmptyForCompanyInDisplayName() throws Exception {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5141,6 +5309,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContainsValues(buildFilterUri("aperture", true), snippet);
     }
 
+    @Test
     public void testSearchSnippetEmptyForPhoneInDisplayName() throws Exception {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5152,6 +5321,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContainsValues(buildFilterUri("860", true), snippet);
     }
 
+    @Test
     public void testSearchSnippetEmptyForEmailInDisplayName() throws Exception {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5164,6 +5334,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertContainsValues(buildFilterUri("cave", true), snippet);
     }
 
+    @Test
     public void testDisplayNameUpdateFromStructuredNameUpdate() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         Uri nameUri = DataUtil.insertStructuredName(mResolver, rawContactId, "Slinky", "Dog");
@@ -5190,6 +5361,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(uri, Contacts.DISPLAY_NAME, "Dog");
     }
 
+    @Test
     public void testInsertDataWithContentProviderOperations() throws Exception {
         ContentProviderOperation cpo1 = ContentProviderOperation.newInsert(RawContacts.CONTENT_URI)
                 .withValues(new ContentValues())
@@ -5207,6 +5379,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(uri, Contacts.DISPLAY_NAME, "John Doe");
     }
 
+    @Test
     public void testSendToVoicemailDefault() {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5218,6 +5391,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
+    @Test
     public void testSetSendToVoicemailAndRingtone() {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
@@ -5238,6 +5412,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertMetadataDirty(rawContactUri, false);
     }
 
+    @Test
     public void testSendToVoicemailAndRingtoneAfterAggregation() {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "a", "b");
         long contactId1 = queryContactId(rawContactId1);
@@ -5255,6 +5430,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSendToVoicemailAndRingtone(contactId1, true, "foo,bar"); // Either foo or bar
     }
 
+    @Test
     public void testDoNotSendToVoicemailAfterAggregation() {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "e", "f");
         long contactId1 = queryContactId(rawContactId1);
@@ -5272,6 +5448,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSendToVoicemailAndRingtone(queryContactId(rawContactId1), false, null);
     }
 
+    @Test
     public void testSetSendToVoicemailAndRingtonePreservedAfterJoinAndSplit() {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "i", "j");
         long contactId1 = queryContactId(rawContactId1);
@@ -5293,6 +5470,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertSendToVoicemailAndRingtone(queryContactId(rawContactId2), false, "bar");
     }
 
+    @Test
     public void testMarkMetadataDirtyAfterAggregation() {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "i", "j");
         long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "k", "l");
@@ -5314,6 +5492,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(false);
     }
 
+    @Test
     public void testStatusUpdateInsert() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         Uri imUri = insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
@@ -5367,6 +5546,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(contactUri, values);
     }
 
+    @Test
     public void testStatusUpdateInferAttribution() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         Uri imUri = insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
@@ -5388,6 +5568,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(resultUri, values);
     }
 
+    @Test
     public void testStatusUpdateMatchingImOrEmail() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
@@ -5432,6 +5613,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesWithProjection(contactUri, values);
     }
 
+    @Test
     public void testStatusUpdateUpdateAndDelete() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
@@ -5507,6 +5689,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesWithProjection(contactUri, values);
     }
 
+    @Test
     public void testStatusUpdateUpdateToNull() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
@@ -5535,6 +5718,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValuesWithProjection(contactUri, values);
     }
 
+    @Test
     public void testStatusUpdateWithTimestamp() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         insertImHandle(rawContactId, Im.PROTOCOL_AIM, null, "aim");
@@ -5568,6 +5752,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     // Stream item query test cases.
 
+    @Test
     public void testQueryStreamItemsByRawContactId() {
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         ContentValues values = buildGenericStreamItemValues();
@@ -5579,6 +5764,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 values);
     }
 
+    @Test
     public void testQueryStreamItemsByContactId() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5591,6 +5777,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 values);
     }
 
+    @Test
     public void testQueryStreamItemsByLookupKey() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5604,6 +5791,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 values);
     }
 
+    @Test
     public void testQueryStreamItemsByLookupKeyAndContactId() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -5619,6 +5807,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 values);
     }
 
+    @Test
     public void testQueryStreamItems() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = buildGenericStreamItemValues();
@@ -5626,6 +5815,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(StreamItems.CONTENT_URI, values);
     }
 
+    @Test
     public void testQueryStreamItemsWithSelection() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues firstValues = buildGenericStreamItemValues();
@@ -5644,6 +5834,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 new String[]{"Goodbye world"}, secondValues);
     }
 
+    @Test
     public void testQueryStreamItemById() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues firstValues = buildGenericStreamItemValues();
@@ -5666,6 +5857,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     // Stream item photo insertion + query test cases.
 
+    @Test
     public void testQueryStreamItemPhotoWithSelection() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = buildGenericStreamItemValues();
@@ -5683,6 +5875,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 new String[]{"1"}, photo1Values);
     }
 
+    @Test
     public void testQueryStreamItemPhotoByStreamItemId() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
 
@@ -5714,6 +5907,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 StreamItems.StreamItemPhotos.CONTENT_DIRECTORY), photo2Values);
     }
 
+    @Test
     public void testQueryStreamItemPhotoByStreamItemPhotoId() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
 
@@ -5760,6 +5954,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     // Stream item insertion test cases.
 
+    @Test
     public void testInsertStreamItemInProfileRequiresWriteProfileAccess() {
         long profileRawContactId = createBasicProfileContact(new ContentValues());
 
@@ -5768,6 +5963,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         insertStreamItem(profileRawContactId, values, null);
     }
 
+    @Test
     public void testInsertStreamItemWithContentValues() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = buildGenericStreamItemValues();
@@ -5778,6 +5974,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.StreamItems.CONTENT_DIRECTORY), values);
     }
 
+    @Test
     public void testInsertStreamItemOverLimit() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = buildGenericStreamItemValues();
@@ -5812,6 +6009,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, streamItemIds.size());
     }
 
+    @Test
     public void testInsertStreamItemOlderThanOldestInLimit() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = buildGenericStreamItemValues();
@@ -5835,6 +6033,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     // Stream item photo insertion test cases.
 
+    @Test
     public void testInsertStreamItemsAndPhotosInBatch() throws Exception {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues streamItemValues = buildGenericStreamItemValues();
@@ -5889,6 +6088,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     // Stream item update test cases.
 
+    @Test
     public void testUpdateStreamItemById() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = buildGenericStreamItemValues();
@@ -5902,6 +6102,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.StreamItems.CONTENT_DIRECTORY), values);
     }
 
+    @Test
     public void testUpdateStreamItemWithContentValues() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = buildGenericStreamItemValues();
@@ -5917,6 +6118,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     // Stream item photo update test cases.
 
+    @Test
     public void testUpdateStreamItemPhotoById() throws IOException {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = buildGenericStreamItemValues();
@@ -5945,6 +6147,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(Uri.parse(displayPhotoUri)));
     }
 
+    @Test
     public void testUpdateStreamItemPhotoWithContentValues() throws IOException {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues values = buildGenericStreamItemValues();
@@ -5974,6 +6177,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     // Stream item deletion test cases.
 
+    @Test
     public void testDeleteStreamItemById() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues firstValues = buildGenericStreamItemValues();
@@ -5994,6 +6198,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.StreamItems.CONTENT_DIRECTORY), secondValues);
     }
 
+    @Test
     public void testDeleteStreamItemWithSelection() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         ContentValues firstValues = buildGenericStreamItemValues();
@@ -6015,6 +6220,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     // Stream item photo deletion test cases.
 
+    @Test
     public void testDeleteStreamItemPhotoById() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long streamItemId = ContentUris.parseId(
@@ -6039,6 +6245,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testDeleteStreamItemPhotoWithSelection() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long streamItemId = ContentUris.parseId(
@@ -6056,6 +6263,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(photoUri, firstPhotoValues);
     }
 
+    @Test
     public void testDeleteStreamItemsWhenRawContactDeleted() {
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri streamItemUri = insertStreamItem(rawContactId,
@@ -6072,6 +6280,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(streamItemPhotoUri, emptyValues);
     }
 
+    @Test
     public void testQueryStreamItemLimit() {
         ContentValues values = new ContentValues();
         values.put(StreamItems.MAX_ITEMS, 5);
@@ -6081,6 +6290,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     // Tests for inserting or updating stream items as a side-effect of making status updates
     // (forward-compatibility of status updates into the new social stream API).
 
+    @Test
     public void testStreamItemInsertedOnStatusUpdate() {
 
         // This method of creating a raw contact automatically inserts a status update with
@@ -6100,6 +6310,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 expectedValues);
     }
 
+    @Test
     public void testStreamItemInsertedOnStatusUpdate_HtmlQuoting() {
 
         // This method of creating a raw contact automatically inserts a status update with
@@ -6122,6 +6333,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 expectedValues);
     }
 
+    @Test
     public void testStreamItemUpdatedOnSecondStatusUpdate() {
 
         // This method of creating a raw contact automatically inserts a status update with
@@ -6161,6 +6373,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         return values;
     }
 
+    @Test
     public void testSingleStatusUpdateRowPerContact() {
         int protocol1 = Im.PROTOCOL_GOOGLE_TALK;
         String handle1 = "test@gmail.com";
@@ -6226,6 +6439,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
+    @Test
     public void testContactVisibilityUpdateOnMembershipChange() {
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         assertVisibility(rawContactId, "0");
@@ -6254,6 +6468,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 null, Contacts.IN_VISIBLE_GROUP, expectedValue);
     }
 
+    @Test
     public void testSupplyingBothValuesAndParameters() throws Exception {
         Account account = new Account("account 1", "type%/:1");
         Uri uri = ContactsContract.Groups.CONTENT_URI.buildUpon()
@@ -6286,6 +6501,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testContentEntityIterator() {
         // create multiple contacts and check that the selected ones are returned
         long id;
@@ -6375,6 +6591,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         iterator.close();
     }
 
+    @Test
     public void testDataCreateUpdateDeleteByMimeType() throws Exception {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
 
@@ -6442,6 +6659,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
     }
 
+    @Test
     public void testRawContactQuery() {
         Account account1 = new Account("a", "b");
         Account account2 = new Account("c", "d");
@@ -6461,6 +6679,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(rowUri2, RawContacts._ID, rawContactId2) ;
     }
 
+    @Test
     public void testRawContactDeletion() {
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
@@ -6492,6 +6711,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(false);
     }
 
+    @Test
     public void testRawContactDeletionKeepingAggregateContact() {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, mAccount);
         long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, mAccount);
@@ -6507,6 +6727,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, getCount(Contacts.CONTENT_URI, Contacts._ID + "=" + contactId, null));
     }
 
+    @Test
     public void testRawContactDeletion_byAccountParam() {
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
@@ -6543,6 +6764,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(uri, RawContacts.DELETED, "1");
     }
 
+    @Test
     public void testRawContactDeletion_byAccountSelection() {
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri uri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
@@ -6568,6 +6790,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * Test for {@link ContactsProvider2#stringToAccounts} and
      * {@link ContactsProvider2#accountsToString}.
      */
+    @Test
     public void testAccountsToString() {
         final Set<Account> EXPECTED_0 = Sets.newHashSet();
         final Set<Account> EXPECTED_1 = Sets.newHashSet(TestUtil.ACCOUNT_1);
@@ -6614,6 +6837,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * Test for {@link ContactsProvider2#haveAccountsChanged} and
      * {@link ContactsProvider2#saveAccounts}.
      */
+    @Test
     public void testHaveAccountsChanged() {
         final ContactsProvider2 cp = (ContactsProvider2) getProvider();
 
@@ -6661,6 +6885,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertTrue(cp.haveAccountsChanged(ACCOUNTS_1));
     }
 
+    @Test
     public void testAccountsUpdated() {
         // This is to ensure we do not delete contacts with null, null (account name, type)
         // accidentally.
@@ -6695,6 +6920,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 + rawContactId2, null));
     }
 
+    @Test
     public void testAccountDeletion() {
         Account readOnlyAccount = new Account("act", READ_ONLY_ACCOUNT_TYPE);
         ContactsProvider2 cp = (ContactsProvider2) getProvider();
@@ -6738,6 +6964,163 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.PHOTO_ID, ContentUris.parseId(photoUri1));
     }
 
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_CP2_SYNC_SEARCH_INDEX_FLAG)
+    public void testSearchIndexUpdatedOnAccountDeletion() {
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        SQLiteDatabase db = cp.getDatabaseHelper().getReadableDatabase();
+        mActor.setAccounts(new Account[]{mAccount});
+        cp.onAccountsUpdated(new Account[]{mAccount});
+
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Wick",
+                mAccount);
+
+        // Assert the contact is in the search index
+        assertStoredValue(buildFilterUri("wick", false), SearchSnippets.SNIPPET, null);
+        assertEquals(1, DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+
+        // Remove the account
+        mActor.setAccounts(new Account[]{});
+        cp.onAccountsUpdated(new Account[]{});
+
+        // Assert the contact is no longer searchable
+        assertRowCount(0, buildFilterUri("wick", false), null, null);
+
+        // Assert the contact is no longer in the search index table
+        assertEquals(0, DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_CP2_SYNC_SEARCH_INDEX_FLAG)
+    public void testSearchIndexUpdatedOnAccountDeletion_withMultipleAccounts() {
+        Account readOnlyAccount = new Account("act", READ_ONLY_ACCOUNT_TYPE);
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        SQLiteDatabase db = cp.getDatabaseHelper().getReadableDatabase();
+        mActor.setAccounts(new Account[]{readOnlyAccount, mAccount});
+        cp.onAccountsUpdated(new Account[]{readOnlyAccount, mAccount});
+
+        long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Wick",
+                readOnlyAccount);
+        long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, "john", "wick",
+                mAccount);
+        insertEmail(rawContactId2, "person@movie.com", true);
+
+        assertAggregated(rawContactId1, rawContactId2);
+
+        // Assert the contact is searchable by name and email
+        assertStoredValue(buildFilterUri("wick", false), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildFilterUri("movie", false), SearchSnippets.SNIPPET,
+                "person@[movie].com");
+        // Since contacts are aggregated only 1 entry should be present in search index
+        assertEquals(1, DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+
+        // Remove the writable account
+        mActor.setAccounts(new Account[]{readOnlyAccount});
+        cp.onAccountsUpdated(new Account[]{readOnlyAccount});
+
+        // Assert the contact is searchable by name but not by email
+        assertStoredValue(buildFilterUri("wick", false), SearchSnippets.SNIPPET, null);
+        assertRowCount(0, buildFilterUri("movie", false), null, null);
+
+        // Assert the contact is still in the search index table
+        assertEquals(1, DatabaseUtils.longForQuery(db, "SELECT count(*) FROM search_index", null));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_CP2_SYNC_SEARCH_INDEX_FLAG)
+    public void testSearchIndexUpdatedOnAccountDeletion_withMaxStaleContacts() {
+        Account readOnlyAccount = new Account("act", READ_ONLY_ACCOUNT_TYPE);
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        SQLiteDatabase db = cp.getDatabaseHelper().getReadableDatabase();
+        mActor.setAccounts(new Account[]{readOnlyAccount, mAccount});
+        cp.onAccountsUpdated(new Account[]{readOnlyAccount, mAccount});
+
+        // The maximum amount of stale contacts before rebuilding search index completely
+        cp.setSearchIndexMaxUpdateFilterContacts(5);
+
+        // Add more contacts than the max amount of stale contacts, such that we trigger a
+        // rebuild of the search index during the account removal process
+        for (int i = 0; i < 10; i++) {
+            String firstName = "first" + i;
+            String lastName = "last" + i;
+            long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, firstName,
+                    lastName, readOnlyAccount);
+            long rawContactId2 = RawContactUtil.createRawContactWithName(mResolver, firstName,
+                    lastName, mAccount);
+            insertEmail(rawContactId2, "person@corp" + i + ".com", true);
+
+            assertAggregated(rawContactId1, rawContactId2);
+
+            // Assert the contact is searchable by name and email
+            assertStoredValue(buildFilterUri(firstName, false), SearchSnippets.SNIPPET, null);
+            assertStoredValue(buildFilterUri("corp" + i, false), SearchSnippets.SNIPPET,
+                    "person@[corp" + i + "].com");
+            // Since contacts are aggregated only 1 entry should be present in search index
+            assertEquals(i + 1,
+                    DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+        }
+
+        // Remove the writable account
+        mActor.setAccounts(new Account[]{readOnlyAccount});
+        cp.onAccountsUpdated(new Account[]{readOnlyAccount});
+
+        for (int i = 0; i < 10; i++) {
+            String firstName = "first" + i;
+            String lastName = "last" + i;
+            // Assert the contact is searchable by name but not by email
+            assertStoredValue(buildFilterUri(firstName, false), SearchSnippets.SNIPPET, null);
+            assertRowCount(0, buildFilterUri("corp" + i, false), null, null);
+        }
+
+        // Assert all of the contacts are still in the search index table
+        assertEquals(10, DatabaseUtils.longForQuery(db, "SELECT count(*) FROM search_index", null));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_CP2_SYNC_SEARCH_INDEX_FLAG)
+    public void testSearchIndexUpdatedOnRawContactOperations() {
+        ContactsProvider2 cp = (ContactsProvider2) getProvider();
+        SQLiteDatabase db = cp.getDatabaseHelper().getReadableDatabase();
+
+        assertEquals(0, DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+
+        long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "John", "Wick");
+        Uri emailUri = insertEmail(rawContactId, "john@movie.com");
+
+        // Assert contact is in the search index
+        assertStoredValue(buildFilterUri("wick", false), SearchSnippets.SNIPPET, null);
+        assertStoredValue(buildFilterUri("movie", false), SearchSnippets.SNIPPET,
+                "john@[movie].com");
+        assertEquals(1, DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+        assertEquals(0, DatabaseUtils.longForQuery(db,
+                    "SELECT COUNT(*) FROM stale_search_index_contacts", null));
+
+        // Update raw contact with email
+        ContentValues values = new ContentValues();
+        values.put(Data.RAW_CONTACT_ID, rawContactId);
+        values.put(Email.DATA, "john@continental.com");
+        mResolver.update(emailUri, values, null);
+
+        // Assert contact is updated in the search index
+        assertStoredValue(buildFilterUri("wick", false), SearchSnippets.SNIPPET, null);
+        assertRowCount(0, buildFilterUri("movie", false), null, null);
+        assertStoredValue(buildFilterUri("continental", false), SearchSnippets.SNIPPET,
+                "john@[continental].com");
+        assertEquals(1, DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+        assertEquals(0, DatabaseUtils.longForQuery(db,
+                    "SELECT COUNT(*) FROM stale_search_index_contacts", null));
+
+        // Delete the raw contact
+        RawContactUtil.delete(mResolver, rawContactId, true);
+
+        // Assert the contact is no longer searchable
+        assertRowCount(0, buildFilterUri("wick", false), null, null);
+        assertEquals(0, DatabaseUtils.longForQuery(db, "SELECT COUNT(*) FROM search_index", null));
+        assertEquals(0, DatabaseUtils.longForQuery(db,
+                    "SELECT COUNT(*) FROM stale_search_index_contacts", null));
+    }
+
+    @Test
     public void testStreamItemsCleanedUpOnAccountRemoval() {
         Account doomedAccount = new Account("doom", "doom");
         Account safeAccount = mAccount;
@@ -6780,6 +7163,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(safeStreamItemPhotoUri, StreamItemPhotos._ID, safeStreamItemPhotoId);
     }
 
+    @Test
     public void testContactDeletion() {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "John", "Doe",
                 TestUtil.ACCOUNT_1);
@@ -6796,6 +7180,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 RawContacts.DELETED, "1");
     }
 
+    @Test
     public void testMarkAsDirtyParameter() {
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
@@ -6812,6 +7197,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(false);
     }
 
+    @Test
     public void testDirtyWhenRawContactInsert() {
         // When inserting a rawcontact.
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
@@ -6821,6 +7207,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
     }
 
+    @Test
     public void testRawContactDirtyAndVersion() {
         final long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI, rawContactId);
@@ -6861,6 +7248,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(version, getVersion(uri));
     }
 
+    @Test
     public void testRawContactClearDirty() {
         final long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
@@ -6876,6 +7264,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(version, getVersion(uri));
     }
 
+    @Test
     public void testRawContactDeletionSetsDirty() {
         final long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri uri = ContentUris.withAppendedId(ContactsContract.RawContacts.CONTENT_URI,
@@ -6892,6 +7281,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(version, getVersion(uri));
     }
 
+    @Test
     public void testNotifyMetadataChangeForRawContactInsertBySyncAdapter() {
         Uri uri = RawContacts.CONTENT_URI.buildUpon()
                 .appendQueryParameter(RawContacts.ACCOUNT_NAME, mAccount.name)
@@ -6904,6 +7294,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertMetadataDirty(rawContactUri, false);
     }
 
+    @Test
     public void testMarkAsMetadataDirtyForRawContactMetadataChange() {
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         long contactId = queryContactId(rawContactId);
@@ -6934,6 +7325,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertMetadataDirty(rawContactUri, false);
     }
 
+    @Test
     public void testMarkAsMetadataDirtyForRawContactBackupIdChange() {
         long rawContactId = RawContactUtil.createRawContact(mResolver, mAccount);
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
@@ -6952,6 +7344,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertMetadataDirty(rawContactUri, false);
     }
 
+    @Test
     public void testMarkAsMetadataDirtyForAggregationExceptionChange() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, new Account("a", "a"));
         long rawContactId2 = RawContactUtil.createRawContact(mResolver, new Account("b", "b"));
@@ -6965,6 +7358,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 false);
     }
 
+    @Test
     public void testMarkAsMetadataNotDirtyForUsageStatsChange() {
         final long rid1 = RawContactUtil.createRawContactWithName(mResolver, "contact", "a");
         final long did1a = ContentUris.parseId(insertEmail(rid1, "email_1_a@email.com"));
@@ -6974,6 +7368,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertMetadataDirty(ContentUris.withAppendedId(RawContacts.CONTENT_URI, rid1), false);
     }
 
+    @Test
     public void testMarkAsMetadataDirtyForDataPrimarySettingInsert() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, new Account("a", "a"));
         Uri mailUri11 = insertEmail(rawContactId1, "test1@domain1.com", true, true);
@@ -6984,6 +7379,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 false);
     }
 
+    @Test
     public void testMarkAsMetadataDirtyForDataPrimarySettingUpdate() {
         long rawContactId = RawContactUtil.createRawContact(mResolver, new Account("a", "a"));
         Uri mailUri1 = insertEmail(rawContactId, "test1@domain1.com");
@@ -6999,6 +7395,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 false);
     }
 
+    @Test
     public void testMarkAsMetadataDirtyForDataDelete() {
         long rawContactId = RawContactUtil.createRawContact(mResolver, new Account("a", "a"));
         Uri mailUri1 = insertEmail(rawContactId, "test1@domain1.com", true, true);
@@ -7009,6 +7406,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 false);
     }
 
+    @Test
     public void testDeleteContactWithoutName() {
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, new ContentValues());
         long rawContactId = ContentUris.parseId(rawContactUri);
@@ -7023,6 +7421,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, numDeleted);
     }
 
+    @Test
     public void testDeleteContactWithoutAnyData() {
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, new ContentValues());
         long rawContactId = ContentUris.parseId(rawContactUri);
@@ -7035,6 +7434,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, numDeleted);
     }
 
+    @Test
     public void testDeleteContactWithEscapedUri() {
         ContentValues values = new ContentValues();
         values.put(RawContacts.SOURCE_ID, "!@#$%^&*()_+=-/.,<>?;'\":[]}{\\|`~");
@@ -7047,6 +7447,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, mResolver.delete(lookupUri, null, null));
     }
 
+    @Test
     public void testDeleteContactComposedOfSingleLocalRawContact() {
         // Create a raw contact in the local (null) account
         long rawContactId = RawContactUtil.createRawContact(mResolver, null);
@@ -7068,6 +7469,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c2.close();
     }
 
+    @Test
     public void testDeleteContactComposedOfTwoLocalRawContacts() {
         // Create a raw contact in the local (null) account
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, null);
@@ -7104,6 +7506,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c3.close();
     }
 
+    @Test
     public void testDeleteContactComposedOfSomeLocalRawContacts() {
         // Create a raw contact in the local (null) account
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, null);
@@ -7139,6 +7542,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c3.close();
     }
 
+    @Test
     public void testQueryContactWithEscapedUri() {
         ContentValues values = new ContentValues();
         values.put(RawContacts.SOURCE_ID, "!@#$%^&*()_+=-/.,<>?;'\":[]}{\\|`~");
@@ -7153,6 +7557,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         c.close();
     }
 
+    @Test
     public void testGetPhotoUri() {
         ContentValues values = new ContentValues();
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
@@ -7169,6 +7574,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Contacts.PHOTO_URI, photoUri);
     }
 
+    @Test
     public void testGetPhotoViaLookupUri() throws IOException {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7196,6 +7602,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 thumbnail, mResolver.openInputStream(photoLookupUriWithoutId));
     }
 
+    @Test
     public void testInputStreamForPhoto() throws Exception {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7219,6 +7626,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(photoUri));
     }
 
+    @Test
     public void testSuperPrimaryPhoto() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, new Account("a", "a"));
         Uri photoUri1 = insertPhoto(rawContactId1, R.drawable.earth_normal);
@@ -7258,6 +7666,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(contactUri, Contacts.PHOTO_ID, photoId1);
     }
 
+    @Test
     public void testUpdatePhoto() {
         ContentValues values = new ContentValues();
         Uri rawContactUri = mResolver.insert(RawContacts.CONTENT_URI, values);
@@ -7285,6 +7694,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(photoId, twigId);
     }
 
+    @Test
     public void testUpdateRawContactDataPhoto() {
         // setup a contact with a null photo
         ContentValues values = new ContentValues();
@@ -7320,6 +7730,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         storedPhoto.close();
     }
 
+    @Test
     public void testOpenDisplayPhotoForContactId() throws IOException {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7332,6 +7743,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(photoUri));
     }
 
+    @Test
     public void testOpenDisplayPhotoForContactLookupKey() throws IOException {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7345,6 +7757,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(photoUri));
     }
 
+    @Test
     public void testOpenDisplayPhotoForContactLookupKeyAndId() throws IOException {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7359,6 +7772,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(photoUri));
     }
 
+    @Test
     public void testOpenDisplayPhotoForRawContactId() throws IOException {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         insertPhoto(rawContactId, R.drawable.earth_normal);
@@ -7370,6 +7784,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(photoUri));
     }
 
+    @Test
     public void testOpenDisplayPhotoByPhotoUri() throws IOException {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7384,6 +7799,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(Uri.parse(photoUri)));
     }
 
+    @Test
     public void testPhotoUriForDisplayPhoto() {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7407,6 +7823,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 photoUri);
     }
 
+    @Test
     public void testPhotoUriForThumbnailPhoto() throws IOException {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7436,6 +7853,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(Uri.parse(photoUri)));
     }
 
+    @Test
     public void testWriteNewPhotoToAssetFile() throws Exception {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7476,6 +7894,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(Uri.parse(thumbnailUri)));
     }
 
+    @Test
     public void testWriteUpdatedPhotoToAssetFile() throws Exception {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7533,6 +7952,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, (Object[])null).get();
     }
 
+    @Test
     public void testPhotoDimensionLimits() {
         ContentValues values = new ContentValues();
         values.put(DisplayPhoto.DISPLAY_MAX_DIM, 256);
@@ -7540,6 +7960,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValues(DisplayPhoto.CONTENT_MAX_DIMENSIONS_URI, values);
     }
 
+    @Test
     public void testPhotoStoreCleanup() throws IOException {
         SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
         PhotoStore photoStore = provider.getPhotoStore();
@@ -7634,6 +8055,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 new ContentValues[0]);
     }
 
+    @Test
     public void testPhotoStoreCleanupForProfile() {
         SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
         PhotoStore profilePhotoStore = provider.getProfilePhotoStore();
@@ -7688,6 +8110,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
 
     }
 
+    @Test
     public void testCleanupDanglingContacts_noDanglingContacts() throws Exception {
         SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
         RawContactUtil.createRawContactWithName(mResolver, "A", "B");
@@ -7703,6 +8126,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(2, rawContactCursor.getCount());
     }
 
+    @Test
     public void testCleanupDanglingContacts_singleDanglingContacts() throws Exception {
         SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver, "A", "B");
@@ -7717,6 +8141,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(0, mResolver.query(Contacts.CONTENT_URI, null, null, null, null).getCount());
     }
 
+    @Test
     public void testCleanupDanglingContacts_multipleDanglingContacts() throws Exception {
         SynchronousContactsProvider2 provider = (SynchronousContactsProvider2) mActor.provider;
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver, "A", "B");
@@ -7737,6 +8162,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(1, mResolver.query(Contacts.CONTENT_URI, null, null, null, null).getCount());
     }
 
+    @Test
     public void testOverwritePhotoWithThumbnail() throws IOException {
         long rawContactId = RawContactUtil.createRawContactWithName(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7765,6 +8191,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 mResolver.openInputStream(Uri.parse(photoUri)));
     }
 
+    @Test
     public void testUpdateRawContactSetStarred() {
         long rawContactId1 = RawContactUtil.createRawContactWithName(mResolver);
         Uri rawContactUri1 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1);
@@ -7814,6 +8241,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
     }
 
+    @Test
     public void testUpdateContactOptionsSetStarred() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         long contactId = queryContactId(rawContactId);
@@ -7827,6 +8255,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(true);
     }
 
+    @Test
     public void testSetAndClearSuperPrimaryEmail() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver, new Account("a", "a"));
         Uri mailUri11 = insertEmail(rawContactId1, "test1@domain1.com");
@@ -7967,22 +8396,27 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(mailUri2, Data.IS_SUPER_PRIMARY, withSuperPrimary ? 1 : 0);
     }
 
+    @Test
     public void testNewPrimaryInInsert() {
         testChangingPrimary(false, false);
     }
 
+    @Test
     public void testNewPrimaryInInsertWithSuperPrimary() {
         testChangingPrimary(false, true);
     }
 
+    @Test
     public void testNewPrimaryInUpdate() {
         testChangingPrimary(true, false);
     }
 
+    @Test
     public void testNewPrimaryInUpdateWithSuperPrimary() {
         testChangingPrimary(true, true);
     }
 
+    @Test
     public void testContactSortOrder() {
         assertEquals(ContactsColumns.PHONEBOOK_BUCKET_PRIMARY + ", "
                      + Contacts.SORT_KEY_PRIMARY,
@@ -8000,6 +8434,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                                                              + suffix));
     }
 
+    @Test
     public void testContactCounts() {
         Uri uri = Contacts.CONTENT_URI.buildUpon()
                 .appendQueryParameter(Contacts.EXTRA_ADDRESS_BOOK_INDEX, "true").build();
@@ -8044,6 +8479,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         MoreAsserts.assertEquals(expected, actual);
     }
 
+    @Test
     public void testReadBooleanQueryParameter() {
         assertBooleanUriParameter("foo:bar", "bool", true, true);
         assertBooleanUriParameter("foo:bar", "bool", false, false);
@@ -8064,6 +8500,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 Uri.parse(uriString), parameter, defaultValue));
     }
 
+    @Test
     public void testGetQueryParameter() {
         assertQueryParameter("foo:bar", "param", null);
         assertQueryParameter("foo:bar?param", "param", null);
@@ -8088,6 +8525,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertQueryParameter("foo:bar?ppp=val&", "p", null);
     }
 
+    @Test
     public void testMissingAccountTypeParameter() {
         // Try querying for RawContacts only using ACCOUNT_NAME
         final Uri queryUri = RawContacts.CONTENT_URI.buildUpon().appendQueryParameter(
@@ -8100,6 +8538,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testInsertInconsistentAccountType() {
         // Try inserting RawContact with inconsistent Accounts
         final Account red = new Account("red", "red");
@@ -8119,10 +8558,12 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testProviderStatusNoContactsNoAccounts() throws Exception {
         assertProviderStatus(ProviderStatus.STATUS_EMPTY);
     }
 
+    @Test
     public void testProviderStatusOnlyLocalContacts() throws Exception {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         assertProviderStatus(ProviderStatus.STATUS_NORMAL);
@@ -8131,6 +8572,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertProviderStatus(ProviderStatus.STATUS_EMPTY);
     }
 
+    @Test
     public void testProviderStatusWithAccounts() throws Exception {
         assertProviderStatus(ProviderStatus.STATUS_EMPTY);
         mActor.setAccounts(new Account[]{TestUtil.ACCOUNT_1});
@@ -8150,6 +8592,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testProperties() throws Exception {
         ContactsProvider2 provider = (ContactsProvider2)getProvider();
         ContactsDatabaseHelper helper = (ContactsDatabaseHelper)provider.getDatabaseHelper();
@@ -8164,6 +8607,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals("default", helper.getProperty("existent1", "default"));
     }
 
+    @Test
     public void testQueryMultiVCard() {
         // No need to create any contacts here, because the query for multiple vcards
         // does not go into the database at all
@@ -8180,6 +8624,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testQueryFileSingleVCard() {
         final VCardTestUriCreator contacts = createVCardTestContacts();
 
@@ -8204,6 +8649,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testQueryFileProfileVCard() {
         createBasicProfileContact(new ContentValues());
         Cursor cursor = mResolver.query(Profile.CONTENT_VCARD_URI, null, null, null, null);
@@ -8215,6 +8661,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testOpenAssetFileMultiVCard() throws IOException {
         final VCardTestUriCreator contacts = createVCardTestContacts();
 
@@ -8230,6 +8677,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertTrue(data.contains("N:Doh;Jane;;;"));
     }
 
+    @Test
     public void testOpenAssetFileSingleVCard() throws IOException {
         final VCardTestUriCreator contacts = createVCardTestContacts();
 
@@ -8259,6 +8707,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testAutoGroupMembership() {
         long g1 = createGroup(mAccount, "g1", "t1", 0, true /* autoAdd */, false /* favorite */);
         long g2 = createGroup(mAccount, "g2", "t2", 0, false /* autoAdd */, false /* favorite */);
@@ -8289,6 +8738,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testNoAutoAddMembershipAfterGroupCreation() {
         long r1 = RawContactUtil.createRawContact(mResolver, mAccount);
         long r2 = RawContactUtil.createRawContact(mResolver, mAccount);
@@ -8313,6 +8763,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     // the starred contacts should be added to group
     // favorites group removed
     // no change to starred status
+    @Test
     public void testFavoritesMembershipAfterGroupCreation() {
         long r1 = RawContactUtil.createRawContact(mResolver, mAccount, RawContacts.STARRED, "1");
         long r2 = RawContactUtil.createRawContact(mResolver, mAccount);
@@ -8385,6 +8836,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertFalse(queryRawContactIsStarred(r7));
     }
 
+    @Test
     public void testFavoritesGroupMembershipChangeAfterStarChange() {
         long g1 = createGroup(mAccount, "g1", "t1", 0, false /* autoAdd */, true /* favorite */);
         long g2 = createGroup(mAccount, "g2", "t2", 0, false /* autoAdd */, false/* favorite */);
@@ -8460,6 +8912,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
     }
 
+    @Test
     public void testStarChangedAfterGroupMembershipChange() {
         long g1 = createGroup(mAccount, "g1", "t1", 0, false /* autoAdd */, true /* favorite */);
         long g2 = createGroup(mAccount, "g2", "t2", 0, false /* autoAdd */, false/* favorite */);
@@ -8530,6 +8983,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNoRowsAndClose(queryGroupMemberships(mAccountTwo));
     }
 
+    @Test
     public void testReadOnlyRawContact() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId);
@@ -8546,6 +9000,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(rawContactUri, RawContacts.CUSTOM_RINGTONE, "third");
     }
 
+    @Test
     public void testReadOnlyDataRow() {
         long rawContactId = RawContactUtil.createRawContact(mResolver);
         Uri emailUri = insertEmail(rawContactId, "email");
@@ -8564,6 +9019,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(emailUri, Email.ADDRESS, "changed");
     }
 
+    @Test
     public void testContactWithReadOnlyRawContact() {
         long rawContactId1 = RawContactUtil.createRawContact(mResolver);
         Uri rawContactUri1 = ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId1);
@@ -8586,6 +9042,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertStoredValue(rawContactUri2, RawContacts.CUSTOM_RINGTONE, "second");
     }
 
+    @Test
     public void testNameParsingQuery() {
         Uri uri = ContactsContract.AUTHORITY_URI.buildUpon().appendPath("complete_name")
                 .appendQueryParameter(StructuredName.DISPLAY_NAME, "Mr. John Q. Doe Jr.").build();
@@ -8603,6 +9060,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testNameConcatenationQuery() {
         Uri uri = ContactsContract.AUTHORITY_URI.buildUpon().appendPath("complete_name")
                 .appendQueryParameter(StructuredName.PREFIX, "Mr")
@@ -8625,6 +9083,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         cursor.close();
     }
 
+    @Test
     public void testBuildSingleRowResult() {
         checkBuildSingleRowResult(
                 new String[] {"b"},
@@ -8672,6 +9131,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testDataUsageFeedbackAndDelete() {
 
         sMockClock.install();
@@ -8813,6 +9273,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     /*******************************************************
      * Delta api tests.
      */
+    @Test
     public void testContactDelete_hasDeleteLog() {
         sMockClock.install();
         long start = sMockClock.currentTimeMillis();
@@ -8823,6 +9284,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         RawContactUtil.delete(mResolver, ids.mRawContactId, true);
     }
 
+    @Test
     public void testContactDelete_marksRawContactsForDeletion() {
         DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete(mAccount);
 
@@ -8837,6 +9299,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         RawContactUtil.delete(mResolver, ids.mRawContactId, true);
     }
 
+    @Test
     public void testContactDelete_checkRawContactContactId() {
         DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete(mAccount);
 
@@ -8849,6 +9312,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         RawContactUtil.delete(mResolver, ids.mRawContactId, true);
     }
 
+    @Test
     public void testContactUpdate_metadataChange() {
         DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
         Uri rawContactUri = ContentUris.withAppendedId(RawContacts.CONTENT_URI, ids.mRawContactId);
@@ -8864,6 +9328,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNetworkNotified(false);
     }
 
+    @Test
     public void testContactUpdate_updatesContactUpdatedTimestamp() {
         sMockClock.install();
         DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
@@ -8884,6 +9349,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     }
 
     // This implicitly tests the Contact create case.
+    @Test
     public void testRawContactCreate_updatesContactUpdatedTimestamp() {
         long startTime = System.currentTimeMillis();
 
@@ -8896,6 +9362,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         RawContactUtil.delete(mResolver, rawContactId, true);
     }
 
+    @Test
     public void testRawContactUpdate_updatesContactUpdatedTimestamp() {
         DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
 
@@ -8912,6 +9379,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         RawContactUtil.delete(mResolver, ids.mRawContactId, true);
     }
 
+    @Test
     public void testRawContactPsuedoDelete_hasDeleteLogForContact() {
         DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
 
@@ -8925,6 +9393,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         RawContactUtil.delete(mResolver, ids.mRawContactId, true);
     }
 
+    @Test
     public void testRawContactDelete_hasDeleteLogForContact() {
         DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
 
@@ -8945,6 +9414,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         return ContactUtil.queryContactLastUpdatedTimestamp(mResolver, contactId);
     }
 
+    @Test
     public void testDataInsert_updatesContactLastUpdatedTimestamp() {
         sMockClock.install();
         DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
@@ -8960,6 +9430,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         RawContactUtil.delete(mResolver, ids.mRawContactId, true);
     }
 
+    @Test
     public void testDataDelete_updatesContactLastUpdatedTimestamp() {
         sMockClock.install();
         DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
@@ -8978,6 +9449,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         RawContactUtil.delete(mResolver, ids.mRawContactId, true);
     }
 
+    @Test
     public void testDataUpdate_updatesContactLastUpdatedTimestamp() {
         sMockClock.install();
         DatabaseAsserts.ContactIdPair ids = DatabaseAsserts.assertAndCreateContact(mResolver);
@@ -9003,6 +9475,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         return ContentUris.parseId(uri);
     }
 
+    @Test
     public void testDeletedContactsDelete_isUnsupported() {
         final Uri URI = ContactsContract.DeletedContacts.CONTENT_URI;
         DatabaseAsserts.assertDeleteIsUnsupported(mResolver, URI);
@@ -9011,12 +9484,14 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         DatabaseAsserts.assertDeleteIsUnsupported(mResolver, uri);
     }
 
+    @Test
     public void testDeletedContactsInsert_isUnsupported() {
         final Uri URI = ContactsContract.DeletedContacts.CONTENT_URI;
         DatabaseAsserts.assertInsertIsUnsupported(mResolver, URI);
     }
 
 
+    @Test
     public void testQueryDeletedContactsByContactId() {
         DatabaseAsserts.ContactIdPair ids = assertContactCreateDelete();
 
@@ -9024,6 +9499,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 DeletedContactUtil.queryDeletedTimestampForContactId(mResolver, ids.mContactId));
     }
 
+    @Test
     public void testQueryDeletedContactsAll() {
         final int numDeletes = 10;
 
@@ -9040,6 +9516,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertEquals(numDeletes, endCount - startCount);
     }
 
+    @Test
     public void testQueryDeletedContactsSinceTimestamp() {
         sMockClock.install();
 
@@ -9110,6 +9587,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
     /*******************************************************
      * Pinning support tests
      */
+    @Test
     public void testPinnedPositionsUpdate() {
         final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
         final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContact(mResolver);
@@ -9181,6 +9659,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         );
     }
 
+    @Test
     public void testPinnedPositionsAfterJoinAndSplit() {
         final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContactWithName(
                 mResolver, "A", "Smith");
@@ -9308,6 +9787,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         );
     }
 
+    @Test
     public void testDefaultAccountSet_throwException() {
         mActor.setAccounts(new Account[]{mAccount});
         try {
@@ -9349,6 +9829,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         }
     }
 
+    @Test
     public void testDefaultAccountSetAndQuery() {
         Bundle response = mResolver.call(ContactsContract.AUTHORITY_URI,
                 Settings.QUERY_DEFAULT_ACCOUNT_METHOD, null, null);
@@ -9381,6 +9862,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertNull(account);
     }
 
+    @Test
     public void testPinnedPositionsDemoteIllegalArguments() {
         try {
             mResolver.call(ContactsContract.AUTHORITY_URI, PinnedPositions.UNDEMOTE_METHOD,
@@ -9408,6 +9890,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
                 null);
     }
 
+    @Test
     public void testPinnedPositionsAfterDemoteAndUndemote() {
         final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
         final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContact(mResolver);
@@ -9458,6 +9941,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * Verifies that any existing pinned contacts have their pinned positions incremented by one
      * after the upgrade step
      */
+    @Test
     public void testPinnedPositionsUpgradeTo906_PinnedContactsIncrementedByOne() {
         final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
         final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContact(mResolver);
@@ -9484,6 +9968,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * Verifies that any unpinned contacts (or those with pinned position Integer.MAX_VALUE - 1)
      * have their pinned positions correctly set to 0 after the upgrade step.
      */
+    @Test
     public void testPinnedPositionsUpgradeTo906_UnpinnedValueCorrectlyUpdated() {
         final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
         final DatabaseAsserts.ContactIdPair i2 = DatabaseAsserts.assertAndCreateContact(mResolver);
@@ -9508,6 +9993,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * Tests the functionality of the
      * {@link ContactsContract.PinnedPositions#pin(ContentResolver, long, int)} API.
      */
+    @Test
     public void testPinnedPositions_ContactsContractPinnedPositionsPin() {
         final DatabaseAsserts.ContactIdPair i1 = DatabaseAsserts.assertAndCreateContact(mResolver);
 
@@ -9540,6 +10026,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
      * End pinning support tests
      ******************************************************/
 
+    @Test
     public void testAuthorization_authorize() throws Exception {
         // Setup
         ContentValues values = new ContentValues();
@@ -9558,6 +10045,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertTrue(cp.isValidPreAuthorizedUri(authorizedUri));
     }
 
+    @Test
     public void testAuthorization_unauthorized() throws Exception {
         // Setup
         ContentValues values = new ContentValues();
@@ -9570,6 +10058,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertFalse(cp.isValidPreAuthorizedUri(contactUri));
     }
 
+    @Test
     public void testAuthorization_invalidAuthorization() throws Exception {
         // Setup
         ContentValues values = new ContentValues();
@@ -9586,6 +10075,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertFalse(cp.isValidPreAuthorizedUri(almostAuthorizedUri));
     }
 
+    @Test
     public void testAuthorization_expired() throws Exception {
         // Setup
         ContentValues values = new ContentValues();
@@ -9603,6 +10093,7 @@ public class ContactsProvider2Test extends BaseContactsProvider2Test {
         assertFalse(cp.isValidPreAuthorizedUri(authorizedUri));
     }
 
+    @Test
     public void testAuthorization_contactUpgrade() throws Exception {
         ContactsDatabaseHelper helper =
                 ((ContactsDatabaseHelper) ((ContactsProvider2) getProvider()).getDatabaseHelper());

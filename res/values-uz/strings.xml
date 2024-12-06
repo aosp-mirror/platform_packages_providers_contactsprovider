@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontaktlar"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Boshqa"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Ovozli xabar egasi: "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Mavjud kontaktlar sinxronlansinmi?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"%1$s %2$s (%3$s) hisobiga zaxiralanganiga ishonch hosil qilish uchun ularni sinxronlashingiz mumkin"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# ta mavjud kontakt}other{# ta mavjud kontakt}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sinxronlash"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Sinxronlanmasin"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontaktlar ma’lumotlar bazasidan nusxa ko‘chirish"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Siz 1) barcha qo‘ng‘iroqlar jurnali va barcha kontaktlarga aloqador ma’lumotlar ni o‘z ichiga olgan ma’lumotlar bazangizdan ichki xotiraga nusxa ko‘chirish va 2) uni e-pochta orqali jo‘natmoqchisiz. Ularni muvaffaqiyatli nusxa ko‘chirib yoki elektron xat qabul qilingandan so‘ng nusxasini o‘chirishni unutmang."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Hozir o‘chirish"</string>

@@ -16,11 +16,13 @@
 
 package com.android.providers.contacts;
 
+import static com.android.providers.contacts.flags.Flags.cp2SyncSearchIndexFlag;
+
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteStatement;
 import android.util.ArrayMap;
 import android.util.ArraySet;
-
-import com.google.android.collect.Maps;
-import com.google.android.collect.Sets;
 
 import java.util.Map.Entry;
 import java.util.Set;
@@ -89,14 +91,32 @@ public class TransactionContext  {
         mUpdatedSyncStates.put(rowId, data);
     }
 
-    public void invalidateSearchIndexForRawContact(long rawContactId) {
-        if (mStaleSearchIndexRawContacts == null) mStaleSearchIndexRawContacts = new ArraySet<>();
-        mStaleSearchIndexRawContacts.add(rawContactId);
+    public void invalidateSearchIndexForRawContact(SQLiteDatabase db, long rawContactId) {
+        if (!cp2SyncSearchIndexFlag()) {
+            if (mStaleSearchIndexRawContacts == null) {
+                mStaleSearchIndexRawContacts = new ArraySet<>();
+            }
+            mStaleSearchIndexRawContacts.add(rawContactId);
+            return;
+        }
+        createStaleSearchIndexTableIfNotExists(db);
+        db.execSQL("""
+                INSERT OR IGNORE INTO stale_search_index_contacts
+                    SELECT raw_contacts.contact_id
+                    FROM raw_contacts
+                    WHERE raw_contacts._id = ?""",
+                new Long[]{rawContactId});
     }
 
-    public void invalidateSearchIndexForContact(long contactId) {
-        if (mStaleSearchIndexContacts == null) mStaleSearchIndexContacts = new ArraySet<>();
-        mStaleSearchIndexContacts.add(contactId);
+    public void invalidateSearchIndexForContact(SQLiteDatabase db, long contactId) {
+        if (!cp2SyncSearchIndexFlag()) {
+            if (mStaleSearchIndexContacts == null) mStaleSearchIndexContacts = new ArraySet<>();
+            mStaleSearchIndexContacts.add(contactId);
+            return;
+        }
+        createStaleSearchIndexTableIfNotExists(db);
+        db.execSQL("INSERT OR IGNORE INTO stale_search_index_contacts VALUES (?)",
+                new Long[]{contactId});
     }
 
     public Set<Long> getInsertedRawContactIds() {
@@ -120,13 +140,27 @@ public class TransactionContext  {
     }
 
     public Set<Long> getStaleSearchIndexRawContactIds() {
+        if (cp2SyncSearchIndexFlag()) {
+            throw new UnsupportedOperationException();
+        }
         if (mStaleSearchIndexRawContacts == null) mStaleSearchIndexRawContacts = new ArraySet<>();
         return mStaleSearchIndexRawContacts;
     }
 
     public Set<Long> getStaleSearchIndexContactIds() {
+        if (cp2SyncSearchIndexFlag()) {
+            throw new UnsupportedOperationException();
+        }
         if (mStaleSearchIndexContacts == null) mStaleSearchIndexContacts = new ArraySet<>();
         return mStaleSearchIndexContacts;
+    }
+
+    public long getStaleSearchIndexContactIdsCount(SQLiteDatabase db) {
+        createStaleSearchIndexTableIfNotExists(db);
+        try (Cursor cursor =
+                db.rawQuery("SELECT COUNT(*) FROM stale_search_index_contacts", null)) {
+            return cursor.moveToFirst() ? cursor.getLong(0) : 0;
+        }
     }
 
     public Set<Entry<Long, Object>> getUpdatedSyncStates() {
@@ -153,13 +187,30 @@ public class TransactionContext  {
         mBackupIdChangedRawContacts = null;
     }
 
-    public void clearSearchIndexUpdates() {
-        mStaleSearchIndexRawContacts = null;
-        mStaleSearchIndexContacts = null;
+    public void clearSearchIndexUpdates(SQLiteDatabase db) {
+        if (cp2SyncSearchIndexFlag()) {
+            db.delete("stale_search_index_contacts", null, null);
+        } else {
+            mStaleSearchIndexRawContacts = null;
+            mStaleSearchIndexContacts = null;
+        }
     }
 
-    public void clearAll() {
+    public void clearAll(SQLiteDatabase db) {
         clearExceptSearchIndexUpdates();
-        clearSearchIndexUpdates();
+        clearSearchIndexUpdates(db);
+    }
+
+    private void createStaleSearchIndexTableIfNotExists(SQLiteDatabase db) {
+        // Given the SQL query is a DDL statement if one uses SQLiteDatabase#execSQL
+        // to run it, it will trigger a clearing of the SQLite prepared statement cache.
+        // Clearing the cache results in worst performance when running recurring SQL
+        // queries. For this reason prefer to use a pre-compiled SQL statement, which
+        // bypasses the cache clearing.
+        try (SQLiteStatement statement = db.compileStatement("""
+                CREATE TEMP TABLE IF NOT EXISTS
+                 stale_search_index_contacts (id INTEGER PRIMARY KEY)""")) {
+            statement.execute();
+        }
     }
 }
