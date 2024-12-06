@@ -448,7 +448,7 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
 
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
-    @DisableCompatChanges({ContactsProvider2.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS})
+    @DisableCompatChanges({ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS})
     public void testRawContactInsert_whenDefaultAccountSetToCloud_contactCreationNotRestricted() {
         mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
         mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
@@ -488,7 +488,7 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
 
     @Test
     @RequiresFlagsEnabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
-    @EnableCompatChanges({ContactsProvider2.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS})
+    @EnableCompatChanges({ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS})
     public void testRawContactInsert_whenDefaultAccountSetToCloud_contactCreationRestricted() {
         mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
         mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1, SYSTEM_CLOUD_ACCOUNT_2});
