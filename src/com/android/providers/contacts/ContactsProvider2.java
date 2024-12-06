@@ -37,8 +37,6 @@ import android.app.AppOpsManager;
 import android.app.BroadcastOptions;
 import android.app.SearchManager;
 import android.app.compat.CompatChanges;
-import android.compat.annotation.ChangeId;
-import android.compat.annotation.EnabledSince;
 import android.content.BroadcastReceiver;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
@@ -465,17 +463,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
     public static final int DELETED_CONTACTS_ID = 23001;
 
     public static final int DIRECTORY_FILE_ENTERPRISE = 24000;
-
-    /**
-     * Restricted the contacts creation in specific accounts.
-     *
-     * When enabled, contacts cannot be created under local or SIM accounts when default account
-     * is set to an account associated with a cloud provider.
-     */
-    @ChangeId
-    @EnabledSince(targetSdkVersion = Build.VERSION_CODES.BAKLAVA)
-    static final long RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS = 352312780L;
-
 
     // Inserts into URIs in this map will direct to the profile database if the parent record's
     // value (looked up from the ContentValues object with the key specified by the value in this
@@ -4921,7 +4908,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
                 if (isAccountChanging) {
                     if (newDefaultAccountApiEnabled() && CompatChanges.isChangeEnabled(
-                            RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
+                            ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
                             Binder.getCallingUid())) {
                         mAccountResolver.validateAccountForContactAddition(updatedAccountName,
                                 updatedAccountType);
@@ -5110,7 +5097,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // operation, which is clean such that no partial updated will be committed to the
                 // DB.
                 if (applyDefaultAccount && CompatChanges.isChangeEnabled(
-                        RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
+                        ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
                         Binder.getCallingUid())) {
                     mAccountResolver.validateAccountForContactAddition(
                             newAccountWithDataSet.getAccountName(),
@@ -10548,7 +10535,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             boolean applyDefaultAccount) {
         boolean shouldValidateAccountForContactAddition =
                 applyDefaultAccount && CompatChanges.isChangeEnabled(
-                        RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
+                        ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
                         Binder.getCallingUid());
 
         final AccountWithDataSet account = mAccountResolver.resolveAccountWithDataSet(uri, values,
