@@ -2556,6 +2556,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             final long now = Clock.getInstance().currentTimeMillis();
             final SQLiteDatabase db = mDbHelper.get().getWritableDatabase();
             db.beginTransactionNonExclusive();
+            Cursor cursor =  null;
             try {
                 // First delete any pre-authorization URIs that are no longer valid. Unfortunately,
                 // this operation will grab a write lock for readonly queries. Since this only
@@ -2565,15 +2566,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         new String[]{String.valueOf(now)});
 
                 // Now check to see if the pre-authorized URI map contains the URI.
-                final Cursor c = db.query(Tables.PRE_AUTHORIZED_URIS, null,
+                cursor = db.query(Tables.PRE_AUTHORIZED_URIS, null,
                         PreAuthorizedUris.URI + "=?1",
                         new String[]{uri.toString()}, null, null, null);
-                final boolean isValid = c.getCount() != 0;
+                final boolean isValid = cursor.getCount() != 0;
 
                 db.setTransactionSuccessful();
                 return isValid;
             } finally {
                 db.endTransaction();
+                MoreCloseables.closeQuietly(cursor);
             }
         }
         return false;
@@ -6962,7 +6964,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
                     } finally {
                         if (!foundResult) {
                             // We'll be returning a different cursor, so close this one.
-                            cursor.close();
+                            MoreCloseables.closeQuietly(cursor);
                         }
                     }
                 }
@@ -7154,11 +7156,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // This method will return either primary directory or enterprise directory
                 final long inputDirectoryId = ContentUris.parseId(uri);
                 if (Directory.isEnterpriseDirectoryId(inputDirectoryId)) {
-                    final Cursor cursor = queryCorpContactsProvider(
-                            ContentUris.withAppendedId(Directory.CONTENT_URI,
-                            inputDirectoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE),
-                            projection, selection, selectionArgs, sortOrder, cancellationSignal);
-                    return rewriteCorpDirectories(cursor);
+                    Cursor cursor = null;
+                    try {
+                        cursor = queryCorpContactsProvider(
+                                ContentUris.withAppendedId(Directory.CONTENT_URI,
+                                inputDirectoryId - Directory.ENTERPRISE_DIRECTORY_ID_BASE),
+                                projection, selection, selectionArgs, sortOrder, cancellationSignal);
+                        return rewriteCorpDirectories(cursor);
+                    } finally {
+                        MoreCloseables.closeQuietly(cursor);
+                    }
                 } else {
                     // As it is not an enterprise directory id, fall back to original API
                     final Uri localUri = ContentUris.withAppendedId(Directory.CONTENT_URI,
@@ -7638,11 +7645,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
         lookupQb.appendWhere(contactIdColumn + "=? AND " + lookupKeyColumn + "=?");
         Cursor c = doQuery(db, lookupQb, projection, selection, args, sortOrder,
                 groupBy, null, limit, cancellationSignal);
-        if (c.getCount() != 0) {
+        if (c != null && c.getCount() != 0) {
             return c;
         }
-
-        c.close();
+        MoreCloseables.closeQuietly(c);
         return null;
     }
 
