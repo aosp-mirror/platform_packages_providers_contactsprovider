@@ -16,7 +16,7 @@
 
 package com.android.providers.contacts;
 
-import static com.android.providers.contacts.flags.Flags.cp2AccountMoveFlag;
+import static com.android.providers.contacts.flags.Flags.disableCp2AccountMoveFlag;
 import static com.android.providers.contacts.flags.Flags.cp2AccountMoveSyncStubFlag;
 import static com.android.providers.contacts.flags.Flags.cp2AccountMoveDeleteNonCommonDataRowsFlag;
 import static com.android.providers.contacts.flags.Flags.disableMoveToIneligibleDefaultAccountFlag;
@@ -246,7 +246,7 @@ public class ContactMover {
     // Keep it in proguard for testing: once it's used in production code, remove this annotation.
     @NeededForTesting
     void moveLocalToCloudDefaultAccount() {
-        if (!cp2AccountMoveFlag()) {
+        if (disableCp2AccountMoveFlag()) {
             Log.w(TAG, "moveLocalToCloudDefaultAccount: flag disabled");
             return;
         }
@@ -275,7 +275,7 @@ public class ContactMover {
     // Keep it in proguard for testing: once it's used in production code, remove this annotation.
     @NeededForTesting
     void moveSimToCloudDefaultAccount() {
-        if (!cp2AccountMoveFlag()) {
+        if (disableCp2AccountMoveFlag()) {
             Log.w(TAG, "moveSimToCloudDefaultAccount: flag disabled");
             return;
         }
@@ -306,7 +306,7 @@ public class ContactMover {
     // Keep it in proguard for testing: once it's used in production code, remove this annotation.
     @NeededForTesting
     int getNumberLocalContacts() {
-        if (!cp2AccountMoveFlag()) {
+        if (disableCp2AccountMoveFlag()) {
             Log.w(TAG, "getNumberLocalContacts: flag disabled");
             return 0;
         }
@@ -334,7 +334,7 @@ public class ContactMover {
     // Keep it in proguard for testing: once it's used in production code, remove this annotation.
     @NeededForTesting
     int getNumberSimContacts() {
-        if (!cp2AccountMoveFlag()) {
+        if (disableCp2AccountMoveFlag()) {
             Log.w(TAG, "getNumberSimContacts: flag disabled");
             return 0;
         }
@@ -363,7 +363,7 @@ public class ContactMover {
     // Keep it in proguard for testing: once it's used in production code, remove this annotation.
     @NeededForTesting
     void moveRawContacts(Set<AccountWithDataSet> sourceAccounts, AccountWithDataSet destAccount) {
-        if (!cp2AccountMoveFlag()) {
+        if (disableCp2AccountMoveFlag()) {
             Log.w(TAG, "moveRawContacts: flag disabled");
             return;
         }
@@ -385,7 +385,7 @@ public class ContactMover {
     @NeededForTesting
     void moveRawContactsWithSyncStubs(Set<AccountWithDataSet> sourceAccounts,
             AccountWithDataSet destAccount) {
-        if (!cp2AccountMoveFlag() || !cp2AccountMoveSyncStubFlag()) {
+        if (disableCp2AccountMoveFlag() || !cp2AccountMoveSyncStubFlag()) {
             Log.w(TAG, "moveRawContactsWithSyncStubs: flags disabled");
             return;
         }

@@ -21,7 +21,7 @@ import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.provider.Flags.newDefaultAccountApiEnabled;
 
-import static com.android.providers.contacts.flags.Flags.cp2AccountMoveFlag;
+import static com.android.providers.contacts.flags.Flags.disableCp2AccountMoveFlag;
 import static com.android.providers.contacts.flags.Flags.cp2SyncSearchIndexFlag;
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
@@ -2628,7 +2628,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             }
         } else if (RawContacts.DefaultAccount.MOVE_LOCAL_CONTACTS_TO_CLOUD_DEFAULT_ACCOUNT_METHOD
                 .equals(method)) {
-            if (!cp2AccountMoveFlag() || !newDefaultAccountApiEnabled()) {
+            if (!newDefaultAccountApiEnabled() || disableCp2AccountMoveFlag()) {
                 return null;
             }
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), WRITE_PERMISSION);
@@ -2641,9 +2641,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         } else if (RawContacts.DefaultAccount.GET_NUMBER_OF_MOVABLE_LOCAL_CONTACTS_METHOD
                 .equals(method)) {
             if (!newDefaultAccountApiEnabled()) {
+                Log.w(TAG, "Flag newDefaultAccountApiEnabled disabled");
                 return null;
             }
-            if (!cp2AccountMoveFlag()) {
+            if (disableCp2AccountMoveFlag()) {
+              Log.w(TAG, "Cp2AccountMoveFlag disabled");
                 return new Bundle();
             }
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
@@ -2657,7 +2659,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
         } else if (RawContacts.DefaultAccount.MOVE_SIM_CONTACTS_TO_CLOUD_DEFAULT_ACCOUNT_METHOD
                 .equals(method)) {
-            if (!cp2AccountMoveFlag() || !newDefaultAccountApiEnabled()) {
+            if (!newDefaultAccountApiEnabled() || disableCp2AccountMoveFlag()) {
                 return null;
             }
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), WRITE_PERMISSION);
@@ -2672,7 +2674,7 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (!newDefaultAccountApiEnabled()) {
                 return null;
             }
-            if (!cp2AccountMoveFlag()) {
+            if (disableCp2AccountMoveFlag()) {
                 return new Bundle();
             }
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);

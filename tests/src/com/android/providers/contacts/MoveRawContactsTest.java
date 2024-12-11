@@ -394,7 +394,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveDuplicateRawContacts() {
         // create a duplicate pair of contacts
         long sourceDupeRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -413,7 +413,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueRawContactsWithDataRows() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -441,7 +441,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueRawContacts() {
         // create a near duplicate in the destination account
         long destContactId = RawContactUtil.createRawContactWithName(
@@ -465,7 +466,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueRawContactsStubDisabled() {
         // create a near duplicate in the destination account
         long destContactId = RawContactUtil.createRawContactWithName(
@@ -489,7 +490,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueRawContactsFromNullAccount() {
         mActor.setAccounts(new Account[]{DEST_ACCOUNT});
         AccountWithDataSet source =
@@ -524,7 +526,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueRawContactsFromNullAccountToEmptyDestination() {
         mActor.setAccounts(new Account[]{DEST_ACCOUNT});
         AccountWithDataSet source =
@@ -552,7 +555,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueRawContactsToNullAccount() {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT});
         AccountWithDataSet dest =
@@ -573,7 +577,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueRawContactsToNullAccountStubDisabled() {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT});
         AccountWithDataSet dest =
@@ -600,7 +604,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
      * will be deleted as a duplicate.
      */
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG,
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG,
             Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
     public void testMoveUniqueRawContactWithNonPortableDataRowsFlagEnabled() {
         // create a duplicate pair of contacts
@@ -641,8 +645,9 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
      * be treated as unique.
      */
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
-    @DisableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG,
+            Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
     public void testMoveUniqueRawContactWithNonPortableDataRowsFlagDisabled() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -680,8 +685,9 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
      * be treated as unique.
      */
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG,
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG,
             Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueRawContactsWithNonPortableDataRowsAccountTypesMatch() {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT_WITH_SOURCE_TYPE});
         AccountWithDataSet dest =
@@ -725,8 +731,9 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
      * be treated as unique.
      */
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
-    @DisableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG,
+            Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
     public void testMoveUniqueRawContactsWithNonPortableDataRowsAccountTypesMatchFlagDisabled() {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT_WITH_SOURCE_TYPE});
         AccountWithDataSet dest =
@@ -770,8 +777,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
      * be treated as a duplicate.
      */
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG,
-            Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveDuplicateRawContactsWithNonPortableDataRowsAccountTypesMatch() {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT_WITH_SOURCE_TYPE});
         AccountWithDataSet dest =
@@ -811,8 +818,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
      * be treated as a duplicate.
      */
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
-    @DisableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_DELETE_NON_COMMON_DATA_ROWS_FLAG})
     public void testMoveDuplicateRawContactsWithNonPortableDataRowsAccountTypesMatchFlagDisabled() {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT_WITH_SOURCE_TYPE});
         AccountWithDataSet dest =
@@ -846,7 +852,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveDuplicateNonSystemGroup() {
         // create a duplicate pair of contacts
         long sourceDupeRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -876,7 +883,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueNonSystemGroup() {
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
                 SOURCE_ACCOUNT);
@@ -902,7 +910,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueNonSystemGroupWithSourceId() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -924,7 +933,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueNonSystemGroupWithSourceIdStubsDisabled() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -953,7 +962,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG, Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_SYNC_STUB_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueRawContactsWithGroups() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -996,7 +1006,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveDuplicateSystemGroup() {
         // create a duplicate pair of contacts
         long sourceDupeRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -1028,7 +1038,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveUniqueSystemGroup() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -1053,7 +1063,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testDoNotMoveEmptyUniqueSystemGroup() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -1086,7 +1096,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testDoNotMoveAutoAddSystemGroup() {
         // create a duplicate pair of contacts
         long sourceRawContactId = RawContactUtil.createRawContactWithName(mResolver,
@@ -1126,7 +1136,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveLocalToDefaultCloudAccount() {
         mActor.setAccounts(new Account[]{DEST_CLOUD_ACCOUNT});
         setDefaultAccountManagerAccounts(new Account[]{
@@ -1148,9 +1158,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({
-            Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG,
-            Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG})
+    @EnableFlags({Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveLocalToDefaultCloudAccount_disableIneligibleAccountMove_flagOn() {
         mActor.setAccounts(new Account[]{DEST_CLOUD_ACCOUNT});
         setDefaultAccountManagerAccounts(new Account[]{
@@ -1174,8 +1183,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
-    @DisableFlags({Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG,
+            Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG})
     public void testMoveLocalToIneligibleCloudAccount_disableIneligibleAccountMove_flagOff() {
         mActor.setAccounts(new Account[]{DEST_ACCOUNT});
         setDefaultAccountManagerAccounts(new Account[]{
@@ -1199,9 +1208,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({
-            Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG,
-            Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG})
+    @EnableFlags({Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveLocalToIneligibleCloudAccount_disableIneligibleAccountMove_flagOn() {
         mActor.setAccounts(new Account[]{DEST_ACCOUNT});
         setDefaultAccountManagerAccounts(new Account[]{
@@ -1227,7 +1235,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveToDefaultNonCloudAccount() {
         mActor.setAccounts(new Account[]{DEST_ACCOUNT});
         AccountWithDataSet source =
@@ -1249,7 +1257,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveFromNonLocalAccount() {
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_CLOUD_ACCOUNT});
         setDefaultAccountManagerAccounts(new Account[]{
@@ -1271,7 +1279,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveSimToDefaultCloudAccount() {
         mActor.setAccounts(new Account[]{SIM_ACCOUNT, DEST_CLOUD_ACCOUNT});
         setDefaultAccountManagerAccounts(new Account[]{
@@ -1295,9 +1303,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
 
     @Test
-    @EnableFlags({
-            Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG,
-            Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG})
+    @EnableFlags({Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveSimToDefaultCloudAccount_disableIneligibleAccountMove_flagOn() {
         mActor.setAccounts(new Account[]{SIM_ACCOUNT, DEST_CLOUD_ACCOUNT});
         setDefaultAccountManagerAccounts(new Account[]{
@@ -1322,8 +1329,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
-    @DisableFlags({Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG,
+            Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG})
     public void testMoveSimToIneligibleCloudAccount_disableIneligibleAccountMove_flagOff() {
         mActor.setAccounts(new Account[]{SIM_ACCOUNT, DEST_ACCOUNT});
         setDefaultAccountManagerAccounts(new Account[]{
@@ -1348,10 +1355,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({
-            Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG,
-            Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG
-    })
+    @EnableFlags({Flags.FLAG_DISABLE_MOVE_TO_INELIGIBLE_DEFAULT_ACCOUNT_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testMoveSimToIneligibleCloudAccount_disableIneligibleAccountMove_flagOn() {
         mActor.setAccounts(new Account[]{DEST_ACCOUNT});
         setDefaultAccountManagerAccounts(new Account[]{
@@ -1377,7 +1382,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testGetNumberContactsWithSimContacts() {
         mActor.setAccounts(new Account[]{SIM_ACCOUNT, DEST_CLOUD_ACCOUNT});
 
@@ -1406,7 +1411,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testGetNumberContactsWithLocalContacts() {
         mActor.setAccounts(new Account[]{DEST_CLOUD_ACCOUNT});
         setDefaultAccountManagerAccounts(new Account[]{
@@ -1430,7 +1435,7 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     }
 
     @Test
-    @EnableFlags({Flags.FLAG_CP2_ACCOUNT_MOVE_FLAG})
+    @DisableFlags({Flags.FLAG_DISABLE_CP2_ACCOUNT_MOVE_FLAG})
     public void testGetNumberContactsWithoutCloudAccount() {
         mActor.setAccounts(new Account[]{SIM_ACCOUNT});
 
