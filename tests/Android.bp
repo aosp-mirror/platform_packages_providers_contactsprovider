@@ -45,7 +45,7 @@ test_module_config {
     options: [
         {
             name: "feature-flags:flag-value",
-            value: "contacts/com.android.providers.contacts.flags.cp2_account_move_flag=true",
+            value: "contacts/com.android.providers.contacts.flags.disable_cp2_account_move_flag=false",
         },
         {
             name: "feature-flags:flag-value",
@@ -64,7 +64,7 @@ test_module_config {
     options: [
         {
             name: "feature-flags:flag-value",
-            value: "contacts/com.android.providers.contacts.flags.cp2_account_move_flag=false",
+            value: "contacts/com.android.providers.contacts.flags.disable_cp2_account_move_flag=true",
         },
         {
             name: "feature-flags:flag-value",
