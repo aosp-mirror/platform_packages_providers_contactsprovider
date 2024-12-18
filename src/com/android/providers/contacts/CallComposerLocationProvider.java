@@ -18,7 +18,6 @@ package com.android.providers.contacts;
 
 import static com.android.providers.contacts.util.DbQueryUtils.getEqualityClause;
 
-import android.Manifest;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.ContentProvider;
@@ -33,12 +32,13 @@ import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Process;
+import android.os.UserHandle;
 import android.provider.CallLog;
 import android.telecom.TelecomManager;
 import android.text.TextUtils;
 import android.util.Log;
 
-
+import com.android.internal.telephony.TelephonyPermissions;
 import com.android.providers.contacts.util.SelectionBuilder;
 
 import java.util.Objects;
@@ -173,7 +173,8 @@ public class CallComposerLocationProvider extends ContentProvider {
 
     private void enforceAccessRestrictions() {
         int uid = Binder.getCallingUid();
-        if (uid == Process.SYSTEM_UID || uid == Process.myUid() || uid == Process.PHONE_UID) {
+        if (TelephonyPermissions.isSystemOrPhone(uid)
+                || UserHandle.isSameApp(uid, Process.myUid())) {
             return;
         }
         String defaultDialerPackageName = getContext().getSystemService(TelecomManager.class)

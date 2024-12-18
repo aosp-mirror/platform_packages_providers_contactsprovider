@@ -12,11 +12,12 @@ android_app {
         "src/com/android/providers/contacts/EventLogTags.logtags",
     ],
     libs: [
-        "ext"
+        "ext",
     ],
     static_libs: [
         "android-common",
         "com.android.vcard",
+        "contactsprovider_flags_java_lib",
         "guava",
         "android.content.pm.flags-aconfig-java",
     ],
@@ -40,4 +41,16 @@ android_app {
 platform_compat_config {
     name: "contacts-provider-platform-compat-config",
     src: ":ContactsProvider",
+}
+
+aconfig_declarations {
+    name: "contactsprovider_flags",
+    package: "com.android.providers.contacts.flags",
+    container: "system",
+    srcs: ["contactsprovider_flags.aconfig"],
+}
+
+java_aconfig_library {
+    name: "contactsprovider_flags_java_lib",
+    aconfig_declarations: "contactsprovider_flags",
 }

@@ -17,6 +17,7 @@
 package com.android.providers.contacts;
 
 import static android.content.pm.UserProperties.SHOW_IN_LAUNCHER_WITH_PARENT;
+
 import static com.android.providers.contacts.ContactsActor.MockUserManager.CLONE_PROFILE_USER;
 import static com.android.providers.contacts.ContactsActor.MockUserManager.PRIMARY_USER;
 
@@ -292,11 +293,11 @@ public class ContactsActor {
         }
 
         @Override
-        public List<String> getPackagesWithCarrierPrivileges() {
+        public Set<String> getPackagesWithCarrierPrivileges() {
             if (!mHasCarrierPrivileges) {
-                return Collections.emptyList();
+                return Collections.emptySet();
             }
-            return Collections.singletonList(packageName);
+            return Collections.singleton(packageName);
         }
     }
 
@@ -386,7 +387,11 @@ public class ContactsActor {
             @Override
             public File getFilesDir() {
                 // TODO: Need to figure out something more graceful than this.
-                return new File("/data/data/com.android.providers.contacts.tests/files");
+                // The returned file path must take into account the user under
+                // which the test is running given that in HSUM the test doesn't
+                // run under the system user.
+                return new File("/data/user/" + UserHandle.myUserId()
+                        + "/com.android.providers.contacts.tests/files");
             }
 
             @Override
