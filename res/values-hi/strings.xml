@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"संपर्क"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"अन्य"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"इनका ध्‍वनि‍मेल: "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"क्या आपको मौजूदा संपर्कों को सिंक करना है?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"%1$s को सिंक करके, यह पक्का किया जा सकता है कि उनका बैक अप %2$s (%3$s) में सेव किया गया है"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# मौजूदा संपर्क}one{# मौजूदा संपर्क}other{# मौजूदा संपर्क}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"सिंक करें"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"सिंक न करें"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"संपर्क डेटाबेस की कॉपी बनाएं"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"आप 1) मोबाइल मेमोरी में अपने उस डेटाबेस की कॉपी बनाने वाले हैं जिसमें सभी संपर्कों से जुड़ी जानकारी और सभी कॉल लॉग शामिल हैं, और 2) उसे ईमेल करने वाले हैं. जैसे ही आप डिवाइस से इसकी कॉपी सफलतापूर्वक बना लें या ईमेल मिल जाए तो कॉपी हटाना न भूलें."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"अभी हटाएं"</string>

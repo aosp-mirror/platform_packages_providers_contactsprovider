@@ -15,11 +15,13 @@ android_app {
         "ext",
     ],
     static_libs: [
+        "ContactsProvider-change-ids",
         "android-common",
         "com.android.vcard",
         "contactsprovider_flags_java_lib",
         "guava",
         "android.content.pm.flags-aconfig-java",
+        "android.provider.flags-aconfig-java",
     ],
 
     // The Jacoco tool analyzes code coverage when running unit tests on the
@@ -38,9 +40,18 @@ android_app {
     },
 }
 
+
+java_library {
+    name: "ContactsProvider-change-ids",
+    srcs: ["src/com/android/providers/contacts/ChangeIds.java"],
+    libs: [
+        "app-compat-annotations",
+    ],
+}
+
 platform_compat_config {
     name: "contacts-provider-platform-compat-config",
-    src: ":ContactsProvider",
+    src: ":ContactsProvider-change-ids",
 }
 
 aconfig_declarations {

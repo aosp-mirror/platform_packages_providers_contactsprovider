@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontaktpersonas"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Cits"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Balss pasta ziņojums no "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Vai sinhronizēt esošās kontaktpersonas?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Varat sinhronizēt %1$s, lai nodrošinātu dublēšanu kontā %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# esošo kontaktpersonu}zero{# esošās kontaktpersonas}one{# esošo kontaktpersonu}other{# esošās kontaktpersonas}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sinhronizēt"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Nesinhronizēt"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontaktpersonu datu bāzes kopēšana"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Jūs gatavojaties 1) iekšējā atmiņā izveidot savas datu bāzes kopiju, ietverot visu kontaktpersonu informāciju un visu zvanu žurnālu, un 2) nosūtīt to pa e-pastu. Dzēsiet kopiju, tiklīdz tā būs veiksmīgi kopēta no ierīces vai tiks saņemts attiecīgais e-pasta ziņojums."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Dzēst tūlīt"</string>
