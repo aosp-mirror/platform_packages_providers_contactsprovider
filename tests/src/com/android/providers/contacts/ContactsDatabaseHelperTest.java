@@ -512,44 +512,129 @@ public class ContactsDatabaseHelperTest extends BaseContactsProvider2Test {
     }
 
     public void testGetAndSetDefaultAccount() {
-        Account account = mDbHelper.getDefaultAccount();
-        assertNull(account);
+        // Test: Initially, no default account exists
+        Account[] accounts = mDbHelper.getDefaultAccountIfAny();
+        assertEquals(0, accounts.length); // Check for empty array
 
+        // Test: Setting and getting valid default account
         mDbHelper.setDefaultAccount("a", "b");
-        account = mDbHelper.getDefaultAccount();
-        assertEquals("a", account.name);
-        assertEquals("b", account.type);
+        accounts = mDbHelper.getDefaultAccountIfAny();
+        assertEquals(1, accounts.length);
+        assertEquals("a", accounts[0].name);
+        assertEquals("b", accounts[0].type);
 
         mDbHelper.setDefaultAccount("c", "d");
-        account = mDbHelper.getDefaultAccount();
-        assertEquals("c", account.name);
-        assertEquals("d", account.type);
+        accounts = mDbHelper.getDefaultAccountIfAny();
+        assertEquals(1, accounts.length);
+        assertEquals("c", accounts[0].name);
+        assertEquals("d", accounts[0].type);
 
+        // Test: set the default account to NULL.
         mDbHelper.setDefaultAccount(null, null);
-        account = mDbHelper.getDefaultAccount();
-        assertNull(account);
+        accounts = mDbHelper.getDefaultAccountIfAny();
+        assertEquals(1, accounts.length);
+        assertNull(accounts[0]);
 
-        // Invalid account (not-null account name and null account type) throws exception.
+        // Test: Invalid account (non-null name, null type)
         try {
             mDbHelper.setDefaultAccount("name", null);
             fail("Setting default account to an invalid account should fail.");
         } catch (IllegalArgumentException e) {
-            // expected.
+            // Expected exception
         }
-        account = mDbHelper.getDefaultAccount();
-        assertNull(account);
+        accounts = mDbHelper.getDefaultAccountIfAny();
+        assertEquals(1, accounts.length);
+        assertNull(accounts[0]);
 
-        // Update default account to an existing account
+        // Test: Update default account to an existing account
         mDbHelper.setDefaultAccount("a", "b");
-        account = mDbHelper.getDefaultAccount();
-        assertEquals("a", account.name);
-        assertEquals("b", account.type);
+        accounts = mDbHelper.getDefaultAccountIfAny();
+        assertEquals(1, accounts.length);
+        assertEquals("a", accounts[0].name);
+        assertEquals("b", accounts[0].type);
 
+        // Test: Unset the default account.
+        ContentValues values = new ContentValues();
+        values.put(ContactsDatabaseHelper.AccountsColumns.IS_DEFAULT, 0);
+        mDb.update(Tables.ACCOUNTS, values, null, null);
+
+        accounts = mDbHelper.getDefaultAccountIfAny();
+        assertEquals(0, accounts.length); // Check for empty array
+
+        // Test: Verify total accounts in the database (including added defaults)
         try (Cursor cursor = mDbHelper.getReadableDatabase().query(Tables.ACCOUNTS, new String[]{
                 ContactsDatabaseHelper.AccountsColumns.ACCOUNT_NAME,
                 ContactsDatabaseHelper.AccountsColumns.ACCOUNT_TYPE
         }, null, null, null, null, null)) {
             assertEquals(3, cursor.getCount());
         }
+    }
+
+    void createRawContact(AccountWithDataSet account) {
+        createRawContact(account, /* deleted= */ false);
+    }
+
+    void createRawContact(AccountWithDataSet account, boolean deleted) {
+        // Create an account.
+        final long accountId = mDbHelper.getOrCreateAccountIdInTransaction(account);
+        // Create a raw contact.
+        ContentValues rawContactValues = new ContentValues();
+        rawContactValues.put(ContactsDatabaseHelper.RawContactsColumns.ACCOUNT_ID, accountId);
+        if (deleted) {
+            rawContactValues.put(RawContactsColumns.CONCRETE_DELETED, 1);
+        }
+        mDb.insert(Tables.RAW_CONTACTS, null, rawContactValues);
+    }
+
+    public void testCountRawContactsForAccount() {
+        createRawContact(
+                new AccountWithDataSet("testName", "testType", /* dataSet= */ null));
+
+        int count = mDbHelper.countRawContactsQuery(Set.of(
+                new AccountWithDataSet("testName", "testType", /* dataSet= */ null)
+        ));
+
+        assertEquals(1, count);
+    }
+
+    public void testCountRawContactsForAccountsNullAccount() {
+        createRawContact(new AccountWithDataSet(null, null, null));
+        createRawContact(new AccountWithDataSet(null, null, null));
+
+        int count = mDbHelper.countRawContactsQuery(Set.of(
+                new AccountWithDataSet(null, null, null)
+        ));
+
+        assertEquals(2, count);
+    }
+
+    public void testCountRawContactsDoesNotIncludeDeletedContacts() {
+        createRawContact(new AccountWithDataSet(null, null, null));
+        createRawContact(new AccountWithDataSet(null, null, null),
+                /* deleted= */ true
+        );
+
+        int count = mDbHelper.countRawContactsQuery(Set.of(
+                new AccountWithDataSet(null, null, null)
+        ));
+
+        assertEquals(1, count);
+    }
+
+    public void testCountRawContactsForAccountsEmptyLocalAccount() {
+        int count = mDbHelper.countRawContactsQuery(Set.of(AccountWithDataSet.LOCAL));
+
+        assertEquals(0, count);
+    }
+
+    public void testCountRawContactsForUnrelatedAccount() {
+        createRawContact(
+                new AccountWithDataSet("testName", "testType", /* dataSet= */ null));
+
+        int count = mDbHelper.countRawContactsQuery(Set.of(
+                new AccountWithDataSet(null, null, null)
+        ));
+
+        assertEquals(0, count);
     }
 }
