@@ -12,11 +12,12 @@ android_test {
         "mockito-target-minus-junit4",
         "flag-junit",
         "android.content.pm.flags-aconfig-java",
+        "contactsprovider_flags_java_lib",
     ],
     libs: [
-        "android.test.runner",
-        "android.test.base",
-        "android.test.mock",
+        "android.test.runner.stubs.system",
+        "android.test.base.stubs.system",
+        "android.test.mock.stubs.system",
     ],
 
     // Only compile source java files in this apk.
@@ -28,4 +29,43 @@ android_test {
     optimize: {
         enabled: false,
     },
+}
+
+// Tests with all launch-able flags enabled by default.
+// All flags' value will be true unless overridden in the individual tests.
+test_module_config {
+    name: "ContactsProviderTestsWithAllFlagEnabled",
+    base: "ContactsProviderTests",
+    test_suites: ["device-tests"],
+
+    options: [
+        {
+            name: "feature-flags:flag-value",
+            value: "contacts/com.android.providers.contacts.flags.cp2_account_move_flag=true",
+        },
+        {
+            name: "feature-flags:flag-value",
+            value: "contacts/com.android.providers.contacts.flags.enable_new_default_account_rule_flag=true",
+        },
+
+    ],
+}
+
+// Tests with all launch-able flags disabled by default.
+// All flags' value will be false unless overridden in the individual tests.
+test_module_config {
+    name: "ContactsProviderTestsWithAllFlagDisabled",
+    base: "ContactsProviderTests",
+    test_suites: ["device-tests"],
+
+    options: [
+        {
+            name: "feature-flags:flag-value",
+            value: "contacts/com.android.providers.contacts.flags.cp2_account_move_flag=false",
+        },
+        {
+            name: "feature-flags:flag-value",
+            value: "contacts/com.android.providers.contacts.flags.enable_new_default_account_rule_flag=false",
+        },
+    ],
 }
