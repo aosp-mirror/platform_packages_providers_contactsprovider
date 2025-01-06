@@ -26,8 +26,10 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"অন্যান্য"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ইয়াৰ পৰা অহা ভইচমেল "</string>
     <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ইতিমধ্যে থকা সম্পৰ্কসমূহ ছিংক কৰিবনে?"</string>
-    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"আপুনি %1$sক ছিংক কৰিব পাৰে যাতে সেইসমূহ %2$s (%3$s)ত বেক আপ কৰা বুলি নিশ্চিত কৰিব পাৰি"</string>
-    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# টা ইতিমধ্যে থকা সম্পৰ্ক}one{# টা ইতিমধ্যে থকা সম্পৰ্ক}other{# টা ইতিমধ্যে থকা সম্পৰ্ক}}"</string>
+    <!-- no translation found for move_contacts_to_default_account_dialog_message (8979541503037221359) -->
+    <skip />
+    <!-- no translation found for movable_contacts_count (5238731486523789939) -->
+    <skip />
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"ছিংক কৰক"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"ছিংক নকৰিব"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"সম্পৰ্কসূচীৰ ডেটাবেছ প্ৰতিলিপি কৰক"</string>

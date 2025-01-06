@@ -50,11 +50,11 @@
     <!-- The title for move contacts to default account dialog. [CHAR LIMIT=NONE] -->
     <string name="move_contacts_to_default_account_dialog_title">Sync existing contacts?</string>
     <!-- The message text for move contacts to default account dialog. [CHAR LIMIT=NONE] -->
-    <string name="move_contacts_to_default_account_dialog_message">You can sync %1$s to ensure they\'re backed up to %2$s (%3$s)</string>
+    <string name="move_contacts_to_default_account_dialog_message">You can sync %1$s backed up to %2$s (%3$s)</string>
     <!-- The message text for total movable contacts count. [CHAR LIMIT=NONE] -->
     <string name="movable_contacts_count"> {contacts_count, plural,
-        =1    {# existing contact}
-        other {# existing contacts}
+        =1    {# existing contact to ensure it\'s}
+        other {# existing contacts to ensure they\'re}
         }
     </string>
     <!-- The text for move contacts to default account dialog confirm button. [CHAR LIMIT=NONE] -->

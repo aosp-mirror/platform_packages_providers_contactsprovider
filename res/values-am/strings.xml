@@ -26,8 +26,10 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"ሌላ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ከ....የድምፅ መልዕክት "</string>
     <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ነባር ዕውቂያዎች ይስመሩ?"</string>
-    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"ወደ %2$s (%3$s) ምትኬ እንደተቀመጠላቸው ለማረጋገጥ %1$s ማስመር ይችላሉ"</string>
-    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# ነባር ዕውቂያ}one{# ነባር ዕውቂያ}other{# ነባር ዕውቂያዎች}}"</string>
+    <!-- no translation found for move_contacts_to_default_account_dialog_message (8979541503037221359) -->
+    <skip />
+    <!-- no translation found for movable_contacts_count (5238731486523789939) -->
+    <skip />
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"አስምር"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"አታመሳስል"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"የእውቂያዎች የውሂብ ጎታ ገልብጥ"</string>

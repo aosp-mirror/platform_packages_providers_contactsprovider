@@ -26,8 +26,10 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Cits"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Balss pasta ziņojums no "</string>
     <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Vai sinhronizēt esošās kontaktpersonas?"</string>
-    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Varat sinhronizēt %1$s, lai nodrošinātu dublēšanu kontā %2$s (%3$s)"</string>
-    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# esošo kontaktpersonu}zero{# esošās kontaktpersonas}one{# esošo kontaktpersonu}other{# esošās kontaktpersonas}}"</string>
+    <!-- no translation found for move_contacts_to_default_account_dialog_message (8979541503037221359) -->
+    <skip />
+    <!-- no translation found for movable_contacts_count (5238731486523789939) -->
+    <skip />
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sinhronizēt"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Nesinhronizēt"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontaktpersonu datu bāzes kopēšana"</string>

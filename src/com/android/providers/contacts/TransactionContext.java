@@ -20,6 +20,7 @@ import static com.android.providers.contacts.flags.Flags.cp2SyncSearchIndexFlag;
 
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteStatement;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 
@@ -46,8 +47,6 @@ public class TransactionContext  {
     private ArraySet<Long> mStaleSearchIndexRawContacts;
     private ArraySet<Long> mStaleSearchIndexContacts;
     private ArrayMap<Long, Object> mUpdatedSyncStates;
-
-    private boolean mIsStaleSearchIndexTableCreated = false;
 
     public TransactionContext(boolean forProfile) {
         mForProfile = forProfile;
@@ -203,11 +202,15 @@ public class TransactionContext  {
     }
 
     private void createStaleSearchIndexTableIfNotExists(SQLiteDatabase db) {
-        if (!mIsStaleSearchIndexTableCreated) {
-            db.execSQL("""
-                    CREATE TEMP TABLE IF NOT EXISTS
-                     stale_search_index_contacts (id INTEGER PRIMARY KEY)""");
-            mIsStaleSearchIndexTableCreated = true;
+        // Given the SQL query is a DDL statement if one uses SQLiteDatabase#execSQL
+        // to run it, it will trigger a clearing of the SQLite prepared statement cache.
+        // Clearing the cache results in worst performance when running recurring SQL
+        // queries. For this reason prefer to use a pre-compiled SQL statement, which
+        // bypasses the cache clearing.
+        try (SQLiteStatement statement = db.compileStatement("""
+                CREATE TEMP TABLE IF NOT EXISTS
+                 stale_search_index_contacts (id INTEGER PRIMARY KEY)""")) {
+            statement.execute();
         }
     }
 }

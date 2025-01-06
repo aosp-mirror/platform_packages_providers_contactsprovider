@@ -26,8 +26,10 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"ಇತರೆ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ಇದರಿಂದ ಧ್ವನಿಮೇಲ್‌ "</string>
     <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ಅಸ್ತಿತ್ವದಲ್ಲಿರುವ ಸಂಪರ್ಕಗಳನ್ನು ಸಿಂಕ್ ಮಾಡಬೇಕೆ?"</string>
-    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"%2$s (%3$s) ಅನ್ನು ಬ್ಯಾಕಪ್ ಮಾಡಲಾಗಿದೆಯೇ ಎಂದು ಖಚಿತಪಡಿಸಿಕೊಳ್ಳಲು ನೀವು %1$s ಅನ್ನು ಸಿಂಕ್ ಮಾಡಬಹುದು"</string>
-    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# ಅಸ್ತಿತ್ವದಲ್ಲಿರುವ ಸಂಪರ್ಕ}one{# ಅಸ್ತಿತ್ವದಲ್ಲಿರುವ ಸಂಪರ್ಕಗಳು}other{# ಅಸ್ತಿತ್ವದಲ್ಲಿರುವ ಸಂಪರ್ಕಗಳು}}"</string>
+    <!-- no translation found for move_contacts_to_default_account_dialog_message (8979541503037221359) -->
+    <skip />
+    <!-- no translation found for movable_contacts_count (5238731486523789939) -->
+    <skip />
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"ಸಿಂಕ್ ಮಾಡಿ"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"ಸಿಂಕ್ ಮಾಡಬೇಡಿ"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"ಸಂಪರ್ಕಗಳ ಡೇಟಾಬೇಸ್‌‌ ನಕಲಿಸಿ"</string>
