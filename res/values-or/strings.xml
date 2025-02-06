@@ -26,10 +26,8 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"ଅନ୍ଯ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ଏହାଙ୍କଠାରୁ ଭଏସମେଲ୍‌ "</string>
     <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ପୂର୍ବରୁ ଥିବା କଣ୍ଟାକ୍ଟଗୁଡ଼ିକୁ ସିଙ୍କ କରିବେ?"</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (8979541503037221359) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (5238731486523789939) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_message" msgid="8979541503037221359">"ଆପଣ %2$s (%3$s)ରେ ବେକ ଅପ ନେବା ପାଇଁ %1$sକୁ ସିଙ୍କ କରିପାରିବେ"</string>
+    <string name="movable_contacts_count" msgid="5238731486523789939">"{contacts_count,plural, =1{ପୂର୍ବରୁ ଥିବା # କଣ୍ଟାକ୍ଟକୁ ନିଶ୍ଚିତ କରିବାକୁ ହେବ ଯେ ଏହା}other{ପୂର୍ବରୁ ଥିବା # କଣ୍ଟାକ୍ଟକୁ ନିଶ୍ଚିତ କରିବାକୁ ହେବ ଯେ ଏଗୁଡ଼ିକ}}"</string>
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"ସିଙ୍କ କରନ୍ତୁ"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"ସିଙ୍କ କରନ୍ତୁ ନାହିଁ"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"କଣ୍ଟାକ୍ଟ ଡାଟାବେସକୁ କପି କରନ୍ତୁ"</string>

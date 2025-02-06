@@ -26,10 +26,8 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"වෙනත්"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"හඬ තැපෑල ලැබෙන්නේ "</string>
     <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"පවතින සම්බන්ධතා සමමුහුර්ත කරන්න ද?"</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (8979541503037221359) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (5238731486523789939) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_message" msgid="8979541503037221359">"ඔබට %2$s (%3$s) දක්වා උපස්ථ කර ඇති %1$s සමමුහුර්ත කළ හැක"</string>
+    <string name="movable_contacts_count" msgid="5238731486523789939">"{contacts_count,plural, =1{එය සහතික කිරීමට # පවතින සම්බන්ධතාවක්}one{ඒවා සහතික කිරීමට පවතින සම්බන්ධතා #ක්}other{ඒවා සහතික කිරීමට පවතින සම්බන්ධතා #ක්}}"</string>
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"සමමුහුර්ත කරන්න"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"සමමුහූර්ත නොකරන්න"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"සම්බන්ධතා දත්ත සමුදාය පිටපත් කරන්න"</string>

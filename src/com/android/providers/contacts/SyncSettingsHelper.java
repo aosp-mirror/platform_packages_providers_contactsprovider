@@ -17,45 +17,13 @@
 package com.android.providers.contacts;
 
 import android.accounts.Account;
+import android.content.ContentResolver;
+import android.provider.ContactsContract;
 
 import com.android.providers.contacts.util.NeededForTesting;
 
-import java.util.HashMap;
-import java.util.Map;
-
 @NeededForTesting
 public class SyncSettingsHelper {
-    @NeededForTesting
-    public enum SyncState { ON, OFF }
-
-    // TODO: Currently the sync state are stored in memory, which will be hooked up with the real
-    // sync settings.
-    private final Map<Account, SyncState> mSyncStates;
-
-    public SyncSettingsHelper() {
-        mSyncStates = new HashMap<>();
-    }
-
-    /**
-     * Turns on sync for the given account.
-     *
-     * @param account The account for which sync should be turned on.
-     */
-    @NeededForTesting
-    public void turnOnSync(Account account) {
-        mSyncStates.put(account, SyncState.ON);
-    }
-
-    /**
-     * Turns off sync for the given account.
-     *
-     * @param account The account for which sync should be turned off.
-     */
-    @NeededForTesting
-    public void turnOffSync(Account account) {
-        mSyncStates.put(account, SyncState.OFF);
-    }
-
     /**
      * Checks if sync is turned off for the given account.
      *
@@ -64,7 +32,7 @@ public class SyncSettingsHelper {
      */
     @NeededForTesting
     public boolean isSyncOff(Account account) {
-        return mSyncStates.get(account) == SyncState.OFF;
+        return ContentResolver.getIsSyncable(account, ContactsContract.AUTHORITY) <= 0;
     }
 }
 

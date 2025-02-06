@@ -21,15 +21,13 @@
     <string name="provider_label" msgid="6012150850819899907">"אנשי קשר"</string>
     <string name="upgrade_out_of_memory_notification_ticker" msgid="7638747231223520477">"שדרוג אנשי הקשר מחייב זיכרון נוסף."</string>
     <string name="upgrade_out_of_memory_notification_title" msgid="8888171924684998531">"משדרג את האחסון של אנשי קשר"</string>
-    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"הקש כדי להשלים את השדרוג."</string>
+    <string name="upgrade_out_of_memory_notification_text" msgid="2581831842693151968">"יש ללחוץ כדי להשלים את השדרוג."</string>
     <string name="default_directory" msgid="93961630309570294">"אנשי קשר"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"אחר"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"הודעה קולית מאת "</string>
     <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"רוצה לסנכרן את אנשי הקשר הקיימים?"</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (8979541503037221359) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (5238731486523789939) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_message" msgid="8979541503037221359">"‏רוצה לסנכרן %1$s שכל אנשי הקשר שלך מסונכרנים בחשבון %2$s‏ (%3$s)?"</string>
+    <string name="movable_contacts_count" msgid="5238731486523789939">"{contacts_count,plural, =1{איש קשר אחד כדי לוודא}one{‫# אנשי קשר כדי לוודא}two{‫# אנשי קשר כדי לוודא}other{‫# אנשי קשר כדי לוודא}}"</string>
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"סנכרון"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"אני לא רוצה לסנכרן"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"העתקת מסד נתוני אנשי קשר"</string>

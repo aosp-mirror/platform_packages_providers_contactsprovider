@@ -26,10 +26,8 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"其他"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"留言來自 "</string>
     <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"要同步處理現有聯絡人嗎？"</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (8979541503037221359) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (5238731486523789939) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_message" msgid="8979541503037221359">"你可同步處理 %1$s 系統將這些資訊備份至 %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="5238731486523789939">"{contacts_count,plural, =1{# 個現有聯絡人以確保}other{# 個現有聯絡人以確保}}"</string>
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"同步處理"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"不要同步處理"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"複製通訊錄資料庫"</string>

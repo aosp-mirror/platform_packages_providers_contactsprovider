@@ -91,6 +91,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
     DefaultAccountManager mDefaultAccountManager;
     AccountManager mMockAccountManager;
 
+    SyncSettingsHelper mSyncSettingsHelper;
+
     @Before
     @Override
     public void setUp() throws Exception {
@@ -98,8 +100,9 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
         mCp = (ContactsProvider2) getProvider();
         mMockAccountManager = Mockito.mock(AccountManager.class);
+        mSyncSettingsHelper = Mockito.mock(SyncSettingsHelper.class);
         mDefaultAccountManager = new DefaultAccountManager(mCp.getContext(),
-                mCp.getDatabaseHelper(), new SyncSettingsHelper(), mMockAccountManager);
+                mCp.getDatabaseHelper(), mSyncSettingsHelper, mMockAccountManager);
         mActor.setAccounts(new Account[]{SOURCE_ACCOUNT, DEST_ACCOUNT});
         mSource = AccountWithDataSet.get(SOURCE_ACCOUNT.name, SOURCE_ACCOUNT.type, null);
         mDest = AccountWithDataSet.get(DEST_ACCOUNT.name, DEST_ACCOUNT.type, null);
@@ -114,6 +117,8 @@ public class MoveRawContactsTest extends BaseContactsProvider2Test {
 
         mDefaultAccountManager.tryPushDefaultAccount(
                 DefaultAccountAndState.ofNotSet());
+
+        Mockito.when(mSyncSettingsHelper.isSyncOff(DEST_CLOUD_ACCOUNT)).thenReturn(false);
     }
 
     @After

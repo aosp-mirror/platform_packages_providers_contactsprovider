@@ -21,8 +21,8 @@ import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.provider.Flags.newDefaultAccountApiEnabled;
 
-import static com.android.providers.contacts.flags.Flags.disableCp2AccountMoveFlag;
 import static com.android.providers.contacts.flags.Flags.cp2SyncSearchIndexFlag;
+import static com.android.providers.contacts.flags.Flags.disableCp2AccountMoveFlag;
 import static com.android.providers.contacts.util.PhoneAccountHandleMigrationUtils.TELEPHONY_COMPONENT_NAME;
 
 import android.accounts.Account;
@@ -2219,6 +2219,15 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return getContext().getResources().getBoolean(R.bool.config_enableAppCloningBuildingBlocks)
                 && mAppCloningDeviceConfigHelper.getEnableAppCloningBuildingBlocks();
     }
+
+    @VisibleForTesting
+    protected boolean isAccountRestrictionEnabled() {
+        return
+                getContext().getResources()
+                        .getBoolean(R.bool.config_rawContactsAccountRestrictionEnabled);
+
+    }
+
 
     /**
      * Maximum dimension (height or width) of photo thumbnails.
@@ -4909,7 +4918,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         ? updatedDataSet : c.getString(GroupAccountQuery.DATA_SET);
 
                 if (isAccountChanging) {
-                    if (newDefaultAccountApiEnabled() && CompatChanges.isChangeEnabled(
+                    if (newDefaultAccountApiEnabled() && isAccountRestrictionEnabled()
+                            && CompatChanges.isChangeEnabled(
                             ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
                             Binder.getCallingUid())) {
                         mAccountResolver.validateAccountForContactAddition(updatedAccountName,
@@ -5098,9 +5108,10 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // a single transaction, failing checkAccountIsWritable will fail the entire update
                 // operation, which is clean such that no partial updated will be committed to the
                 // DB.
-                if (applyDefaultAccount && CompatChanges.isChangeEnabled(
-                        ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
-                        Binder.getCallingUid())) {
+                if (applyDefaultAccount && isAccountRestrictionEnabled()
+                        && CompatChanges.isChangeEnabled(
+                                ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
+                                Binder.getCallingUid())) {
                     mAccountResolver.validateAccountForContactAddition(
                             newAccountWithDataSet.getAccountName(),
                             newAccountWithDataSet.getAccountType());
@@ -10536,7 +10547,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
     private long replaceAccountInfoByAccountId(Uri uri, ContentValues values,
             boolean applyDefaultAccount) {
         boolean shouldValidateAccountForContactAddition =
-                applyDefaultAccount && CompatChanges.isChangeEnabled(
+                applyDefaultAccount && isAccountRestrictionEnabled()
+                        && CompatChanges.isChangeEnabled(
                         ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
                         Binder.getCallingUid());
 

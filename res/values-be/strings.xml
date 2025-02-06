@@ -26,10 +26,8 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Іншае"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Галасавое паведамленне ад "</string>
     <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Сінхранізаваць існуючыя кантакты?"</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (8979541503037221359) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (5238731486523789939) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_message" msgid="8979541503037221359">"Вы можаце сінхранізаваць %1$s ў %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="5238731486523789939">"{contacts_count,plural, =1{# існуючы кантакт, каб стварыць яго рэзервовую копію}one{# існуючы кантакт, каб стварыць іх рэзервовыя копіі}few{# існуючыя кантакты, каб стварыць іх рэзервовыя копіі}many{# існуючых кантактаў, каб стварыць іх рэзервовыя копіі}other{# існуючага кантакту, каб стварыць іх рэзервовыя копіі}}"</string>
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Сінхранізаваць"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Не сінхранізаваць"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Капiраваць базу дадзеных кантактаў"</string>

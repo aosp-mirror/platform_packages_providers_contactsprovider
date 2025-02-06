@@ -20,9 +20,11 @@ import static android.provider.ContactsContract.SimAccount.SDN_EF_TYPE;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assume.assumeTrue;
 
 import android.accounts.Account;
 import android.compat.testing.PlatformCompatChangeRule;
+import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.database.sqlite.SQLiteDatabase;
@@ -419,6 +421,14 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
 
         // 1 system cloud account is present on the device.
         mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
+
+        // The setIsSyncable operation may not be effective on some environments. Skip the remaining
+        // tests if setIsSyncable is not effective.
+        ContentResolver.setIsSyncable(SYSTEM_CLOUD_ACCOUNT_1, ContactsContract.AUTHORITY, 1);
+        Thread.sleep(1000);
+        assumeTrue(ContentResolver.getIsSyncable(SYSTEM_CLOUD_ACCOUNT_1, ContactsContract.AUTHORITY)
+                > 0);
+
         response = mResolver.call(ContactsContract.AUTHORITY_URI,
                 DefaultAccount.QUERY_ELIGIBLE_DEFAULT_ACCOUNTS_METHOD, null, null);
         accounts = response.getParcelableArrayList(
@@ -427,6 +437,14 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
 
         // 2 system cloud accounts are present on the device.
         mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1, SYSTEM_CLOUD_ACCOUNT_2});
+
+        // The setIsSyncable operation may not be effective on some environments. Skip the remaining
+        // tests if setIsSyncable is not effective.
+        ContentResolver.setIsSyncable(SYSTEM_CLOUD_ACCOUNT_2, ContactsContract.AUTHORITY, 1);
+        Thread.sleep(1000);
+        assumeTrue(ContentResolver.getIsSyncable(SYSTEM_CLOUD_ACCOUNT_2, ContactsContract.AUTHORITY)
+                > 0);
+
         response = mResolver.call(ContactsContract.AUTHORITY_URI,
                 DefaultAccount.QUERY_ELIGIBLE_DEFAULT_ACCOUNTS_METHOD, null, null);
         accounts = response.getParcelableArrayList(

@@ -26,10 +26,8 @@
     <string name="local_invisible_directory" msgid="705244318477396120">"Digər"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Səsli mesaj göndərən: "</string>
     <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Mövcud kontaktlar sinxronlaşdırılsın?"</string>
-    <!-- no translation found for move_contacts_to_default_account_dialog_message (8979541503037221359) -->
-    <skip />
-    <!-- no translation found for movable_contacts_count (5238731486523789939) -->
-    <skip />
+    <string name="move_contacts_to_default_account_dialog_message" msgid="8979541503037221359">"%1$s %2$s (%3$s) hesabına yedəklənməsini təmin edə bilərsiniz"</string>
+    <string name="movable_contacts_count" msgid="5238731486523789939">"{contacts_count,plural, =1{# mövcud kontaktı sinxronlaşdıraraq onun}other{# mövcud kontaktı sinxronlaşdıraraq onların}}"</string>
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sinxronlaşdırın"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Sinxronlaşdırmayın"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kontakt data bazasını kopyalayın"</string>
