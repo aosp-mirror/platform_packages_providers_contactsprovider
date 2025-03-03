@@ -26,6 +26,8 @@ import android.text.TextUtils;
 import java.util.List;
 
 public class AccountResolver {
+    public static final String UNABLE_TO_WRITE_TO_LOCAL_OR_SIM_EXCEPTION_MESSAGE =
+            "Cannot add contacts to local or SIM accounts when default account is set to cloud";
     private static final String TAG = "AccountResolver";
 
     private final ContactsDatabaseHelper mDbHelper;
@@ -152,8 +154,8 @@ public class AccountResolver {
 
         if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
             if (isDeviceOrSimAccount(account)) {
-                throw new IllegalArgumentException("Cannot add contacts to local or SIM accounts "
-                        + "when default account is set to cloud");
+                throw new IllegalArgumentException(
+                        UNABLE_TO_WRITE_TO_LOCAL_OR_SIM_EXCEPTION_MESSAGE);
             }
         }
     }

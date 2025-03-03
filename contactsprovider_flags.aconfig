@@ -43,3 +43,12 @@ flag {
     description: "Disable bulk move of contacts between accounts"
     bug: "382359013"
 }
+flag {
+   name: "log_contact_save_invalid_account_error"
+   namespace: "contacts"
+   description: "Log the error of saving contacts to invalid account"
+   bug: "399412962"
+   metadata {
+       purpose: PURPOSE_BUGFIX
+   }
+}

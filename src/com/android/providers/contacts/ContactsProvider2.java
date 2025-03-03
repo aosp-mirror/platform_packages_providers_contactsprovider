@@ -2615,15 +2615,16 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (newDefaultAccountApiEnabled()) {
                 return queryDefaultAccountForNewContacts();
             } else {
-                // Ignore the call if the flag is disabled.
-                Log.w(TAG, "Query default account for new contacts is not supported.");
+                throw new UnsupportedOperationException(
+                        "Query default account for new contacts is not supported.");
             }
         } else if (DefaultAccount.QUERY_ELIGIBLE_DEFAULT_ACCOUNTS_METHOD.equals(method)) {
             if (newDefaultAccountApiEnabled()) {
                 return queryEligibleDefaultAccounts();
             } else {
-                Log.w(TAG, "Query eligible account that can be set as cloud default account "
-                        + "is not supported.");
+                throw new UnsupportedOperationException(
+                        "Query eligible account that can be set as cloud default account "
+                                + "is not supported.");
             }
         } else if (Settings.SET_DEFAULT_ACCOUNT_METHOD.equals(method)) {
             return setDefaultAccountSetting(extras);
@@ -2632,13 +2633,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
             if (newDefaultAccountApiEnabled()) {
                 return setDefaultAccountForNewContactsSetting(extras);
             } else {
-                // Ignore the call if the flag is disabled.
-                Log.w(TAG, "Set default account for new contacts is not supported.");
+                throw new UnsupportedOperationException(
+                        "Set default account for new contacts is not supported.");
             }
         } else if (RawContacts.DefaultAccount.MOVE_LOCAL_CONTACTS_TO_CLOUD_DEFAULT_ACCOUNT_METHOD
                 .equals(method)) {
             if (!newDefaultAccountApiEnabled() || disableCp2AccountMoveFlag()) {
-                return null;
+                throw new UnsupportedOperationException(
+                        "Move local contacts to cloud default account is not supported");
             }
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), WRITE_PERMISSION);
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
@@ -2646,15 +2648,14 @@ public class ContactsProvider2 extends AbstractContactsProvider
             final Bundle response = new Bundle();
             mContactMover.moveLocalToCloudDefaultAccount();
             return response;
-
         } else if (RawContacts.DefaultAccount.GET_NUMBER_OF_MOVABLE_LOCAL_CONTACTS_METHOD
                 .equals(method)) {
             if (!newDefaultAccountApiEnabled()) {
-                Log.w(TAG, "Flag newDefaultAccountApiEnabled disabled");
-                return null;
+                throw new UnsupportedOperationException(
+                        "Getting the count of local contacts to move is not supported");
             }
             if (disableCp2AccountMoveFlag()) {
-              Log.w(TAG, "Cp2AccountMoveFlag disabled");
+                Log.w(TAG, "Cp2AccountMoveFlag disabled");
                 return new Bundle();
             }
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), READ_PERMISSION);
@@ -2665,11 +2666,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
             response.putInt(RawContacts.DefaultAccount.KEY_NUMBER_OF_MOVABLE_LOCAL_CONTACTS,
                     count);
             return response;
-
         } else if (RawContacts.DefaultAccount.MOVE_SIM_CONTACTS_TO_CLOUD_DEFAULT_ACCOUNT_METHOD
                 .equals(method)) {
             if (!newDefaultAccountApiEnabled() || disableCp2AccountMoveFlag()) {
-                return null;
+                throw new UnsupportedOperationException(
+                        "Move SIM contacts to cloud default account is not supported");
             }
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(), WRITE_PERMISSION);
             ContactsPermissions.enforceCallingOrSelfPermission(getContext(),
@@ -2677,11 +2678,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
             final Bundle response = new Bundle();
             mContactMover.moveSimToCloudDefaultAccount();
             return response;
-
         } else if (RawContacts.DefaultAccount.GET_NUMBER_OF_MOVABLE_SIM_CONTACTS_METHOD
                 .equals(method)) {
             if (!newDefaultAccountApiEnabled()) {
-                return null;
+                throw new UnsupportedOperationException(
+                        "Getting the count of SIM contacts to move is not supported");
             }
             if (disableCp2AccountMoveFlag()) {
                 return new Bundle();
@@ -2694,7 +2695,6 @@ public class ContactsProvider2 extends AbstractContactsProvider
             response.putInt(RawContacts.DefaultAccount.KEY_NUMBER_OF_MOVABLE_SIM_CONTACTS,
                     count);
             return response;
-
         }
         return null;
     }

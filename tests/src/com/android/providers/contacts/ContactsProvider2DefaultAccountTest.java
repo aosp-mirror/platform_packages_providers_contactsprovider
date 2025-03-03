@@ -155,28 +155,36 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
         // Default account is Unknown initially.
         assertEquals(0, mCp.getDatabaseHelper().getDefaultAccountIfAny().length);
 
-        assertNull(mResolver.call(ContactsContract.AUTHORITY_URI,
-                DefaultAccount.QUERY_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null, null));
+        assertThrows(UnsupportedOperationException.class, () -> {
+            mResolver.call(ContactsContract.AUTHORITY_URI,
+                    DefaultAccount.QUERY_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null, null);
+        });
 
         // Attempt to set default account to a cloud account.
-        assertNull(mResolver.call(ContactsContract.AUTHORITY_URI,
-                DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
-                bundleToSetDefaultAccountForNewContacts(
-                        DefaultAccountAndState.ofCloud(NON_SYSTEM_CLOUD_ACCOUNT_1))));
+        assertThrows(UnsupportedOperationException.class, () -> {
+            mResolver.call(ContactsContract.AUTHORITY_URI,
+                    DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
+                    bundleToSetDefaultAccountForNewContacts(
+                            DefaultAccountAndState.ofCloud(NON_SYSTEM_CLOUD_ACCOUNT_1)));
+        });
         // Default account is not changed.
         assertEquals(0, mCp.getDatabaseHelper().getDefaultAccountIfAny().length);
 
         // Attempt to set default account to local.
-        assertNull(mResolver.call(ContactsContract.AUTHORITY_URI,
-                DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
-                bundleToSetDefaultAccountForNewContacts(DefaultAccountAndState.ofLocal())));
+        assertThrows(UnsupportedOperationException.class, () -> {
+            mResolver.call(ContactsContract.AUTHORITY_URI,
+                    DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
+                    bundleToSetDefaultAccountForNewContacts(DefaultAccountAndState.ofLocal()));
+        });
         // Default account is not changed.
         assertEquals(0, mCp.getDatabaseHelper().getDefaultAccountIfAny().length);
 
         // Attempt to set default account to "not set".
-        assertNull(mResolver.call(ContactsContract.AUTHORITY_URI,
-                DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
-                bundleToSetDefaultAccountForNewContacts(DefaultAccountAndState.ofNotSet())));
+        assertThrows(UnsupportedOperationException.class, () -> {
+            mResolver.call(ContactsContract.AUTHORITY_URI,
+                    DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
+                    bundleToSetDefaultAccountForNewContacts(DefaultAccountAndState.ofNotSet()));
+        });
         // Default account is not changed.
         assertEquals(0, mCp.getDatabaseHelper().getDefaultAccountIfAny().length);
     }
@@ -387,14 +395,18 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
     @RequiresFlagsDisabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
     public void testGetEligibleCloudAccounts_flagOff() throws Exception {
         mActor.setAccounts(new Account[0]);
-        assertNull(mResolver.call(ContactsContract.AUTHORITY_URI,
-                        DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD,
-                        null, null));
+        assertThrows(UnsupportedOperationException.class, () -> {
+            mResolver.call(ContactsContract.AUTHORITY_URI,
+                    DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD,
+                    null, null);
+        });
 
         mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1});
-        assertNull(mResolver.call(ContactsContract.AUTHORITY_URI,
-                        DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD,
-                        null, null));
+        assertThrows(UnsupportedOperationException.class, () -> {
+            mResolver.call(ContactsContract.AUTHORITY_URI,
+                    DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD,
+                    null, null);
+        });
     }
 
     @Test

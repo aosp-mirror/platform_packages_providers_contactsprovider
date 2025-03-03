@@ -36,7 +36,7 @@ import androidx.test.filters.SmallTest;
 
 import com.android.providers.contacts.FixedAndroidTestCase;
 
-import org.mockito.Matchers;
+import org.mockito.ArgumentMatchers;
 
 import java.util.Arrays;
 import java.util.List;
@@ -294,16 +294,16 @@ public class EnterprisePolicyGuardTest extends FixedAndroidTestCase {
     private Context getMockContext(boolean isCallerIdEnabled, boolean isContactsSearchEnabled,
             boolean isManagedProfileEnabled) {
         DevicePolicyManager mockDpm = mock(DevicePolicyManager.class);
-        when(mockDpm.hasManagedProfileCallerIdAccess(Matchers.any(),Matchers.any()))
+        when(mockDpm.hasManagedProfileCallerIdAccess(ArgumentMatchers.any(),ArgumentMatchers.any()))
                 .thenReturn(isCallerIdEnabled);
-        when(mockDpm.hasManagedProfileContactsAccess(Matchers.any(),Matchers.any()))
+        when(mockDpm.hasManagedProfileContactsAccess(ArgumentMatchers.any(),ArgumentMatchers.any()))
                 .thenReturn(isContactsSearchEnabled);
 
         List<UserInfo> userInfos = MANAGED_USERINFO_LIST;
         UserManager mockUm = mock(UserManager.class);
         when(mockUm.getProcessUserId()).thenReturn(CURRENT_USER_ID);
         when(mockUm.getUsers()).thenReturn(userInfos);
-        when(mockUm.getProfiles(Matchers.anyInt())).thenReturn(userInfos);
+        when(mockUm.getProfiles(ArgumentMatchers.anyInt())).thenReturn(userInfos);
         when(mockUm.getProfileParent(WORK_USER_ID)).thenReturn(CURRENT_USER_INFO);
         when(mockUm.isQuietModeEnabled(UserHandle.of(WORK_USER_ID)))
                 .thenReturn(!isManagedProfileEnabled);
