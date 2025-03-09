@@ -52,3 +52,12 @@ flag {
        purpose: PURPOSE_BUGFIX
    }
 }
+flag {
+   name: "log_call_method"
+   namespace: "contacts"
+   description: "Log the call method"
+   bug: "400528898"
+   metadata {
+       purpose: PURPOSE_BUGFIX
+   }
+}

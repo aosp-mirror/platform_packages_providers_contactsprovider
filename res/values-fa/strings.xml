@@ -33,7 +33,7 @@
     <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"همگام‌سازی"</string>
     <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"همگام‌سازی نشود"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"کپی پایگاه داده مخاطبین"</string>
-    <string name="debug_dump_database_message" msgid="406438635002392290">"شما در شرف ۱) ایجاد یک نسخه از پایگاه داده‌ در حافظه داخلی هستید، این کپی حاوی همه اطلاعات مربوط به مخاطبین و همه گزارش‌های تماس است و همچنین می‌خواهید ۲) آن را ایمیل کنید. به‌خاطر داشته باشید که به محض تهیه این نسخه در دستگاه یا دریافت ایمیل، آن را حذف کنید."</string>
+    <string name="debug_dump_database_message" msgid="406438635002392290">"شما در شرف ۱) ایجاد یک نسخه از پایگاه داده‌ در فضای ذخیره‌سازی داخلی هستید، این کپی حاوی همه اطلاعات مربوط به مخاطبین و همه گزارش‌های تماس است و همچنین می‌خواهید ۲) آن را ایمیل کنید. به‌خاطر داشته باشید که به محض تهیه این نسخه در دستگاه یا دریافت ایمیل، آن را حذف کنید."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"اکنون حذف شود"</string>
     <string name="debug_dump_start_button" msgid="2837506913757600001">"شروع"</string>
     <string name="debug_dump_email_sender_picker" msgid="3534420908672176460">"یک برنامه را برای ارسال فایل خود انتخاب کنید"</string>

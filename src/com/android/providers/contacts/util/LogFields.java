@@ -37,6 +37,8 @@ public final class LogFields {
 
     private int resultCount;
 
+    private int mMethodCalled;
+
     private int uid;
 
     public LogFields(
@@ -80,6 +82,10 @@ public final class LogFields {
         return resultCount;
     }
 
+    public int getMethodCalled() {
+        return mMethodCalled;
+    }
+
     public int getUid() {
         return uid;
     }
@@ -93,6 +99,7 @@ public final class LogFields {
         private Exception exception;
         private Uri resultUri;
         private int resultCount;
+        private int mMethodCalled;
 
         private int uid;
 
@@ -143,6 +150,17 @@ public final class LogFields {
             return this;
         }
 
+        /**
+         * Sets the method called.
+         *
+         * @param methodCalled The method called.
+         * @return This {@code Builder} object for chaining.
+         */
+        public Builder setMethodCalled(int methodCalled) {
+            this.mMethodCalled = methodCalled;
+            return this;
+        }
+
         public Builder setUid(int uid) {
             this.uid = uid;
             return this;
@@ -155,6 +173,7 @@ public final class LogFields {
             logFields.exception = this.exception;
             logFields.resultUri = this.resultUri;
             logFields.uid = this.uid;
+            logFields.mMethodCalled = this.mMethodCalled;
             return logFields;
         }
     }
