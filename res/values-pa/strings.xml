@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"ਸੰਪਰਕ"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"ਹੋਰ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ਇਸ ਤੋਂ ਵੌਇਸਮੇਲ "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ਕੀ ਮੌਜੂਦਾ ਸੰਪਰਕਾਂ ਨੂੰ ਸਿੰਕ ਕਰਨਾ ਹੈ?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"ਤੁਸੀਂ ਇਹ ਪੱਕਾ ਕਰਨ ਲਈ %1$s ਨੂੰ ਸਿੰਕ ਕਰ ਸਕਦੇ ਹੋ ਕਿ ਉਨ੍ਹਾਂ ਦਾ %2$s (%3$s) ਵਿੱਚ ਬੈਕਅੱਪ ਲਿਆ ਗਿਆ ਹੈ"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# ਮੌਜੂਦਾ ਸੰਪਰਕ}one{# ਮੌਜੂਦਾ ਸੰਪਰਕ}other{# ਮੌਜੂਦਾ ਸੰਪਰਕ}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"ਸਿੰਕ ਕਰੋ"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"ਸਿੰਕ ਨਾ ਕਰੋ"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"ਸੰਪਰਕ ਡਾਟਾਬੇਸ ਕਾਪੀ ਕਰੋ"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"ਤੁਸੀਂ ਇਹ ਕਰਨ ਵਾਲੇ ਹੋ 1) ਆਪਣੇ ਡਾਟਾਬੇਸ ਦੀ ਇੱਕ ਕਾਪੀ ਬਣਾਓ ਜਿਸ ਵਿੱਚ ਸਾਰੀ ਸੰਪਰਕ ਸੰਬੰਧਿਤ ਜਾਣਕਾਰੀ ਅਤੇ ਅੰਦਰੂਨੀ ਸਟੋਰੇਜ ਵਿੱਚ ਸਾਰਾ ਕਾਲ ਲੌਗ ਸ਼ਾਮਲ ਹੋਵੇ ਅਤੇ 2) ਇਸਨੂੰ ਈਮੇਲ ਕਰੋ। ਜਿਵੇਂ ਹੀ ਤੁਸੀਂ ਇਸਨੂੰ ਸਫਲਤਾਪੂਰਵਕ ਕਾਪੀ ਕਰ ਲਓ ਜਾਂ ਈਮੇਲ ਪ੍ਰਾਪਤ ਕਰ ਲਓ, ਕਾਪੀ ਮਿਟਾਉਣਾ ਯਾਦ ਰੱਖੋ।"</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"ਹੁਣ ਮਿਟਾਓ"</string>

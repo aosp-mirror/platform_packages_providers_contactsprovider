@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontakty"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Iné"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Hlasová správa od "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Chcete synchronizovať existujúce kontakty?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Môžete synchronizovať %1$s, aby sa vytvorila záloha v účte %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# existujúci kontakt}few{# existujúce kontakty}many{# existing contacts}other{# existujúcich kontaktov}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Synchronizovať"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Nesynchronizovať"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopírovanie databázy kontaktov"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Práve sa chystáte 1) vytvoriť v internom ukladacom priestore kópiu svojej databázy, ktorá obsahuje všetky informácie týkajúce sa kontaktov a všetky hovory, a 2) poslať túto databázu e-mailom. Nezabudnite odstrániť kópiu hneď po úspešnom skopírovaní do zariadenia alebo doručení e-mailu."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Odstrániť"</string>
