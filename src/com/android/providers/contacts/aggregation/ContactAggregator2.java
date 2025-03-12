@@ -390,7 +390,7 @@ public class ContactAggregator2 extends AbstractContactAggregator {
                     mAggregatedPresenceDelete.execute();
                     if (cp2SyncSearchIndexFlag()) {
                         // Make sure we remove the obsolete contact id from search index
-                        txContext.invalidateSearchIndexForContact(cid);
+                        txContext.invalidateSearchIndexForContact(db, cid);
                     }
                 } else {
                     updateAggregateData(txContext, cid);

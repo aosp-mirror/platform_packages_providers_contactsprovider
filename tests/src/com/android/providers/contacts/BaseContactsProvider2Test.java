@@ -899,6 +899,20 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         mResolver.update(contentUri, values, null, null);
     }
 
+
+    protected void storeValues(Uri contentUri, long id, Map<String, String> columnValueMap) {
+        storeValues(ContentUris.withAppendedId(contentUri, id), columnValueMap);
+    }
+
+    protected void storeValues(Uri contentUri, Map<String, String> columnValueMap) {
+        ContentValues values = new ContentValues();
+        for (String key : columnValueMap.keySet()) {
+            values.put(key, columnValueMap.get(key));
+        }
+        mResolver.update(contentUri, values, null, null);
+    }
+
+
     protected void storeValue(Uri contentUri, long id, String column, long value) {
         storeValue(ContentUris.withAppendedId(contentUri, id), column, value);
     }

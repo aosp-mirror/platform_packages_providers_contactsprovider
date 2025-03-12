@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Кантакты"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Іншае"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Галасавое паведамленне ад "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Сінхранізаваць існуючыя кантакты?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Вы можаце сінхранізаваць %1$s, каб гарантаваць рэзервовае капіраванне ва ўліковы запіс %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# існуючы кантакт}one{# існуючы кантакт}few{# існуючыя кантакты}many{# існуючых кантактаў}other{# існуючага кантакту}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Сінхранізаваць"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Не сінхранізаваць"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Капiраваць базу дадзеных кантактаў"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Вы збіраецеся 1) зрабіць копію базы дадзеных, якая ўключае ў сябе ўсе звесткi пра кантакты і званкi на ўнутранай памяці, і 2) адправiць яго па электроннай пошце. Не забудзьцеся выдаліць копію, як толькі вы паспяхова скапіруеце іх на прыладу ці атрымаеце па электроннай пошце."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Выдаліць зараз"</string>

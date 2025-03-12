@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Contactos"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Outro"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Correo de voz de "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Queres sincronizar os contactos?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Podes sincronizar %1$s para garantir que o teñas almacenado nunha copia de seguranza en %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# contacto}other{# contactos}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sincronizar"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Non sincronizar"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copiar base de datos dos contactos"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Estás a punto de 1) realizar unha copia da túa base de datos que inclúe toda a información relacionada cos contactos e todos os rexistros de chamadas no almacenamento interno, e de 2) envialo por correo electrónico. Non esquezas eliminar a copia en canto a copies correctamente fóra do dispositivo ou en canto se reciba o correo electrónico."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Eliminar agora"</string>

@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontakter"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Övrigt"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Röstmeddelande från "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Vill du synkronisera befintliga kontakter?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Du kan synkronisera %1$s för att säkerställa säkerhetskopiering till %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# befintlig kontakt}other{# befintliga kontakter}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Synkronisera"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Synkronisera inte"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopiera kontaktdatabas"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Du kommer att 1) kopiera din databas, inklusive alla kontaktuppgifter och samtalsloggar till det interna lagringsutrymmet, och 2) skicka det via e-post. Kom ihåg att ta bort kopian från enheten när kopieringen har slutförts eller när du har fått e-postmeddelandet."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Ta bort nu"</string>
