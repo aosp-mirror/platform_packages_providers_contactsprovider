@@ -813,7 +813,7 @@ public class AccountResolverTest {
                         new Account("test_user2", "com.google")));
 
         result = mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
-                    true, /*shouldValidateAccountForContactAddition=*/false);
+                true, /*shouldValidateAccountForContactAddition=*/false);
 
         assertNull(result);
     }
@@ -824,10 +824,10 @@ public class AccountResolverTest {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 DefaultAccountAndState.ofNotSet());
 
-        mAccountResolver.validateAccountForContactAddition("", "");
-        mAccountResolver.validateAccountForContactAddition(null, "");
-        mAccountResolver.validateAccountForContactAddition("", null);
-        mAccountResolver.validateAccountForContactAddition(null, null);
+        mAccountResolver.validateAccountForContactAddition("", "", true);
+        mAccountResolver.validateAccountForContactAddition(null, "", true);
+        mAccountResolver.validateAccountForContactAddition("", null, true);
+        mAccountResolver.validateAccountForContactAddition(null, null, true);
         // No exception expected
     }
 
@@ -837,18 +837,18 @@ public class AccountResolverTest {
                 DefaultAccountAndState.ofNotSet());
 
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.validateAccountForContactAddition("accountName", "");
+            mAccountResolver.validateAccountForContactAddition("accountName", "", true);
         });
 
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.validateAccountForContactAddition("accountName", null);
+            mAccountResolver.validateAccountForContactAddition("accountName", null, true);
         });
 
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.validateAccountForContactAddition("", "accountType");
+            mAccountResolver.validateAccountForContactAddition("", "accountType", true);
         });
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.validateAccountForContactAddition(null, "accountType");
+            mAccountResolver.validateAccountForContactAddition(null, "accountType", true);
         });
     }
 
@@ -858,13 +858,13 @@ public class AccountResolverTest {
                 DefaultAccountAndState.ofCloud(
                         new Account("test_user1", "com.google")));
 
-        mAccountResolver.validateAccountForContactAddition("test_user1", "com.google");
-        mAccountResolver.validateAccountForContactAddition("test_user2", "com.google");
-        mAccountResolver.validateAccountForContactAddition("test_user3", "com.whatsapp");
+        mAccountResolver.validateAccountForContactAddition("test_user1", "com.google", true);
+        mAccountResolver.validateAccountForContactAddition("test_user2", "com.google", true);
+        mAccountResolver.validateAccountForContactAddition("test_user3", "com.whatsapp", true);
         assertThrows(IllegalArgumentException.class, () ->
-                mAccountResolver.validateAccountForContactAddition("", ""));
+                mAccountResolver.validateAccountForContactAddition("", "", true));
         assertThrows(IllegalArgumentException.class, () ->
-                mAccountResolver.validateAccountForContactAddition(null, null));
+                mAccountResolver.validateAccountForContactAddition(null, null, true));
         // No exception expected
     }
 
@@ -873,11 +873,11 @@ public class AccountResolverTest {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 DefaultAccountAndState.ofLocal());
 
-        mAccountResolver.validateAccountForContactAddition("test_user1", "com.google");
-        mAccountResolver.validateAccountForContactAddition("test_user2", "com.google");
-        mAccountResolver.validateAccountForContactAddition("test_user3", "com.whatsapp");
-        mAccountResolver.validateAccountForContactAddition("", "");
-        mAccountResolver.validateAccountForContactAddition(null, null);
+        mAccountResolver.validateAccountForContactAddition("test_user1", "com.google", true);
+        mAccountResolver.validateAccountForContactAddition("test_user2", "com.google", true);
+        mAccountResolver.validateAccountForContactAddition("test_user3", "com.whatsapp", true);
+        mAccountResolver.validateAccountForContactAddition("", "", true);
+        mAccountResolver.validateAccountForContactAddition(null, null, true);
         // No exception expected
     }
 
@@ -887,11 +887,11 @@ public class AccountResolverTest {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
                 DefaultAccountAndState.ofNotSet());
 
-        mAccountResolver.validateAccountForContactAddition("test_user1", "com.google");
-        mAccountResolver.validateAccountForContactAddition("test_user2", "com.google");
-        mAccountResolver.validateAccountForContactAddition("test_user3", "com.whatsapp");
-        mAccountResolver.validateAccountForContactAddition("", "");
-        mAccountResolver.validateAccountForContactAddition(null, null);
+        mAccountResolver.validateAccountForContactAddition("test_user1", "com.google", true);
+        mAccountResolver.validateAccountForContactAddition("test_user2", "com.google", true);
+        mAccountResolver.validateAccountForContactAddition("test_user3", "com.whatsapp", true);
+        mAccountResolver.validateAccountForContactAddition("", "", true);
+        mAccountResolver.validateAccountForContactAddition(null, null, true);
         // No exception expected
     }
 }

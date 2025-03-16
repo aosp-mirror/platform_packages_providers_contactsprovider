@@ -22,6 +22,7 @@ import android.provider.ContactsContract.RawContacts;
 import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 import android.provider.ContactsContract.SimAccount;
 import android.text.TextUtils;
+import android.util.Log;
 
 import java.util.List;
 
@@ -96,7 +97,7 @@ public class AccountResolver {
      *                                  default account incompatible account types.
      */
     private Account getAccountWithDefaultAccountApplied(Account[] accounts,
-            boolean shouldValidateAccountForContactAddition)
+            boolean enforceCloudDefaultAccountRestriction)
             throws IllegalArgumentException {
         if (accounts.length == 0) {
             DefaultAccountAndState defaultAccountAndState =
@@ -110,9 +111,8 @@ public class AccountResolver {
                 return defaultAccountAndState.getAccount();
             }
         } else {
-            if (shouldValidateAccountForContactAddition) {
-                validateAccountForContactAdditionInternal(accounts[0]);
-            }
+            validateAccountForContactAdditionInternal(accounts[0],
+                    enforceCloudDefaultAccountRestriction);
             return accounts[0];
         }
     }
@@ -136,26 +136,40 @@ public class AccountResolver {
      *                                          (device or SIM) account.</li>
      *                                  </ul>
      */
-    public void validateAccountForContactAddition(String accountName, String accountType) {
-        if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
-            throw new IllegalArgumentException(
-                    "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE");
+    public void validateAccountForContactAddition(String accountName, String accountType,
+            boolean shouldValidateAccountForContactAddition) {
+        if (shouldValidateAccountForContactAddition) {
+            if (TextUtils.isEmpty(accountName) ^ TextUtils.isEmpty(accountType)) {
+                throw new IllegalArgumentException(
+                        "Must specify both or neither of ACCOUNT_NAME and ACCOUNT_TYPE");
+            }
         }
+
         if (TextUtils.isEmpty(accountName)) {
-            validateAccountForContactAdditionInternal(/*account=*/null);
+            validateAccountForContactAdditionInternal(/*account=*/null,
+                    shouldValidateAccountForContactAddition);
         } else {
-            validateAccountForContactAdditionInternal(new Account(accountName, accountType));
+            validateAccountForContactAdditionInternal(new Account(accountName, accountType),
+                    shouldValidateAccountForContactAddition);
         }
     }
 
-    private void validateAccountForContactAdditionInternal(Account account)
+    private void validateAccountForContactAdditionInternal(Account account,
+            boolean enforceCloudDefaultAccountRestriction)
             throws IllegalArgumentException {
         DefaultAccountAndState defaultAccount = mDefaultAccountManager.pullDefaultAccount();
 
         if (defaultAccount.getState() == DefaultAccountAndState.DEFAULT_ACCOUNT_STATE_CLOUD) {
             if (isDeviceOrSimAccount(account)) {
-                throw new IllegalArgumentException(
-                        UNABLE_TO_WRITE_TO_LOCAL_OR_SIM_EXCEPTION_MESSAGE);
+                if (enforceCloudDefaultAccountRestriction) {
+                    throw new IllegalArgumentException(
+                            UNABLE_TO_WRITE_TO_LOCAL_OR_SIM_EXCEPTION_MESSAGE);
+                } else {
+                    Log.w(TAG,
+                            "Cloud default account: Local/SIM contact creation allowed (target "
+                                    + "SDK <36), but restricted in target SDK 36+. Avoid "
+                                    + "local/SIM writes in target SDK 36+.");
+                }
             }
         }
     }

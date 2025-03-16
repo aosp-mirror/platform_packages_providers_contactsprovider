@@ -5008,12 +5008,12 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         ? updatedDataSet : c.getString(GroupAccountQuery.DATA_SET);
 
                 if (isAccountChanging) {
-                    if (newDefaultAccountApiEnabled() && isAccountRestrictionEnabled()
-                            && CompatChanges.isChangeEnabled(
-                            ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
-                            Binder.getCallingUid())) {
+                    if (newDefaultAccountApiEnabled() && isAccountRestrictionEnabled()) {
                         mAccountResolver.validateAccountForContactAddition(updatedAccountName,
-                                updatedAccountType);
+                                updatedAccountType,
+                                CompatChanges.isChangeEnabled(
+                                        ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
+                                        Binder.getCallingUid()));
                     }
 
                     final long accountId = dbHelper.getOrCreateAccountIdInTransaction(
@@ -5198,13 +5198,13 @@ public class ContactsProvider2 extends AbstractContactsProvider
                 // a single transaction, failing checkAccountIsWritable will fail the entire update
                 // operation, which is clean such that no partial updated will be committed to the
                 // DB.
-                if (applyDefaultAccount && isAccountRestrictionEnabled()
-                        && CompatChanges.isChangeEnabled(
-                                ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
-                                Binder.getCallingUid())) {
+                if (applyDefaultAccount && isAccountRestrictionEnabled()) {
                     mAccountResolver.validateAccountForContactAddition(
                             newAccountWithDataSet.getAccountName(),
-                            newAccountWithDataSet.getAccountType());
+                            newAccountWithDataSet.getAccountType(),
+                            CompatChanges.isChangeEnabled(
+                                    ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
+                                    Binder.getCallingUid()));
                 }
 
                 accountId = dbHelper.getOrCreateAccountIdInTransaction(newAccountWithDataSet);
