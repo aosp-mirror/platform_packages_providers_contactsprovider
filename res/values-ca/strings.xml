@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Contactes"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Altres"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Missatge de veu de "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Vols sincronitzar els contactes existents?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Pots sincronitzar %1$s per assegurar-te que se\'n creï una còpia de seguretat a %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# contacte existent}other{# contactes existents}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sincronitza"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"No sincronitzis"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copia la base de dades de contactes"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Estàs a punt de: 1) fer una còpia de la teva base de dades, que inclou tota la informació relacionada amb els contactes i tots els registres de trucades de l\'emmagatzematge intern, i 2) d\'enviar-la per correu electrònic. Recorda suprimir la còpia de seguida que l\'hagis copiat correctament al dispositiu o quan hagis rebut el correu electrònic."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Suprimeix ara"</string>

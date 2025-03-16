@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"संपर्क"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"इतर"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"कडून व्हॉईसमेल "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"सध्याचे संपर्क सिंक करायचे आहेत का?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"त्यांचा %2$s (%3$s) वर बॅकअप घेतला आहे याची खात्री करण्यासाठी तुम्ही %1$s सिंक करू शकता"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{सध्याचा # संपर्क}other{सध्याचे # संपर्क}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"सिंक करा"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"सिंक करू नका"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"संपर्क डेटाबेस कॉपी करा"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"तुम्ही 1) आपल्‍या डेटाबेसची प्रत बनवणार आहात जिच्‍यामध्‍ये सर्व संपर्कांसंबंधी माहिती आणि अंतर्गत संचयनावरील कॉल लॉग समाविष्‍ट असतात आणि 2) ती ईमेल करणार आहात. तुम्ही डिव्‍हाइसवरून यशस्‍वीरित्‍या प्रत कॉपी केल्‍यानंतर किंवा ईमेल प्राप्त केल्‍यानंतर लगेच ती हटविण्‍याचे लक्षात ठेवा."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"आता हटवा"</string>

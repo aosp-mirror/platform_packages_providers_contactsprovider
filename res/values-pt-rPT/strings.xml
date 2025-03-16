@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Contactos"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Outro"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Correio de voz de "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Sincronizar contactos existentes?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Pode sincronizar %1$s para garantir que é feita uma cópia de segurança em %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# contacto existente}other{# contactos existentes}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sincronizar"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Não sincronizar"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copiar base de dados de contactos"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Está prestes a 1) fazer uma cópia da sua base de dados que inclui todas as informações relativas aos contactos e todo o registo de chamadas para armazenamento interno, e a 2) enviá-los por email. Não se esqueça de eliminar a cópia logo que a tenha copiado com êxito para fora do dispositivo ou que o email tenha sido recebido."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Eliminar agora"</string>

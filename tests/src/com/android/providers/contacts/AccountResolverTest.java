@@ -16,6 +16,8 @@
 
 package com.android.providers.contacts;
 
+import static android.provider.ContactsContract.SimAccount.SDN_EF_TYPE;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -24,11 +26,11 @@ import static org.mockito.Mockito.when;
 import android.accounts.Account;
 import android.content.ContentValues;
 import android.net.Uri;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.RawContacts;
+import android.provider.ContactsContract.RawContacts.DefaultAccount.DefaultAccountAndState;
 
 import androidx.test.filters.SmallTest;
-
-import com.android.providers.contacts.DefaultAccount.AccountCategory;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -36,6 +38,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+
+import java.util.List;
 
 @SmallTest
 @RunWith(JUnit4.class)
@@ -47,11 +51,21 @@ public class AccountResolverTest {
 
     private AccountResolver mAccountResolver;
 
+    private static final Account SIM_ACCOUNT_1 = new Account("simName1", "SIM");
+
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         mAccountResolver = new AccountResolver(mDbHelper, mDefaultAccountManager);
+
+        when(mDbHelper.getAllSimAccounts()).thenReturn(List.of(new ContactsContract.SimAccount(
+                SIM_ACCOUNT_1.name, SIM_ACCOUNT_1.type, 1, SDN_EF_TYPE
+        )));
+
     }
+
+    private static final boolean FALSE_UNUSED = false;
+    private static final boolean TRUE_UNUSED = true;
 
     @Test
     public void testResolveAccountWithDataSet_ignoreDefaultAccount_accountAndDataSetInUri() {
@@ -64,7 +78,8 @@ public class AccountResolverTest {
         ContentValues values = new ContentValues();
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                false, /*shouldValidateAccountForContactAddition=*/TRUE_UNUSED);
 
         assertEquals("test_account", result.getAccountName());
         assertEquals("com.google", result.getAccountType());
@@ -73,9 +88,9 @@ public class AccountResolverTest {
     }
 
     @Test
-    public void testResolveAccountWithDataSet_defaultAccountIsUnknown_accountAndDataSetInUri() {
+    public void testResolveAccountWithDataSet_defaultAccountIsNotSet_accountAndDataSetInUri() {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
 
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
                 .buildUpon()
@@ -86,7 +101,8 @@ public class AccountResolverTest {
         ContentValues values = new ContentValues();
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/true);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
 
         assertEquals("test_account", result.getAccountName());
         assertEquals("com.google", result.getAccountType());
@@ -105,7 +121,8 @@ public class AccountResolverTest {
         values.put(RawContacts.DATA_SET, "test_data_set");
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                false, /*shouldValidateAccountForContactAddition=*/FALSE_UNUSED);
 
         assertEquals("test_account", result.getAccountName());
         assertEquals("com.google", result.getAccountType());
@@ -115,8 +132,8 @@ public class AccountResolverTest {
 
     @Test
     public void testResolveAccountWithDataSet_applyDefaultAccount_accountInUriDataSetInValues() {
-        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(new DefaultAccount(
-                AccountCategory.CLOUD, new Account("randomaccount1@gmail.com", "com.google")));
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(DefaultAccountAndState.ofCloud(
+                new Account("randomaccount1@gmail.com", "com.google")));
 
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
                 .buildUpon()
@@ -127,7 +144,8 @@ public class AccountResolverTest {
         values.put(RawContacts.DATA_SET, "test_data_set");
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
 
         assertEquals("test_account", result.getAccountName());
         assertEquals("com.google", result.getAccountType());
@@ -141,51 +159,68 @@ public class AccountResolverTest {
         ContentValues values = new ContentValues();
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                false, /*shouldValidateAccountForContactAddition=*/TRUE_UNUSED);
 
+        // When default account is not used, uri/values without account is always resolved as
+        // the local account, which is null AccountWithDataSet in this case.
         assertNull(result);
     }
 
     @Test
-    public void testResolveAccountWithDataSet_defaultAccountIsUnknown_noAccount() {
+    public void testResolveAccountWithDataSet_defaultAccountIsNotSet_noAccount() {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
 
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts");
         ContentValues values = new ContentValues();
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
 
+        // When default account is used and the default account is not set, uri/values without
+        // account is always resolved as the local account, which is null AccountWithDataSet in this
+        // case.
         assertNull(result);
     }
 
     @Test
     public void testResolveAccountWithDataSet_defaultAccountIsDevice_noAccount() {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.DEVICE_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofLocal());
 
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts");
         ContentValues values = new ContentValues();
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
 
+        // When default account is used and the default account is set to 'local', uri/values
+        // without account is always resolved as the local account, which is null
+        // AccountWithDataSet in this case.
         assertNull(result);
     }
 
     @Test
     public void testResolveAccountWithDataSet_defaultAccountIsCloud_noAccount() {
-        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(new DefaultAccount(
-                AccountCategory.CLOUD, new Account("randomaccount1@gmail.com", "com.google")));
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(DefaultAccountAndState.ofCloud(
+                new Account("test_account", "com.google")));
 
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts");
         ContentValues values = new ContentValues();
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
 
-        assertNull(result);
+        // When default account is used and the default account is set to 'cloud', uri/values
+        // without account is always resolved as the cloud account, which is null
+        // AccountWithDataSet in this case.
+        assertEquals("test_account", result.getAccountName());
+        assertEquals("com.google", result.getAccountType());
+        assertNull(result.getDataSet());
     }
 
     @Test
@@ -197,17 +232,19 @@ public class AccountResolverTest {
         values.put(RawContacts.DATA_SET, "test_data_set");
 
         AccountWithDataSet result1 = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                false, /*shouldValidateAccountForContactAddition=*/FALSE_UNUSED);
 
         assertEquals("test_account", result1.getAccountName());
         assertEquals("com.google", result1.getAccountType());
         assertEquals("test_data_set", result1.getDataSet());
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
 
         AccountWithDataSet result2 = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/true);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
 
         assertEquals("test_account", result2.getAccountName());
         assertEquals("com.google", result2.getAccountType());
@@ -232,15 +269,16 @@ public class AccountResolverTest {
         // Expecting an exception due to the invalid account in the URI
         assertThrows(IllegalArgumentException.class, () -> {
             mAccountResolver.resolveAccountWithDataSet(uri, values,
-                    /*applyDefaultAccount=*/false);
+                    /*applyDefaultAccount=*/false, /*shouldValidateAccountForContactAddition=*/
+                    TRUE_UNUSED);
         });
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
         // Expecting an exception due to the invalid account in the URI
         assertThrows(IllegalArgumentException.class, () -> {
             mAccountResolver.resolveAccountWithDataSet(uri, values,
-                    /*applyDefaultAccount=*/true);
+                    /*applyDefaultAccount=*/true, /*shouldValidateAccountForContactAddition=*/true);
         });
     }
 
@@ -261,14 +299,16 @@ public class AccountResolverTest {
 
         // Expecting an exception due to the invalid account in the values
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    false, /*shouldValidateAccountForContactAddition=*/FALSE_UNUSED);
         });
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.DEVICE_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofLocal());
         // Expecting an exception due to the invalid account in the URI
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
     }
 
@@ -285,17 +325,19 @@ public class AccountResolverTest {
         values.put(RawContacts.DATA_SET, "test_data_set");
 
         AccountWithDataSet result1 = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                false, /*shouldValidateAccountForContactAddition=*/TRUE_UNUSED);
 
         assertEquals("test_account", result1.getAccountName());
         assertEquals("com.google", result1.getAccountType());
         assertEquals("test_data_set", result1.getDataSet());
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.DEVICE_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofLocal());
 
         AccountWithDataSet result2 = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
 
         assertEquals("test_account", result2.getAccountName());
         assertEquals("com.google", result2.getAccountType());
@@ -318,27 +360,31 @@ public class AccountResolverTest {
 
         // Expecting an exception due to the invalid account in the URI
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    false, /*shouldValidateAccountForContactAddition=*/FALSE_UNUSED);
         });
 
         // Expecting an exception due to the invalid account in the URI, regardless of what is the
         // default account
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.DEVICE_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofLocal());
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, new Account(
+                DefaultAccountAndState.ofCloud(new Account(
                         "test_account", "com.google"
                 )));
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
     }
 
@@ -355,28 +401,32 @@ public class AccountResolverTest {
                 .thenReturn("Test Exception Message");
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    false, /*shouldValidateAccountForContactAddition=*/TRUE_UNUSED);
         });
         assertEquals("Test Exception Message", exception.getMessage());
 
         // Expecting an exception due to the partial account in uri, regardless of what is the
         // default account
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.DEVICE_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofLocal());
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, new Account(
+                DefaultAccountAndState.ofCloud(new Account(
                         "test_account", "com.google"
                 )));
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
     }
 
@@ -391,32 +441,36 @@ public class AccountResolverTest {
                 .thenReturn("Test Exception Message");
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    false, /*shouldValidateAccountForContactAddition=*/FALSE_UNUSED);
         });
         assertEquals("Test Exception Message", exception.getMessage());
 
         // Expecting an exception due to the partial account in uri, regardless of what is the
         // default account
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.DEVICE_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofLocal());
         exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
         assertEquals("Test Exception Message", exception.getMessage());
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
         exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
         assertEquals("Test Exception Message", exception.getMessage());
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, new Account(
+                DefaultAccountAndState.ofCloud(new Account(
                         "test_account", "com.google"
                 )));
         exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
         assertEquals("Test Exception Message", exception.getMessage());
     }
@@ -437,25 +491,28 @@ public class AccountResolverTest {
                 .thenReturn("Test Exception Message");
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    false, /*shouldValidateAccountForContactAddition=*/TRUE_UNUSED);
         });
         assertEquals("Test Exception Message", exception.getMessage());
 
         // Expecting an exception due to the uri and content value's account info mismatching,
         // regardless of what is the default account
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
         exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
         assertEquals("Test Exception Message", exception.getMessage());
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                new DefaultAccount(DefaultAccount.AccountCategory.CLOUD, new Account(
+                DefaultAccountAndState.ofCloud(new Account(
                         "test_account", "com.google"
                 )));
         exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/false);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
         assertEquals("Test Exception Message", exception.getMessage());
     }
@@ -470,13 +527,14 @@ public class AccountResolverTest {
         ContentValues values = new ContentValues();
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                false, /*shouldValidateAccountForContactAddition=*/FALSE_UNUSED);
 
         assertNull(result); // Expect null result as account is effectively absent
     }
 
     @Test
-    public void testResolveAccountWithDataSet_defaultAccountIsDeviceOrUnknown_emptyAccountInUri() {
+    public void testResolveAccountWithDataSet_defaultAccountIsDeviceOrNotSet_emptyAccountInUri() {
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
                 .buildUpon()
                 .appendQueryParameter(RawContacts.ACCOUNT_NAME, "")
@@ -485,15 +543,17 @@ public class AccountResolverTest {
         ContentValues values = new ContentValues();
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
         AccountWithDataSet result1 = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/true);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
         assertNull(result1); // Expect null result as account is effectively absent
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.DEVICE_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofLocal());
         AccountWithDataSet result2 = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/true);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
         assertNull(result2); // Expect null result as account is effectively absent
     }
 
@@ -507,14 +567,78 @@ public class AccountResolverTest {
         ContentValues values = new ContentValues();
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                new DefaultAccount(AccountCategory.CLOUD,
+                DefaultAccountAndState.ofCloud(
                         new Account("test_user2", "com.google")));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
-        assertEquals("Cannot write contacts to local accounts when default account is set to cloud",
+        assertEquals(
+                "Cannot add contacts to local or SIM accounts when default account is set to cloud",
                 exception.getMessage());
+    }
+
+    @Test
+    public void testResolveAccount_defaultAccountIsCloud_emptyAccountInUri_skipAccountValidation() {
+        Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
+                .buildUpon()
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, "")
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, "")
+                .build();
+        ContentValues values = new ContentValues();
+
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
+                DefaultAccountAndState.ofCloud(
+                        new Account("test_user2", "com.google")));
+
+        AccountWithDataSet result =
+                mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                        true, /*shouldValidateAccountForContactAddition=*/false);
+        assertNull(result);
+    }
+
+    @Test
+    public void testResolveAccountWithDataSet_defaultAccountIsCloud_simAccountInUri() {
+        Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
+                .buildUpon()
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, SIM_ACCOUNT_1.name)
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, SIM_ACCOUNT_1.type)
+                .build();
+        ContentValues values = new ContentValues();
+
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
+                DefaultAccountAndState.ofCloud(
+                        new Account("test_user2", "com.google")));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
+        });
+        assertEquals(
+                "Cannot add contacts to local or SIM accounts when default account is set to cloud",
+                exception.getMessage());
+    }
+
+    @Test
+    public void testResolveAccount_defaultAccountIsCloud_simAccountInUri_skipAccountValidation() {
+        Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
+                .buildUpon()
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, SIM_ACCOUNT_1.name)
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, SIM_ACCOUNT_1.type)
+                .build();
+        ContentValues values = new ContentValues();
+
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
+                DefaultAccountAndState.ofCloud(
+                        new Account("test_user2", "com.google")));
+
+        AccountWithDataSet result =
+                mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                        true, /*shouldValidateAccountForContactAddition=*/false);
+        assertEquals(SIM_ACCOUNT_1.name, result.getAccountName());
+        assertEquals(SIM_ACCOUNT_1.type, result.getAccountType());
+        assertNull(result.getDataSet());
     }
 
     @Test
@@ -525,29 +649,32 @@ public class AccountResolverTest {
         values.put(RawContacts.ACCOUNT_TYPE, "");
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                false, /*shouldValidateAccountForContactAddition=*/FALSE_UNUSED);
 
         assertNull(result); // Expect null result as account is effectively absent
     }
 
 
     @Test
-    public void testResolveAccountWithDataSet_defaultAccountDeviceOrUnknown_emptyAccountInValues() {
+    public void testResolveAccountWithDataSet_defaultAccountDeviceOrNotSet_emptyAccountInValues() {
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts");
         ContentValues values = new ContentValues();
         values.put(RawContacts.ACCOUNT_NAME, "");
         values.put(RawContacts.ACCOUNT_TYPE, "");
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
         AccountWithDataSet result1 = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/true);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
         assertNull(result1); // Expect null result as account is effectively absent
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.DEVICE_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofLocal());
         AccountWithDataSet result2 = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/true);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
         assertNull(result2); // Expect null result as account is effectively absent
     }
 
@@ -560,18 +687,37 @@ public class AccountResolverTest {
         values.put(RawContacts.ACCOUNT_TYPE, "");
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                new DefaultAccount(AccountCategory.CLOUD,
+                DefaultAccountAndState.ofCloud(
                         new Account("test_user2", "com.google")));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
-        assertEquals("Cannot write contacts to local accounts when default account is set to cloud",
+        assertEquals(
+                "Cannot add contacts to local or SIM accounts when default account is set to cloud",
                 exception.getMessage());
     }
 
     @Test
-    public void testResolveAccountWithDataSet_ignoreDefaultAccount_emptyAccountInUriAndValues() {
+    public void testResolveAccount_defaultAccountIsCloud_emptyAccountInValues_skipAccountCheck() {
+        Uri uri = Uri.parse("content://com.android.contacts/raw_contacts");
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.ACCOUNT_NAME, "");
+        values.put(RawContacts.ACCOUNT_TYPE, "");
+
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
+                DefaultAccountAndState.ofCloud(
+                        new Account("test_user2", "com.google")));
+
+        AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(uri,
+                values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/false);
+        assertNull(result);
+    }
+
+    @Test
+    public void testResolveAccountWithDataSet_ignoreDefaultAccount_emptyAccount() {
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
                 .buildUpon()
                 .appendQueryParameter(RawContacts.ACCOUNT_NAME, "")
@@ -582,13 +728,14 @@ public class AccountResolverTest {
         values.put(RawContacts.ACCOUNT_TYPE, "");
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                false, /*shouldValidateAccountForContactAddition=*/TRUE_UNUSED);
 
         assertNull(result); // Expect null result as account is effectively absent
     }
 
     @Test
-    public void testResolveAccountWithDataSet_defaultDeviceOrUnknown_emptyAccountInUriAndValues() {
+    public void testResolveAccountWithDataSet_defaultDeviceOrNotSet_emptyAccount() {
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
                 .buildUpon()
                 .appendQueryParameter(RawContacts.ACCOUNT_NAME, "")
@@ -599,20 +746,22 @@ public class AccountResolverTest {
         values.put(RawContacts.ACCOUNT_TYPE, "");
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
         AccountWithDataSet result1 = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/true);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
         assertNull(result1); // Expect null result as account is effectively absent
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.DEVICE_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofLocal());
         AccountWithDataSet result2 = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/true);
+                uri, values, /*applyDefaultAccount=*/
+                true, /*shouldValidateAccountForContactAddition=*/true);
         assertNull(result2); // Expect null result as account is effectively absent
     }
 
     @Test
-    public void testResolveAccountWithDataSet_defaultAccountIsCloud_emptyAccountInUriAndValues() {
+    public void testResolveAccountWithDataSet_defaultAccountIsCloud_emptyAccount() {
         Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
                 .buildUpon()
                 .appendQueryParameter(RawContacts.ACCOUNT_NAME, "")
@@ -623,95 +772,126 @@ public class AccountResolverTest {
         values.put(RawContacts.ACCOUNT_TYPE, "");
 
         AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
-                uri, values, /*applyDefaultAccount=*/false);
+                uri, values, /*applyDefaultAccount=*/
+                false, /*shouldValidateAccountForContactAddition=*/FALSE_UNUSED);
 
         assertNull(result); // Expect null result as account is effectively absent
 
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                new DefaultAccount(AccountCategory.CLOUD,
+                DefaultAccountAndState.ofCloud(
                         new Account("test_user2", "com.google")));
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/true);
+            mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/true);
         });
-        assertEquals("Cannot write contacts to local accounts when default account is set to cloud",
+        assertEquals(
+                "Cannot add contacts to local or SIM accounts when default account is set to cloud",
                 exception.getMessage());
     }
 
 
     @Test
-    public void testCheckAccountIsWritable_bothAccountNameAndTypeAreNullOrEmpty_NoException() {
-        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+    public void testResolveAccount_defaultAccountIsCloud_emptyAccount_skipAccountCheck() {
+        Uri uri = Uri.parse("content://com.android.contacts/raw_contacts")
+                .buildUpon()
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, "")
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, "")
+                .build();
+        ContentValues values = new ContentValues();
+        values.put(RawContacts.ACCOUNT_NAME, "");
+        values.put(RawContacts.ACCOUNT_TYPE, "");
 
-        mAccountResolver.checkAccountIsWritable("", "");
-        mAccountResolver.checkAccountIsWritable(null, "");
-        mAccountResolver.checkAccountIsWritable("", null);
-        mAccountResolver.checkAccountIsWritable(null, null);
+        AccountWithDataSet result = mAccountResolver.resolveAccountWithDataSet(
+                uri, values, /*applyDefaultAccount=*/
+                false, /*shouldValidateAccountForContactAddition=*/FALSE_UNUSED);
+
+        assertNull(result); // Expect null result as account is effectively absent
+
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
+                DefaultAccountAndState.ofCloud(
+                        new Account("test_user2", "com.google")));
+
+        result = mAccountResolver.resolveAccountWithDataSet(uri, values, /*applyDefaultAccount=*/
+                    true, /*shouldValidateAccountForContactAddition=*/false);
+
+        assertNull(result);
+    }
+
+
+    @Test
+    public void testValidateAccountIsWritable_bothAccountNameAndTypeAreNullOrEmpty_NoException() {
+        when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
+                DefaultAccountAndState.ofNotSet());
+
+        mAccountResolver.validateAccountForContactAddition("", "");
+        mAccountResolver.validateAccountForContactAddition(null, "");
+        mAccountResolver.validateAccountForContactAddition("", null);
+        mAccountResolver.validateAccountForContactAddition(null, null);
         // No exception expected
     }
 
     @Test
-    public void testCheckAccountIsWritable_eitherAccountNameOrTypeEmpty_ThrowsException() {
+    public void testValidateAccountIsWritable_eitherAccountNameOrTypeEmpty_ThrowsException() {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
 
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.checkAccountIsWritable("accountName", "");
+            mAccountResolver.validateAccountForContactAddition("accountName", "");
         });
 
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.checkAccountIsWritable("accountName", null);
+            mAccountResolver.validateAccountForContactAddition("accountName", null);
         });
 
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.checkAccountIsWritable("", "accountType");
+            mAccountResolver.validateAccountForContactAddition("", "accountType");
         });
         assertThrows(IllegalArgumentException.class, () -> {
-            mAccountResolver.checkAccountIsWritable(null, "accountType");
+            mAccountResolver.validateAccountForContactAddition(null, "accountType");
         });
     }
 
     @Test
-    public void testCheckAccountIsWritable_defaultAccountIsCloud() {
+    public void testValidateAccountIsWritable_defaultAccountIsCloud() {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                new DefaultAccount(AccountCategory.CLOUD,
+                DefaultAccountAndState.ofCloud(
                         new Account("test_user1", "com.google")));
 
-        mAccountResolver.checkAccountIsWritable("test_user1", "com.google");
-        mAccountResolver.checkAccountIsWritable("test_user2", "com.google");
-        mAccountResolver.checkAccountIsWritable("test_user3", "com.whatsapp");
+        mAccountResolver.validateAccountForContactAddition("test_user1", "com.google");
+        mAccountResolver.validateAccountForContactAddition("test_user2", "com.google");
+        mAccountResolver.validateAccountForContactAddition("test_user3", "com.whatsapp");
         assertThrows(IllegalArgumentException.class, () ->
-                mAccountResolver.checkAccountIsWritable("", ""));
+                mAccountResolver.validateAccountForContactAddition("", ""));
         assertThrows(IllegalArgumentException.class, () ->
-                mAccountResolver.checkAccountIsWritable(null, null));
+                mAccountResolver.validateAccountForContactAddition(null, null));
         // No exception expected
     }
 
     @Test
-    public void testCheckAccountIsWritable_defaultAccountIsDevice() {
+    public void testValidateAccountIsWritable_defaultAccountIsDevice() {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.DEVICE_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofLocal());
 
-        mAccountResolver.checkAccountIsWritable("test_user1", "com.google");
-        mAccountResolver.checkAccountIsWritable("test_user2", "com.google");
-        mAccountResolver.checkAccountIsWritable("test_user3", "com.whatsapp");
-        mAccountResolver.checkAccountIsWritable("", "");
-        mAccountResolver.checkAccountIsWritable(null, null);
+        mAccountResolver.validateAccountForContactAddition("test_user1", "com.google");
+        mAccountResolver.validateAccountForContactAddition("test_user2", "com.google");
+        mAccountResolver.validateAccountForContactAddition("test_user3", "com.whatsapp");
+        mAccountResolver.validateAccountForContactAddition("", "");
+        mAccountResolver.validateAccountForContactAddition(null, null);
         // No exception expected
     }
 
 
     @Test
-    public void testCheckAccountIsWritable_defaultAccountIsUnknown() {
+    public void testValidateAccountIsWritable_defaultAccountIsNotSet() {
         when(mDefaultAccountManager.pullDefaultAccount()).thenReturn(
-                DefaultAccount.UNKNOWN_DEFAULT_ACCOUNT);
+                DefaultAccountAndState.ofNotSet());
 
-        mAccountResolver.checkAccountIsWritable("test_user1", "com.google");
-        mAccountResolver.checkAccountIsWritable("test_user2", "com.google");
-        mAccountResolver.checkAccountIsWritable("test_user3", "com.whatsapp");
-        mAccountResolver.checkAccountIsWritable("", "");
-        mAccountResolver.checkAccountIsWritable(null, null);
+        mAccountResolver.validateAccountForContactAddition("test_user1", "com.google");
+        mAccountResolver.validateAccountForContactAddition("test_user2", "com.google");
+        mAccountResolver.validateAccountForContactAddition("test_user3", "com.whatsapp");
+        mAccountResolver.validateAccountForContactAddition("", "");
+        mAccountResolver.validateAccountForContactAddition(null, null);
         // No exception expected
     }
 }

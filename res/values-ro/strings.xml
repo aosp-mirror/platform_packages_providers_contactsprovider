@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Agendă"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Altul"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Mesaj vocal de la "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Sincronizați persoanele de contact existente?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Puteți sincroniza %1$s pentru a vă asigura că au backup în %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{O persoană de contact existentă}few{# persoane de contact existente}other{# de persoane de contact existente}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Sincronizați"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Nu sincronizați"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copiați baza de date a agendei"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Sunteți pe cale 1) să faceți o copie, pe stocarea internă, a bazei dvs. de date care include toate informațiile referitoare la agendă și întregul jurnal de apeluri și 2) să trimiteți această copie prin e-mail. Nu uitați să ștergeți această copie după ce ați copiat-o de pe dispozitiv sau după ce a fost primit e-mailul."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Ștergeți acum"</string>

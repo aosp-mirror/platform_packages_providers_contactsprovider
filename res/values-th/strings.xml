@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"สมุดโทรศัพท์"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"อื่นๆ"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"ข้อความเสียงจาก "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"ซิงค์รายชื่อติดต่อที่มีอยู่ไหม"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"คุณสามารถซิงค์ %1$s เพื่อให้แน่ใจว่าข้อมูลได้รับการสำรองข้อมูลไปยัง %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{รายชื่อติดต่อที่มีอยู่ # รายการ}other{รายชื่อติดต่อที่มีอยู่ # รายการ}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"ซิงค์"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"ไม่ต้องซิงค์"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"คัดลอกฐานข้อมูลผู้ติดต่อ"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"คุณกำลังจะ 1) ทำสำเนาฐานข้อมูลของคุณซึ่งรวมถึงข้อมูลที่เกี่ยวข้องกับผู้ติดต่อทั้งหมดและบันทึกการโทรทั้งหมดลงในที่จัดเก็บข้อมูลภายใน และ 2) ส่งอีเมล อย่าลืมลบสำเนาออกจากอุปกรณ์ทันทีที่คุณคัดลอกเสร็จเรียบร้อยแล้วหรือเมื่ออีเมลส่งไปถึงผู้รับแล้ว"</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"ลบเดี๋ยวนี้"</string>

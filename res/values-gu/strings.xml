@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"સંપર્કો"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"અન્ય"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"આમના તરફથી વૉઇસમેઇલ "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"શું હાલના સંપર્કો સિંક કરીએ?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"%2$s (%3$s)માં તેનું બૅકઅપ લેવામાં આવ્યું હોય, તેની ખાતરી કરવા માટે તમે %1$sને સિંક કરી શકો છો"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{હાલનો # સંપર્ક}one{હાલનો # સંપર્ક}other{હાલના # સંપર્ક}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"સિંક કરો"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"સિંક કરશો નહીં"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"સંપર્કો ડેટાબેસ કૉપિ કરો"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"તમે 1) તમારા ડેટાબેસની કૉપિ આંતરિક સ્ટોરેજ પર કરવામાં છો કે જેમાં બધા સંપર્કોથી સંબંધિત માહિતી અને તમામ કૉલ લૉગ શામેલ છે અને 2) તેને ઇમેઇલ કરવામાં છો. જેમ જ તમે ઉપકરણ પરથી તેની સફળતાપૂર્વક કૉપિ કરી લો અથવા ઇમેઇલ પ્રાપ્ત થઈ જાય તે પછી કૉપિને કાઢી નાખવાનું યાદ રાખો."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"હમણાં કાઢી નાખો"</string>
