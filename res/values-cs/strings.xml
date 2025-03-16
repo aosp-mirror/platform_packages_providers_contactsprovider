@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Kontakty"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Jiné"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Hlasová zpráva od uživatele "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Synchronizovat stávající kontakty?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Můžete synchronizovat %1$s, aby došlo k zálohování do: %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# stávající kontakt}few{# stávající kontakty}many{# stávajícího kontaktu}other{# stávajících kontaktů}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Synchronizovat"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Nesynchronizovat"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Kopírování databáze kontaktů"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Chystáte se 1) vytvořit v interním úložišti kopii databáze obsahující všechny informace o kontaktech a veškerou historii hovorů a 2) odeslat ji e-mailem. Po úspěšném zkopírování ze zařízení nebo přijetí e-mailem ji nezapomeňte ihned odstranit."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Smazat teď"</string>

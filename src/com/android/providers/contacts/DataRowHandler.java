@@ -28,7 +28,6 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredName;
 import android.provider.ContactsContract.Data;
 import android.text.TextUtils;
 import android.util.Log;
-import android.util.LogWriter;
 
 import com.android.providers.contacts.ContactsDatabaseHelper.DataColumns;
 import com.android.providers.contacts.ContactsDatabaseHelper.MimetypesColumns;
@@ -144,7 +143,7 @@ public abstract class DataRowHandler {
         }
 
         if (containsSearchableColumns(values)) {
-            txContext.invalidateSearchIndexForRawContact(rawContactId);
+            txContext.invalidateSearchIndexForRawContact(db, rawContactId);
         }
 
         return dataId;
@@ -170,7 +169,7 @@ public abstract class DataRowHandler {
         }
 
         if (containsSearchableColumns(values)) {
-            txContext.invalidateSearchIndexForRawContact(rawContactId);
+            txContext.invalidateSearchIndexForRawContact(db, rawContactId);
         }
 
         txContext.markRawContactDirtyAndChanged(rawContactId, callerIsSyncAdapter);
@@ -327,7 +326,7 @@ public abstract class DataRowHandler {
         }
 
         if (hasSearchableData()) {
-            txContext.invalidateSearchIndexForRawContact(rawContactId);
+            txContext.invalidateSearchIndexForRawContact(db, rawContactId);
         }
 
         return count;

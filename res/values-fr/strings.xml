@@ -25,6 +25,11 @@
     <string name="default_directory" msgid="93961630309570294">"Contacts"</string>
     <string name="local_invisible_directory" msgid="705244318477396120">"Autre"</string>
     <string name="voicemail_from_column" msgid="435732568832121444">"Message vocal de "</string>
+    <string name="move_contacts_to_default_account_dialog_title" msgid="1691634911830971868">"Synchroniser les contacts existants ?"</string>
+    <string name="move_contacts_to_default_account_dialog_message" msgid="2005758519299826267">"Vous pouvez synchroniser %1$s pour vous assurer qu\'ils sont sauvegardés sur %2$s (%3$s)"</string>
+    <string name="movable_contacts_count" msgid="7367420913436438253">"{contacts_count,plural, =1{# contact existant}one{# contact existant}other{# contacts existants}}"</string>
+    <string name="move_contacts_to_default_account_dialog_sync_button_text" msgid="6214724007562800237">"Synchroniser"</string>
+    <string name="move_contacts_to_default_account_dialog_cancel_button_text" msgid="1022518096709643659">"Ne pas synchroniser"</string>
     <string name="debug_dump_title" msgid="4916885724165570279">"Copier la base de données de contacts"</string>
     <string name="debug_dump_database_message" msgid="406438635002392290">"Vous êtes sur le point de 1) faire une copie de votre base de données (qui inclut toutes les données relatives aux contacts et l\'intégralité du journal d\'appels) dans la mémoire de stockage interne, puis de 2) l\'envoyer par e-mail. N\'oubliez pas de supprimer la copie une fois qu\'elle a été dupliquée ou dès que l\'e-mail a été reçu."</string>
     <string name="debug_dump_delete_button" msgid="7832879421132026435">"Supprimer"</string>
