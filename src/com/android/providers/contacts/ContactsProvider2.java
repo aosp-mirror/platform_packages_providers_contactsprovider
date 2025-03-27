@@ -3812,7 +3812,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
 
     private Uri insertSettings(Uri uri, ContentValues values) {
         final AccountWithDataSet account = mAccountResolver.resolveAccountWithDataSet(uri, values,
-                /*applyDefaultAccount=*/false, /*shouldValidateAccountForContactAddition=*/ false);
+                /*applyDefaultAccount=*/false, /*shouldValidateAccountForContactAddition=*/ false,
+                false);
 
         // Note that the following check means the local account settings cannot be created with
         // an insert because resolveAccountWithDataSet returns null for it. However, the settings
@@ -5013,7 +5014,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                                 updatedAccountType,
                                 CompatChanges.isChangeEnabled(
                                         ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
-                                        Binder.getCallingUid()));
+                                        Binder.getCallingUid()),
+                                isAppAllowedToSyncSimContacts());
                     }
 
                     final long accountId = dbHelper.getOrCreateAccountIdInTransaction(
@@ -5204,7 +5206,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                             newAccountWithDataSet.getAccountType(),
                             CompatChanges.isChangeEnabled(
                                     ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS,
-                                    Binder.getCallingUid()));
+                                    Binder.getCallingUid()),
+                            isAppAllowedToSyncSimContacts());
                 }
 
                 accountId = dbHelper.getOrCreateAccountIdInTransaction(newAccountWithDataSet);
@@ -6084,6 +6087,11 @@ public class ContactsProvider2 extends AbstractContactsProvider
         return isContactSharingEnabledForCloneProfile() &&
                 UserUtils.shouldUseParentsContacts(getContext()) &&
                 isAppAllowedToUseParentUsersContacts(getCallingPackage());
+    }
+
+    private boolean isAppAllowedToSyncSimContacts() {
+        return ContactsPermissions.hasCallerOrSelfPermission(getContext(),
+                MANAGE_SIM_ACCOUNTS_PERMISSION);
     }
 
     /**
@@ -10643,7 +10651,8 @@ public class ContactsProvider2 extends AbstractContactsProvider
                         Binder.getCallingUid());
 
         final AccountWithDataSet account = mAccountResolver.resolveAccountWithDataSet(uri, values,
-                applyDefaultAccount, shouldValidateAccountForContactAddition);
+                applyDefaultAccount, shouldValidateAccountForContactAddition,
+                isAppAllowedToSyncSimContacts());
         final long id = mDbHelper.get().getOrCreateAccountIdInTransaction(account);
         values.put(RawContactsColumns.ACCOUNT_ID, id);
 

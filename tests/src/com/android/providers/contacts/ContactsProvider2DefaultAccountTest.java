@@ -536,6 +536,8 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
         assertThrows(IllegalArgumentException.class, () ->
                 insertRawContact((Account) null));
 
+        assertThrows(IllegalArgumentException.class, () -> insertRawContact(SIM_ACCOUNT_1));
+
         // Okay to update the raw contact to a different cloud account
         assertEquals(1, updateRawContactAccount(rawContactId1, SYSTEM_CLOUD_ACCOUNT_2));
 
@@ -550,12 +552,73 @@ public class ContactsProvider2DefaultAccountTest extends BaseContactsProvider2Te
         assertThrows(IllegalArgumentException.class, () ->
                 insertGroup((Account) null));
 
+        // Exception expected when inserting group in SIM account.
+        assertThrows(IllegalArgumentException.class, () -> insertGroup(SIM_ACCOUNT_1));
+
         // Okay to update the group to a different cloud account
         assertEquals(1, updateGroupAccount(groupId1, SYSTEM_CLOUD_ACCOUNT_2));
 
         // Exception expected when updating group to NULL account.
         assertThrows(IllegalArgumentException.class, () -> updateGroupAccount(groupId1, null));
 
+        // Exception expected when updating group to SIM account.
+        assertThrows(IllegalArgumentException.class,
+                () -> updateGroupAccount(groupId1, SIM_ACCOUNT_1));
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_NEW_DEFAULT_ACCOUNT_API_ENABLED)
+    @EnableCompatChanges({ChangeIds.RESTRICT_CONTACTS_CREATION_IN_ACCOUNTS})
+    public void
+            testRawContactInsert_whenDefaultAccountSetToCloud_withManageSimAccountsPermission() {
+        mActor.addPermissions("android.permission.SET_DEFAULT_ACCOUNT_FOR_CONTACTS");
+        mActor.addPermissions("android.contacts.permission.MANAGE_SIM_ACCOUNTS");
+        mActor.setAccounts(new Account[]{SYSTEM_CLOUD_ACCOUNT_1, SYSTEM_CLOUD_ACCOUNT_2});
+
+        // Set the default account (for new contacts) to a cloud account.
+        mResolver.call(ContactsContract.AUTHORITY_URI,
+                DefaultAccount.SET_DEFAULT_ACCOUNT_FOR_NEW_CONTACTS_METHOD, null,
+                bundleToSetDefaultAccountForNewContacts(
+                        DefaultAccountAndState.ofCloud(SYSTEM_CLOUD_ACCOUNT_1)));
+
+        // Okay to insert raw contact in cloud account.
+        long rawContactId1 = insertRawContact(SYSTEM_CLOUD_ACCOUNT_1);
+
+        // Exception expected when inserting raw contact in NULL account.
+        assertThrows(IllegalArgumentException.class, () ->
+                insertRawContact((Account) null));
+
+        // No exception expected when inserting raw contact in SIM account by MANAGE_SIM_ACCOUNTS
+        // permission holder.
+        insertRawContact(SIM_ACCOUNT_1);
+
+        // Okay to update the raw contact to a different cloud account
+        assertEquals(1, updateRawContactAccount(rawContactId1, SYSTEM_CLOUD_ACCOUNT_2));
+
+        // Exception expected when updating raw contact to NULL account.
+        assertThrows(IllegalArgumentException.class,
+                () -> updateRawContactAccount(rawContactId1, null));
+
+        // Okay to insert group in cloud account.
+        long groupId1 = insertGroup(SYSTEM_CLOUD_ACCOUNT_1);
+
+        // Exception expected when inserting group in NULL account.
+        assertThrows(IllegalArgumentException.class, () ->
+                insertGroup((Account) null));
+
+        // No exception expected when inserting group in SIM account by MANAGE_SIM_ACCOUNTS
+        // permission holder.
+        insertGroup(SIM_ACCOUNT_1);
+
+        // Okay to update the group to a different cloud account
+        assertEquals(1, updateGroupAccount(groupId1, SYSTEM_CLOUD_ACCOUNT_2));
+
+        // Exception expected when updating group to NULL account.
+        assertThrows(IllegalArgumentException.class, () -> updateGroupAccount(groupId1, null));
+
+        // No exception expected when updating group to SIM account by MANAGE_SIM_ACCOUNTS
+        // permission holder.
+        assertEquals(1, updateGroupAccount(groupId1, SIM_ACCOUNT_1));
     }
 
     private long insertRawContact(Account account) {
