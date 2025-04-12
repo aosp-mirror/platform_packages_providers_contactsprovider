@@ -765,6 +765,7 @@ public abstract class BaseContactsProvider2Test extends PhotoLoadingTestCase {
         }
     }
 
+    @SuppressWarnings("BoxedPrimitiveEquality")
     private void assertNullOrEquals(Cursor c, Long value, String columnName) {
         if (value != NO_LONG) {
             if (value == null) assertTrue(c.isNull(c.getColumnIndexOrThrow(columnName)));
